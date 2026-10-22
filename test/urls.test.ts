@@ -1,5 +1,21 @@
 import { describe, expect, it } from 'vitest'
-import { sourceUrl } from '../src/lib/urls'
+import { canonicalHref, sourceUrl } from '../src/lib/urls'
+
+describe('canonicalHref', () => {
+	const site = new URL('https://maplechess.es')
+
+	it('la ruta sobre el dominio, sin barra final salvo en la portada', () => {
+		expect(canonicalHref('/', site)).toBe('https://maplechess.es/')
+		expect(canonicalHref('/jugadores/2299999', site)).toBe('https://maplechess.es/jugadores/2299999')
+		expect(canonicalHref('/acerca/', site)).toBe('https://maplechess.es/acerca')
+		expect(canonicalHref('', site)).toBe('https://maplechess.es/')
+	})
+
+	it('siempre en el dominio, aunque la ruta parezca otro sitio', () => {
+		expect(new URL(canonicalHref('//evil.com/x', site)).host).toBe('maplechess.es')
+		expect(new URL(canonicalHref('/torneos?q=open', site)).search).toBe('')
+	})
+})
 
 describe('sourceUrl', () => {
 	it('las páginas de info64 y lichess, por https', () => {

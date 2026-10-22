@@ -8,6 +8,7 @@ import {
 	exportGameIds,
 	gamesPgn,
 	gamesWhere,
+	getGame,
 	getHeadToHead,
 	getTopRecentGames,
 	getTournamentGames,
@@ -50,6 +51,13 @@ describe('getHeadToHead', () => {
 		expect(games.length).toBeGreaterThan(0)
 		expect(games.every((g) => [g.whiteFideId, g.blackFideId].sort().join() === [first!.a, first!.b].sort().join())).toBe(true)
 		expect((await getHeadToHead(db, first!.b, first!.a)).map((g) => g.id)).toEqual(games.map((g) => g.id))
+	})
+})
+
+describe('getGame', () => {
+	it('da las medias jugadas guardadas, que deciden si la partida se indexa', async () => {
+		const stored = await db.prepare('SELECT id, ply_count AS plies FROM games WHERE ply_count > 0 LIMIT 1').first<{ id: number; plies: number }>()
+		expect((await getGame(db, stored!.id))?.plyCount).toBe(stored!.plies)
 	})
 })
 

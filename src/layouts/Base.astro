@@ -1,10 +1,12 @@
 ---
+import compartir from '../assets/compartir.png'
 import titularesUrl from '../assets/fonts/titulares-600.woff2'
 import BuscadorJugadores from '../components/BuscadorJugadores.astro'
 import Icon from '../components/Icon.astro'
 import Logo from '../components/Logo.astro'
 import { CC_BY_SA, SOURCE_CODE } from '../lib/licenses'
 import { THEME_COLOR } from '../lib/theme-color'
+import { canonicalHref } from '../lib/urls'
 import '../styles/global.css'
 
 interface Props {
@@ -13,13 +15,29 @@ interface Props {
 	description?: string
 	/** Sección activa del menú. */
 	section?: 'jugadores' | 'partidas' | 'torneos'
-	/** Las fichas y búsquedas sin resultados no se indexan. */
+	/** Las fichas vacías, las partidas sin jugadas y las búsquedas no se indexan. */
 	noindex?: boolean
+	/**
+	 * Ruta canónica. Las páginas de un jugador, un torneo o una partida la hacen
+	 * con su ID: la pedida puede llevar ceros delante o basura detrás
+	 * (positiveInt la acepta). Por defecto, la pedida.
+	 */
+	canonical?: string
 }
 
-const { title, description = 'Buscador de jugadores españoles de ajedrez y de sus partidas, con visor y motor de análisis.', section, noindex = false } = Astro.props
+const {
+	title,
+	description = 'Buscador de jugadores españoles de ajedrez y de sus partidas, con visor y motor de análisis.',
+	section,
+	noindex = false,
+	canonical = Astro.url.pathname
+} = Astro.props
 const siteName = 'MapleChess'
 const fullTitle = title.startsWith(siteName) ? title : `${title} · ${siteName}`
+const site = Astro.site ?? Astro.url
+// Sin query: los filtros, la página y la ronda son variantes de la misma
+// página. Lo que no se indexa no lleva canonical: serían señales contrarias.
+const canonicalUrl = noindex ? null : canonicalHref(canonical, site)
 
 const nav = [
 	{ href: '/jugadores', label: 'Jugadores', id: 'jugadores' },
@@ -44,6 +62,23 @@ const nav = [
 		<title>{fullTitle}</title>
 		<meta name="description" content={description} />
 		{noindex && <meta name="robots" content="noindex" />}
+		{canonicalUrl && <link rel="canonical" href={canonicalUrl} />}
+		{/* Vista previa al compartir un enlace. El título va sin el nombre del
+		    sitio, que lleva og:site_name; sin canonical, se usa la URL pedida.
+		    La tarjeta sale de scripts/iconos.mjs; importada, lleva hash y cambia
+		    de URL si se regenera, así que nadie se queda con la vieja. */}
+		<meta property="og:type" content="website" />
+		<meta property="og:site_name" content={siteName} />
+		<meta property="og:locale" content="es_ES" />
+		<meta property="og:title" content={title} />
+		<meta property="og:description" content={description} />
+		{canonicalUrl && <meta property="og:url" content={canonicalUrl} />}
+		<meta property="og:image" content={new URL(compartir.src, site).href} />
+		<meta property="og:image:type" content="image/png" />
+		<meta property="og:image:width" content={String(compartir.width)} />
+		<meta property="og:image:height" content={String(compartir.height)} />
+		<meta property="og:image:alt" content={siteName} />
+		<meta name="twitter:card" content="summary_large_image" />
 		{/* El ICO con sizes="32x32": así los navegadores que leen SVG se quedan con
 		    el SVG. El ICO y el icono de iOS salen de scripts/iconos.mjs. */}
 		<link rel="icon" href="/favicon.ico" sizes="32x32" />

@@ -1,4 +1,17 @@
-// URL de las fuentes (info64 y lichess) que se enlazan desde el torneo y la partida.
+// URL de las fuentes (info64 y lichess) que se enlazan desde el torneo y la
+// partida, y URL canónica de las páginas.
+
+/**
+ * URL canónica de una página: la ruta sobre el dominio (`site` en
+ * astro.config.mjs), sin query y sin barra final salvo en la portada. Se
+ * asigna la ruta en vez de resolverla: «//otro.sitio» resuelto daría otro
+ * dominio.
+ */
+export function canonicalHref(pathname: string, site: URL): string {
+	const url = new URL(site)
+	url.pathname = pathname.length > 1 ? pathname.replace(/\/+$/, '') : pathname
+	return url.href
+}
 
 /** Sitios de las fuentes, siempre por https. */
 const SOURCES = ['https://info64.org/', 'https://lichess.org/']
