@@ -22,7 +22,10 @@ export default defineConfig(async () => {
 			})
 		],
 		test: {
-			setupFiles: ['./test/apply-migrations.ts']
+			setupFiles: ['./test/apply-migrations.ts'],
+			// Vitest vacía el CSS importado, también con ?raw. Los tokens de
+			// global.css sí llegan: test/theme-color.test.ts los compara.
+			css: { include: [/src\/styles\/global\.css/] }
 		}
 	}
 })
