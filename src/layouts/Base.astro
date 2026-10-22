@@ -84,6 +84,8 @@ const nav = [
 		<link rel="icon" href="/favicon.ico" sizes="32x32" />
 		<link rel="icon" href="/favicon.svg" type="image/svg+xml" />
 		<link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+		{/* Para instalarla como app web (lib/manifest.ts). */}
+		<link rel="manifest" href="/manifest.webmanifest" />
 		{/* La marca y el h1 van en serif nada más cargar: la fuente se pide a la vez que el CSS. */}
 		<link rel="preload" href={titularesUrl} as="font" type="font/woff2" crossorigin />
 	</head>

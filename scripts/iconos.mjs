@@ -1,8 +1,8 @@
-// Genera public/favicon.ico (32×32) y public/apple-touch-icon.png (180×180)
-// a partir de public/favicon.svg, la marca con los colores escritos, y la
-// tarjeta que se ve al compartir un enlace (src/assets/compartir.png). Se
-// ejecuta a mano cuando cambia el logo, el nombre o las maderas:
-// `node scripts/iconos.mjs`.
+// Genera public/favicon.ico (32×32), public/apple-touch-icon.png (180×180) y
+// los iconos de la app web instalada a partir de public/favicon.svg, la marca
+// con los colores escritos, y la tarjeta que se ve al compartir un enlace
+// (src/assets/compartir.png). Se ejecuta a mano cuando cambia el logo, el
+// nombre o las maderas: `node scripts/iconos.mjs`.
 //
 // public/favicon.svg es «!?» (jugada interesante) con los mismos trazos que
 // src/components/Logo.astro y los colores de los tokens walnut y maple-pale
@@ -15,6 +15,12 @@
 //   imagen de 32 px.
 // - apple-touch-icon.png: iOS redondea las esquinas y pinta de negro lo
 //   transparente, así que va opaco y a sangre, con el color de la losa de fondo.
+// - icono-192.png e icono-512.png: los del manifest (src/lib/manifest.ts), la
+//   losa tal cual. Chrome pide los dos tamaños para ofrecer la instalación.
+// - icono-maskable-512.png: el que Android recorta con la forma del lanzador
+//   (círculo, gota, cuadrado redondeado). Va a sangre, sin esquinas, y con el
+//   «!?» al 80 %, dentro de la zona segura: el círculo central de radio 0,4 del
+//   lado.
 // - compartir.png: 1200×630, el tamaño que WhatsApp, Telegram, X y LinkedIn
 //   enseñan en grande. La losa y, debajo, «MapleChess» (scripts/nombre-marca.svg,
 //   en trazos) sobre arce claro, con una franja de casillas de arce y nogal
@@ -55,6 +61,21 @@ header.writeUInt32LE(header.length, 18) // dónde empieza el PNG
 writeFileSync(join(pub, 'favicon.ico'), Buffer.concat([header, image]))
 
 console.log(`[iconos] favicon.ico (32 px) y apple-touch-icon.png (180 px, fondo ${tile}) → public/`)
+
+// Iconos de la app web instalada.
+writeFileSync(join(pub, 'icono-192.png'), png(192))
+writeFileSync(join(pub, 'icono-512.png'), png(512))
+const glyph = svg.match(/<g[\s\S]*<\/g>/)?.[0]
+if (!glyph) throw new Error('[iconos] no encuentro el «!?» en favicon.svg')
+const maskable = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+	<rect width="32" height="32" fill="${tile}"/>
+	<g transform="translate(16 16) scale(0.8) translate(-16 -16)">${glyph}</g>
+</svg>`
+writeFileSync(
+	join(pub, 'icono-maskable-512.png'),
+	new Resvg(maskable, { fitTo: { mode: 'width', value: 512 } }).render().asPng()
+)
+console.log('[iconos] icono-192.png, icono-512.png e icono-maskable-512.png → public/')
 
 // Tarjeta para compartir.
 const css = readFileSync(join(root, 'src', 'styles', 'global.css'), 'utf8')
