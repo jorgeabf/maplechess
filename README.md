@@ -77,7 +77,7 @@ El **repertorio** es el árbol de aperturas del jugador con cada color. En cada 
 - **Visor:** tablero con variantes, comentarios y tiempos de reloj, que se maneja con el teclado y, en el móvil, deslizando sobre el tablero.
   - **Stockfish 19** funciona en el propio navegador: las 3 mejores líneas, la barra de evaluación y la mejor jugada como flecha. Analiza cada posición hasta 10 s o hasta la profundidad 22, para no agotar la batería del móvil; «Seguir analizando» continúa sin límite. Con la pestaña oculta se para y, al volver, sigue.
   - Si la fuente anota evaluaciones, un gráfico las muestra jugada a jugada.
-- **Descargas en PGN:** de una partida, de un torneo, de todas las de un jugador o del resultado de una búsqueda (hasta 5.000 partidas).
+- **Descargas en PGN:** de una partida, de un torneo, de todas las de un jugador o de una posición del repertorio (hasta 5.000 partidas), o del resultado de una búsqueda (las que enseña, hasta 1.000).
 
 Las páginas se generan en el servidor y las búsquedas son formularios normales: todo funciona sin JavaScript menos el tablero y el motor.
 
@@ -146,6 +146,14 @@ La ingesta es educada con las fuentes: como mucho una petición por segundo a in
 <br>
 
 Hace falta Node 24 y pnpm 11.
+
+```bash
+git clone https://github.com/jorgeabf/maplechess.git
+```
+
+```bash
+cd maplechess
+```
 
 ```bash
 pnpm install
@@ -273,7 +281,9 @@ Necesita una cuenta de Cloudflare con **Workers Paid**. La importación de la li
    pnpm run deploy
    ```
 
-   Sólo despliega `origin/main`, con el árbol limpio y fuera de las horas de los crons. Antes copia el motor y apunta el marcador de Time Travel de D1 en `despliegues.log`; después pasa la prueba de humo de `scripts/humo.mjs`, que pide jugadores, partidas y torneos de MapleChess: en una instalación nueva, cambia su URL y sus rutas.
+   Sólo despliega `origin/main`, con el árbol limpio y fuera de las horas de los crons. Antes copia el motor y apunta el marcador de Time Travel de D1 en `despliegues.log`; después pasa la prueba de humo de `scripts/humo.mjs`, que pide jugadores, partidas y torneos de MapleChess: en una instalación nueva, cambia su URL y sus rutas. Cambia también la URL de `.github/workflows/vigilancia.yml`, que dos veces al día pide `/api/estado` y avisa por correo si alguna sincronización falla.
+
+   El límite de ritmo de las búsquedas y las descargas viene apagado (`RATE_LIMIT` en `wrangler.jsonc`): va por IP y cortaría a los jugadores que comparten la wifi de una sala de juego. [CLAUDE.md](CLAUDE.md) explica cuándo encenderlo.
 
 6. Lanza la carga inicial con `/api/admin/sync`, en este orden:
    1. La lista FIDE.
@@ -285,6 +295,12 @@ Necesita una cuenta de Cloudflare con **Workers Paid**. La importación de la li
 Después, cada migración se aplica con `pnpm db:migrate:remote` antes de desplegar, tras apuntar el marcador de Time Travel ([CLAUDE.md](CLAUDE.md) explica cómo volver atrás). Si añade una columna que se deriva del PGN, tras desplegar hay que lanzar el reprocesado de las partidas guardadas (`games-reprocess`).
 
 </details>
+
+## Seguridad y datos personales
+
+- **Un fallo de seguridad** no se publica en una incidencia: avísalo en privado desde la pestaña [Security](https://github.com/jorgeabf/maplechess/security) del repositorio, con «Report a vulnerability».
+- **Para que se retiren tus datos** (o los de un menor a tu cargo), la página [/acerca](https://buscador-partidas-ajedrez.aportuvas.workers.dev/acerca) explica cómo pedirlo.
+- Los ficheros de prueba (`test/fixtures/`) no llevan datos de personas reales: tienen la estructura de las fuentes, con nombres y FIDE ID inventados.
 
 ## Licencia
 
