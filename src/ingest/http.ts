@@ -3,7 +3,7 @@
 // se convierte cualquier respuesta no 2xx en error para que el paso se reintente.
 
 // Sólo ASCII: los valores de cabecera HTTP no admiten otros caracteres.
-const USER_AGENT = 'BuscadorPartidasAjedrez/0.1 (indexador; max 1 req/s)'
+const USER_AGENT = 'MapleChess/0.1 (+https://maplechess.es; indexador; max 1 req/s)'
 
 export class HttpError extends Error {
 	constructor(

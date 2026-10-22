@@ -64,7 +64,8 @@ MapleChess es un buscador de jugadores españoles (lista FIDE, federación ESP),
 - `src/pages/`: páginas (formularios GET, funcionan sin JS) y endpoints `.pgn`.
   - `api/admin/sync.ts` lanza y consulta Workflows, protegido con el secreto `ADMIN_TOKEN`.
   - `500.astro`: el error de servidor, con `Base`, que no consulta D1, para que salga aunque la base de datos falle. No enseña el error (Astro se lo pasa en la prop `error`): queda en el registro de Workers.
-- `src/middleware.ts`: `Cache-Control: private, max-age=0, must-revalidate` por defecto (`private`: las páginas cambian con la cookie `yo`). Una ruta sólo fija la suya si admite caché (las descargas PGN). Además, `X-Content-Type-Options: nosniff` y `X-Frame-Options: SAMEORIGIN` en todas las respuestas, y el límite de ritmo (ver «D1 cobra por filas recorridas»). Sin `Referrer-Policy`: «← Volver» depende del valor por defecto.
+- `src/middleware.ts`: `Cache-Control: private, max-age=0, must-revalidate` por defecto (`private`: las páginas cambian con la cookie `yo`). Una ruta sólo fija la suya si admite caché (las descargas PGN). Además, `X-Content-Type-Options: nosniff`, `X-Frame-Options: SAMEORIGIN` y HSTS de un año en todas las respuestas, y el límite de ritmo (ver «D1 cobra por filas recorridas»). Sin `Referrer-Policy`: «← Volver» depende del valor por defecto.
+  - **Redirección al dominio** (`canonicalUrl`): un GET o HEAD a la URL de workers.dev o a `www` recibe una 301 a la misma dirección de `site` (`astro.config.mjs`). Va por host exacto, así que no redirige las URL de vista previa ni el entorno local. Los POST no se redirigen: tras una 301 llegarían como GET. La 301 lleva la caché por defecto, para que los navegadores no se queden con ella si hay que volver atrás.
   - **CSP:** la pone Astro (`security.csp` en `astro.config.mjs`) como cabecera, con los hashes de sus scripts y estilos en línea, `'self'`, `'wasm-unsafe-eval'` y `style-src-attr 'unsafe-inline'` (los atributos `style` de los gráficos y de chessground). Los `<script>` y `<style>` que emite Astro llevan su hash; uno creado desde JS, un atributo `on…` o un recurso de otro origen se bloquean. `pnpm dev` no la aplica: se prueba con `pnpm build` y `pnpm exec wrangler dev`, mirando la consola.
   - Las URL de las fuentes que se enlazan pasan por `sourceUrl` (`src/lib/urls.ts`): sólo `https://info64.org/` y `https://lichess.org/`.
 - `src/client/`: código de navegador (`<visor-partida>`, motor, `<explorador-repertorio>` y el cierre del panel de búsqueda). Tiene **su propio `tsconfig`** y se incluye con `<script src>`; ver «Trampas».
@@ -77,8 +78,8 @@ MapleChess es un buscador de jugadores españoles (lista FIDE, federación ESP),
     - El tablero lleva `aria-hidden`: chessground pinta las coordenadas como texto.
   - **Lo que puede fallar o limitarse va después del estado:** la URL, el portapapeles, el almacenamiento. Safari lanza un `SecurityError` tras 100 `history.replaceState` en 30 s, así que el visor escribe `#j` 300 ms después de la última jugada, en un `try/catch`.
   - `panel-busqueda.ts`: el popover de la cabecera se cierra cuando el foco sale de él hacia otro elemento; si no, quedaba encima del elemento enfocado. Sin `relatedTarget` no se cierra: Safari no enfoca el botón «Buscar» al pulsarlo.
-- `public/robots.txt`: bloquea repertorio, dossier y PGN, que no aportan al índice y cada visita lee todas las partidas de un jugador; el repertorio, además, tiene un enlace por jugada y es un espacio de URL casi infinito. Sin sitemap, canonical ni OpenGraph hasta tener dominio y nombre definitivos.
-- `public/_headers`: la caché de los archivos estáticos, que no pasan por el Worker (ni por `src/middleware.ts`). El adaptador le añade la regla de `/_astro/` (inmutable, un año); la del motor (`/engine/<versión>/`) es nuestra. El resto de `public/` va con la de Workers por defecto (`public, max-age=0, must-revalidate`). Todos llevan `nosniff`.
+- `public/robots.txt`: bloquea repertorio, dossier y PGN, que no aportan al índice y cada visita lee todas las partidas de un jugador; el repertorio, además, tiene un enlace por jugada y es un espacio de URL casi infinito. Sin sitemap, canonical ni OpenGraph de momento; cuando se pongan, parten de `site` (`astro.config.mjs`).
+- `public/_headers`: la caché de los archivos estáticos, que no pasan por el Worker (ni por `src/middleware.ts`). El adaptador le añade la regla de `/_astro/` (inmutable, un año); la del motor (`/engine/<versión>/`) es nuestra. El resto de `public/` va con la de Workers por defecto (`public, max-age=0, must-revalidate`). Todos llevan `nosniff` y HSTS, como las respuestas del Worker. No se redirigen al dominio: en workers.dev y `www` se sirven tal cual.
 - **Nada de comentarios en lo que se sirve:** en las plantillas, `{/* … */}` y nunca `<!-- … -->`, que Astro deja en el HTML; `public/` va sin comentarios (lo que haya que explicar, aquí o en el script que genera el archivo). El JS y el CSS los minifica Vite.
 - `src/assets/fonts/`: la serif de los titulares (`--font-serif`), Source Serif 4 de Adobe (OFL) en peso 600, recortada y renombrada «Titulares»; su licencia, en `public/fonts/OFL.txt`. Se sirve desde el propio sitio, nunca desde un CDN. Pasa por Vite, como el CSS, para que lleve hash y quede en `/_astro/`, que el adaptador sirve con caché inmutable de un año. La regenera `scripts/fuente-titulares.py` (Python con fonttools), que también calcula el ajuste de métricas de sus respaldos en `global.css`.
 - `src/styles/global.css`: **tokens** de color, espaciado, radio y tipografía, con `light-dark()`. Usar tokens, nunca valores literales.
@@ -207,15 +208,21 @@ curl -X POST localhost:4321/api/admin/sync -H "Authorization: Bearer $TOKEN" \
     - El aviso de abuso es una alerta de gasto de la cuenta (Billing → Billable Usage → «Create budget alert», 10 USD). Si salta, o las métricas de D1 muestran algo raro: comprobar en el panel que ningún otro Worker de la cuenta usa el `namespace_id` 26102201 (compartirían contador) y encenderlo con más margen, unas 120 por minuto. La documentación no dice si el binding cobra: mirar «Billable Usage» unos días después.
 - **Migraciones:** la D1 de producción ya tiene datos, así que cualquier cambio de esquema va en una migración nueva (`migrations/NNNN_…`, con el siguiente número libre), aplicada con `pnpm db:migrate:remote` antes de desplegar. Para regenerar la D1 local hay que parar el servidor (en Windows mantiene abierto el SQLite), borrar `.wrangler/state/v3/d1` y ejecutar `pnpm db:migrate:local`.
 - **D1 local frente a remota:** wrangler identifica la base local por `preview_database_id` (`"DB"`), no por `database_id`. Si se quita, la local aparece vacía. Las órdenes `--remote` dicen «preview database», pero usan el `database_id` de producción.
-- **Bloqueos de LaLiga:** en horario de partido, las operadoras españolas bloquean IP de Cloudflare, incluidas las de `workers.dev` (188.114.96.0/23). Si la web no carga desde España, mira hayahora.futbol antes de depurar. La API de Cloudflare (wrangler) sigue funcionando.
+- **Bloqueos de LaLiga:** en horario de partido, las operadoras españolas bloquean IP de Cloudflare, incluidas las de `workers.dev` (188.114.96.0/23); el dominio también va por Cloudflare. Si la web no carga desde España, mira hayahora.futbol antes de depurar. La API de Cloudflare (wrangler) sigue funcionando.
 - **Cabeceras HTTP sólo en ASCII** (el User-Agent de `src/ingest/http.ts`).
 - **Horas de ronda en hora local:** info64 publica la hora local de España sin zona. `pairings.starts_at` se guarda así (`'YYYY-MM-DD HH:MM'`) y se compara con `madridDateTime()`; en Canarias hay una hora de desfase.
 - **Sincronizaciones a mano y crons:** son automáticas las de info64 a las 05:00 UTC y a las 15:00 y las 22:00 de Madrid (13:00 y 20:00 UTC en verano, 14:00 y 21:00 en invierno) y la de lichess a las 06:30 UTC. No lances otra a esas horas: serían dos a la vez (la de info64 también pide a lichess).
 
 ## Despliegue (Cloudflare Workers Paid)
 
-En producción desde el 17-oct-2026: https://buscador-partidas-ajedrez.aportuvas.workers.dev
+En producción desde el 17-oct-2026: https://maplechess.es
 
+- **Dominio:**
+  - `maplechess.es`, registrado en DonDominio con renovación automática. Cloudflare no vende `.es`.
+  - La zona está en esta cuenta de Cloudflare: plan Free, con DNSSEC (el DS va en DonDominio).
+  - El Worker la sirve con Custom Domains (`routes` en `wrangler.jsonc`) para `maplechess.es` y `www`, que crea `wrangler deploy`. La zona no lleva registros propios A, AAAA ni CNAME para esos dos nombres: el Custom Domain no se crea sobre uno que ya exista.
+  - La URL de antes, https://buscador-partidas-ajedrez.aportuvas.workers.dev, sigue activa y redirige al dominio (ver `src/middleware.ts`). Necesita `"workers_dev": true`: con `routes`, wrangler la apaga por defecto. La enlaza lo publicado antes del dominio, como el aviso a la FEDA.
+  - Correo: Email Routing reenvía `contacto@maplechess.es` (el de `/acerca`) al correo de Jorge. Sólo recibe: las respuestas salen de su correo.
 - D1 `ajedrez` en jurisdicción `eu`.
 - El secreto `ADMIN_TOKEN` tiene su copia local en `.admin-token.prod`, ignorado por git.
 - **Desplegar: `pnpm run deploy`** (`scripts/desplegar.mjs`). En orden:
@@ -223,7 +230,7 @@ En producción desde el 17-oct-2026: https://buscador-partidas-ajedrez.aportuvas
   2. `copy-engine`: `git pull` no ejecuta el postinstall, y sin él un cambio de versión del motor deja producción sin Stockfish.
   3. Apunta en `despliegues.log` (ignorado, como todos los `.log`) la hora, el commit y el marcador de Time Travel de D1.
   4. `pnpm build` y `wrangler deploy`.
-  5. `scripts/humo.mjs`: 10 URL a una petición por segundo, con su estado, un texto de la página y sus cabeceras; sin búsquedas. También a mano: `node scripts/humo.mjs [URL base]`. Un 503 de `/api/estado` es un aviso, no un fallo: falla la ingesta, no el despliegue.
+  5. `scripts/humo.mjs`: 10 URL a una petición por segundo, con su estado, un texto de la página y sus cabeceras; sin búsquedas. También a mano: `node scripts/humo.mjs [URL base]`. Un 503 de `/api/estado` es un aviso, no un fallo: falla la ingesta, no el despliegue. Contra producción comprueba además que workers.dev y `www` redirigen al dominio.
   - No mira si corre alguna instancia: antes, la primera fila de `wrangler workflows instances list` de cada Workflow debe estar Completed.
   - Si otra sesión trabaja en el checkout, despliega desde un worktree de `main` (`git worktree add --detach`), que también es `origin/main`.
 - **Volver atrás:**

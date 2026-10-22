@@ -6,6 +6,16 @@
 	"compatibility_date": "2026-10-01",
 	"compatibility_flags": ["nodejs_compat"],
 	"observability": { "enabled": true },
+	// El dominio, en Custom Domains del Worker: la zona maplechess.es está en esta
+	// cuenta. www y la URL de workers.dev redirigen a él (src/middleware.ts).
+	"routes": [
+		{ "pattern": "maplechess.es", "custom_domain": true },
+		{ "pattern": "www.maplechess.es", "custom_domain": true }
+	],
+	// Con routes, workers_dev pasa a false por defecto, y la URL de workers.dev,
+	// que enlazaba lo publicado antes del dominio (el aviso a la FEDA), dejaría de
+	// responder en vez de redirigir.
+	"workers_dev": true,
 	// Secretos del Worker. Los valores van con `wrangler secret put` y, en local,
 	// en .dev.vars. Declarados aquí, `wrangler types` los pone en Env sin leer
 	// .dev.vars (que no se versiona), así que la CI genera los mismos tipos.
