@@ -48,7 +48,12 @@ const tournamentUrl = sourceUrl(tournament.url)
 const broadcastUrl = sourceUrl(tournament.gamesSourceUrl)
 ---
 
-<Base title={tournament.name} section="torneos" description={`${tournament.name}: participantes y partidas.`}>
+<Base
+	title={tournament.name}
+	section="torneos"
+	description={`${tournament.name}: participantes y partidas.`}
+	canonical={`/torneos/${id}`}
+>
 	<header class="page-head">
 		<h1>{tournament.name}</h1>
 		<p class="page-meta">

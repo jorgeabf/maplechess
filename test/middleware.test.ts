@@ -110,7 +110,7 @@ describe('dominio', () => {
 describe('isExpensive', () => {
 	const expensive = (path: string) => isExpensive(new URL(path, 'https://maplechess.test'))
 
-	it('las búsquedas, las descargas, el dossier y el repertorio', () => {
+	it('las búsquedas, las descargas, el dossier, el repertorio y los trozos del sitemap', () => {
 		for (const path of [
 			'/partidas?jugador=garcia',
 			'/partidas?desde=1000-01-01',
@@ -120,12 +120,15 @@ describe('isExpensive', () => {
 			'/jugadores/32060777.pgn',
 			'/torneos/12.pgn',
 			'/jugadores/32060777/preparar?yo=garcia',
-			'/jugadores/32060777/repertorio'
+			'/jugadores/32060777/repertorio',
+			'/sitemap/jugadores-2.xml',
+			'/sitemap/torneos-1.xml',
+			'/sitemap/partidas-3.xml'
 		])
 			expect(expensive(path), path).toBe(true)
 	})
 
-	it('ni las portadas de las secciones, ni las fichas, partidas o torneos, ni /api', () => {
+	it('ni las portadas de las secciones, ni las fichas, partidas o torneos, ni /api, ni el índice del sitemap', () => {
 		for (const path of [
 			'/',
 			'/partidas',
@@ -140,7 +143,9 @@ describe('isExpensive', () => {
 			'/torneos?q=open',
 			'/torneos/12',
 			'/api/admin/sync',
-			'/acerca'
+			'/acerca',
+			'/sitemap.xml',
+			'/sitemap/paginas.xml'
 		])
 			expect(expensive(path), path).toBe(false)
 	})

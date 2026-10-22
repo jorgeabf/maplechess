@@ -228,7 +228,7 @@ curl -X POST localhost:4321/api/admin/sync -H "Authorization: Bearer $TOKEN" \
 ```
 migrations/        Esquema de D1
 data/openings/     Aperturas de lichess (TSV, CC0)
-scripts/           Copia del motor, aperturas, iconos, rondas de lichess y fuente de los titulares
+scripts/           Copia del motor, aperturas, iconos y tarjeta para compartir, rondas de lichess y fuente de los titulares
 src/worker.ts      Entrypoint: web, crons y Workflows
 src/ingest/        Ingesta: info64, lista FIDE, lichess y escritura en D1
 src/lib/chess/     PGN, nombres, ECO, árbol de jugadas, UCI, ritmo, reloj, repertorio y dossier
