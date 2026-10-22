@@ -1,0 +1,144 @@
+---
+// Panel del motor: interruptor, estado y líneas de Stockfish. Lo controla
+// EnginePanel (src/client/visor/panel-motor.ts) desde el visor o el explorador.
+---
+
+<section class="engine panel" aria-label="Análisis del motor" data-engine="off">
+	<div class="engine-head">
+		<label class="switch">
+			<input type="checkbox" role="switch" data-engine-toggle />
+			<span>Analizar con Stockfish</span>
+		</label>
+		{/* Sólo se anuncian los errores: el progreso (cada profundidad) era ruido.
+		    Vacío sigue en el árbol de accesibilidad, así que se anuncia al llenarse. */}
+		<span class="engine-error" role="status"></span>
+	</div>
+	<span class="engine-status muted num">
+		<span class="engine-progress"></span>
+		<span class="engine-more" hidden>
+			{' · '}
+			<button type="button" class="link" data-engine-infinite>Seguir analizando</button>
+		</span>
+	</span>
+	<ol class="engine-lines"></ol>
+</section>
+
+<style>
+	.engine {
+		display: grid;
+		gap: var(--space-2);
+		container-type: inline-size;
+	}
+
+	/* El motor necesita JavaScript. Detrás de la regla anterior, que con la misma
+	   especificidad ganaría. */
+	@media (scripting: none) {
+		.engine {
+			display: none;
+		}
+	}
+
+	/* El interruptor y, a su lado (o debajo, si no cabe), el aviso de error. */
+	.engine-head {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: var(--space-1) var(--space-3);
+	}
+
+	.engine-error {
+		color: var(--text);
+		font-size: var(--text-s);
+	}
+
+	.switch {
+		display: flex;
+		align-items: center;
+		gap: var(--space-2);
+		color: var(--text);
+		font-size: var(--text-s);
+		font-weight: var(--weight-strong);
+		cursor: pointer;
+	}
+
+	.engine-status {
+		font-size: var(--text-xs);
+	}
+
+	.engine-status:has(.engine-progress:empty) {
+		display: none;
+	}
+
+	.engine-lines {
+		display: grid;
+		gap: var(--space-1);
+		margin: 0;
+		padding: 0;
+		list-style: none;
+		font-size: var(--text-s);
+	}
+
+	/*
+	 * Con el motor encendido, la lista guarda siempre el sitio de sus tres
+	 * líneas (ENGINE_LINES en motor.ts; cada <li> es una línea de texto, o dos
+	 * en un panel estrecho, más abajo). Al
+	 * cambiar de jugada se vacía mientras analiza: si encogiera, todo lo de
+	 * debajo subiría y volvería a bajar en cada jugada.
+	 */
+	.engine:not([data-engine='on']) .engine-lines {
+		display: none;
+	}
+
+	.engine-lines {
+		min-block-size: calc(3lh + 2 * var(--space-1));
+	}
+
+	.engine-lines :global(li) {
+		display: flex;
+		gap: var(--space-2);
+		overflow: hidden;
+		white-space: nowrap;
+		text-overflow: ellipsis;
+	}
+
+	.engine-lines :global(.score) {
+		flex: none;
+		min-inline-size: 3.75rem;
+		padding: 0 var(--space-1);
+		border-radius: var(--radius-s);
+		background: var(--surface-muted);
+		font-family: var(--font-mono);
+		font-weight: var(--weight-strong);
+		text-align: center;
+	}
+
+	.engine-lines :global(.pv) {
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+	/*
+	 * En un panel estrecho (el móvil, el lateral del visor en una ventana
+	 * estrecha) una línea daba sólo para 3–7 de las 12 medias jugadas
+	 * (PV_MOVES): la variante parte en dos líneas como mucho, el resultado se
+	 * queda a la altura de la primera y se guarda el sitio de dos líneas por
+	 * variante. A lo ancho caben en una.
+	 */
+	@container (width < 30rem) {
+		.engine-lines {
+			min-block-size: calc(6lh + 2 * var(--space-1));
+		}
+
+		.engine-lines :global(li) {
+			align-items: baseline;
+			white-space: normal;
+		}
+
+		.engine-lines :global(.pv) {
+			display: -webkit-box;
+			-webkit-box-orient: vertical;
+			-webkit-line-clamp: 2;
+			line-clamp: 2;
+		}
+	}
+</style>

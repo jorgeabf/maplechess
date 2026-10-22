@@ -1,0 +1,111 @@
+---
+// Selector de opciones excluyentes hecho con enlaces (color, periodo, ritmo):
+// cada opción es una URL, así que funciona sin JavaScript y se puede compartir.
+// Las páginas con filtros llevan nofollow: no aportan nada al índice.
+
+interface Option {
+	id: string
+	label: string
+}
+
+interface Props {
+	/** Nombre accesible del grupo ("Periodo"). */
+	label: string
+	/**
+	 * Lo enseña encima, como el rótulo de un campo: con varios selectores
+	 * seguidos, «Todas» o «Todos» no dicen a qué se refieren.
+	 */
+	showLabel?: boolean
+	options: readonly Option[]
+	/** id de la opción actual. */
+	current: string
+	/** URL de la página con esa opción. */
+	href: (id: string) => string
+}
+
+const { label, showLabel = false, options, current, href } = Astro.props
+---
+
+<div class="field">
+	{/* El nombre accesible ya lo da el aria-label del nav: el rótulo visible no se lee dos veces. */}
+	{showLabel && <span class="field-label" aria-hidden="true">{label}</span>}
+	<nav class="segmented" aria-label={label}>
+		{
+			options.map((o) => (
+				<a href={href(o.id)} rel="nofollow" aria-current={o.id === current ? 'true' : undefined}>
+					{o.label}
+				</a>
+			))
+		}
+	</nav>
+</div>
+
+<style>
+	.field {
+		display: grid;
+		justify-items: start;
+		gap: var(--space-1);
+	}
+
+	/* Del alto de un campo, para cuadrar con los filtros de la misma fila. */
+	.segmented {
+		display: inline-flex;
+		flex-wrap: wrap;
+		gap: var(--space-1);
+		min-block-size: var(--control-height);
+		padding: var(--space-1);
+		border: 1px solid var(--border);
+		border-radius: var(--radius-m);
+		background: var(--surface);
+	}
+
+	a {
+		padding: var(--space-1) var(--space-3);
+		border-radius: var(--radius-s);
+		color: var(--text);
+		font-size: var(--text-s);
+		text-decoration: none;
+	}
+
+	/*
+	 * En el móvil, más juntas: las cinco categorías del ranking de /jugadores
+	 * pedían 357 px de 343 a 375 px de ancho y «+65» bajaba sola a otra línea.
+	 * Así ocupan 317. Con más opciones (las rondas de un torneo) sigue partiendo
+	 * línea.
+	 */
+	@media (width < 40rem) {
+		a {
+			padding-inline: var(--space-2);
+		}
+	}
+
+	a:hover {
+		background: var(--surface-hover);
+	}
+
+	/*
+	 * La elegida, en el acento suave (7,2:1 en claro y 7,6:1 en oscuro): en el
+	 * dossier van tres selectores seguidos, y tres bloques de acento pleno
+	 * pesaban más que el contenido. El pleno queda para el botón principal y la
+	 * jugada actual.
+	 */
+	a[aria-current] {
+		background: var(--accent-soft);
+		color: var(--accent);
+		font-weight: var(--weight-strong);
+	}
+
+	/*
+	 * En alto contraste el sistema quita el fondo de acento y la actual no se
+	 * distingue: va con los colores de selección del sistema. Sin ajuste, porque
+	 * el navegador pondría detrás del texto una placa del color del fondo de la
+	 * página y el texto, claro, no se leería.
+	 */
+	@media (forced-colors: active) {
+		a[aria-current] {
+			forced-color-adjust: none;
+			background: Highlight;
+			color: HighlightText;
+		}
+	}
+</style>

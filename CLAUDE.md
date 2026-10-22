@@ -1,0 +1,253 @@
+# MapleChess
+
+MapleChess es un buscador de jugadores españoles (lista FIDE, federación ESP), sus torneos y sus partidas, con visor (chessground + Stockfish en el navegador) y descarga en PGN. Código, comentarios y textos de la web en español. Licencia GPL-3.0-or-later (obligada por chessground/chessops).
+
+## Stack
+
+- **Astro 7 SSR** con `@astrojs/cloudflare` en **un único Worker**. `src/worker.ts` es el entrypoint (`main` en `wrangler.jsonc`): sirve Astro, ejecuta los crons y exporta las clases de los Workflows.
+- **D1** (binding `DB`): esquema en `migrations/`. Búsqueda con FTS5 (`unicode61 remove_diacritics 2`), con tablas `*_fts` de contenido externo mantenidas por triggers.
+- **Workflows** para la ingesta: `INFO64_SYNC` (`src/ingest/info64/sync.ts`), `LICHESS_SYNC` (`src/ingest/lichess/sync.ts`) y `FIDE_SYNC` (`src/ingest/fide/sync.ts`). Crons en `wrangler.jsonc` y `src/ingest/schedule.ts`: las expresiones tienen que coincidir.
+  - Emparejamientos: con `pairings`, `INFO64_SYNC` lee además la próxima ronda de los torneos individuales que juegan en los próximos 8 días (tabla `pairings`, sólo una ronda por torneo). La diaria de las 05:00 UTC lo hace con `'also'`. Hay otras dos pasadas sólo de emparejamientos (`'only'`), a las 15:00 y a las 22:00 de Madrid. La de las 15:00 trae la ronda de la tarde de los días con dos rondas: la de la mañana acaba hacia las 14:00 y la de la tarde empieza entre las 16:00 y las 17:00. La de las 22:00 trae la de la mañana siguiente, para prepararla la noche antes. Los crons van en UTC: `0 13,14,20,21 * * *` salta a las dos horas UTC que pueden ser cada una, en verano y en invierno, y `runScheduled` sólo lanza la pasada cuando es esa hora en Madrid (`PAIRINGS_HOURS`). Los torneos que aún no han empezado se guardan antes, para tener su ranking inicial.
+  - `LICHESS_SYNC` (06:30 UTC): retransmisiones oficiales de lichess con jugadores españoles, aunque info64 no las enlace. Mira las activas y las terminadas desde la pasada anterior (`/api/broadcast/top`; los grupos se expanden con `/api/broadcast/{id}`). De cada retransmisión nueva pide los jugadores y, si hay españoles, el torneo y el PGN. Luego busca el torneo de info64 por los FIDE ID de los participantes y las fechas, con `findInfo64Tournament` (al menos 2 españoles y la mitad):
+    - torneo de info64 sin partidas: queda **enlazado**. Sus partidas van a ese torneo y `syncTournament` suma la retransmisión a las que enlaza info64 (`loadLinkedBroadcasts`);
+    - torneo de info64 con partidas: **duplicado**, no se toca;
+    - sin torneo en info64: torneo **propio** con `source = 'lichess'`, sólo con las partidas en las que juega algún español. Antes se quitan las que ya estén en otro torneo: mismos FIDE ID y colores, a ±3 días (`gamesStoredElsewhere`).
+    Lo decidido queda en `lichess_tours`. Las propias se releen cada día hasta que terminan; las que no tienen españoles, una vez más al terminar. Si a esa hora sigue la diaria de info64, que también pide a lichess, la espera.
+  - `GAMES_REPROCESS` (`src/ingest/reprocess.ts`) recalcula desde el PGN guardado y el ritmo del torneo las columnas derivadas (`opening_moves`, `time_class` y `clocks`, con `derivedColumns()` de `src/ingest/games.ts`, la misma función que usa la ingesta). Además aplica a lo guardado la regla de los nombres de los menores (ver «Menores»): en las partidas (columnas y cabeceras `White`/`Black` del PGN, como texto), los participantes y los emparejamientos. Se lanza a mano tras una migración que añade una de esas columnas o cambia cómo se calcula, o si cambia esa regla.
+- **Ajedrez:** `chessops` (PGN, SAN, FEN) en servidor y cliente, `@lichess-org/chessground` (tablero) y Stockfish 19 *lite single-thread* en un Web Worker.
+  - Piezas mpchess (GPL-3.0) en `src/assets/pieces/mpchess/`, en lugar de las cburnett de chessground: las pone `components/visor/board.css`, y Vite las incrusta en ese CSS.
+  - `scripts/copy-engine.mjs` (postinstall) copia el motor a `public/engine/<versión>/`, que no se versiona. La carpeta es la versión del paquete `stockfish`, que `motor.ts` lee de su `package.json`, y `public/_headers` la sirve con caché inmutable de un año. Si `copy-engine.mjs` pasa a copiar otra build sin que cambie la versión, hay que cambiar también el nombre de la carpeta: con `immutable`, los navegadores se quedarían con la anterior. La licencia queda fuera, en `public/engine/Copying.txt`, porque `/acerca` la enlaza.
+  - Al ser de un solo hilo, no necesita cabeceras COOP/COEP.
+  - Cada búsqueda para en la profundidad 22 o a los 10 s, lo que llegue antes (`ENGINE_DEPTH` y `ENGINE_TIME_MS` en `motor.ts`): con un hilo, la 22 de una posición táctica eran 34 s en escritorio, y en un móvil, de uno a dos minutos. Con la pestaña oculta se para y, al volver, sigue si no había terminado (`onVisibility` en `panel-motor.ts`).
+    - Terminada la búsqueda, «Seguir analizando» en la línea de estado sigue con esa posición sin topes (`go infinite`) hasta pasar a otra. Mientras dura, el mismo botón queda inactivo y dice «sin límite»: explica por qué no para y no pierde el foco. Es un verbo porque es una acción, y no «análisis infinito», que es el nombre de un modo y promete algo que no ocurre: para al cambiar de jugada.
+    - Una búsqueda que vuelve a empezar en la misma posición (sin límite, al volver a la pestaña) parte de cero: la tabla de transposiciones apenas acorta. Las líneas que ya se ven se quedan hasta que las supera (`shown`).
+  - Notación: SAN en inglés («Nf3»), siempre escrita con `formatMove` y `formatLine` de `src/lib/format.ts` («34…Qxc3 35.Qa4»), también las variantes del motor. Las letras en castellano no: «cxd4» y «Cxd4» sólo se distinguen por la mayúscula, y «Re1» es rey en castellano y torre en inglés. La notación con figuras queda para después del lanzamiento: pide una fuente propia, porque los caracteres de ajedrez salen como emoji en iOS y Android.
+  - Flechas: la mejor jugada del motor, en `paleBlue` en el visor y en el explorador; la vista previa de una jugada del explorador, en `paleGrey`. Nunca en verde, que es el de los resultados.
+- **Aperturas:** TSV de lichess (CC0) en `data/openings/`. `pnpm openings` regenera `src/lib/chess/openings.json`.
+
+## Estructura
+
+- `src/ingest/`: ingesta. Se divide en:
+  - `info64/parse.ts`: HTMLRewriter.
+  - `lichess/api.ts`: API de retransmisiones; `lichess/sync.ts`: el Workflow de las oficiales con españoles.
+  - `fide/`: lista FIDE.
+  - `games.ts`: quita las partidas repetidas (`uniqueGames`), cruza nombres, enriquece el PGN y calcula las columnas derivadas.
+  - `nombres.ts`: el nombre que se guarda, sin el año de los menores (`publicName`, ver «Menores»).
+  - `repo.ts`: escrituras con `json_each`; cada parámetro puede llevar hasta ~1 MB de JSON, porque D1 admite 100 parámetros por sentencia.
+- `src/lib/chess/`: nombres, PGN, ECO, árbol de jugadas, UCI y repertorio. Se comparte entre servidor y cliente.
+  - `repertoire.ts`: árbol de aperturas de un jugador (`/jugadores/{id}/repertorio`). Repite `games.opening_moves` (las 40 primeras medias jugadas en UCI) y compara por posición, así que junta transposiciones. `explore` consulta una posición; `indexPositions` indexa todas en una pasada (dossier).
+  - `dossier.ts`: dossier para preparar a un rival (`/jugadores/{id}/preparar`): líneas principales, cambios del último año, resultados según el ELO del rival y cruce con tus partidas (`crossReference`).
+  - `clock.ts`: apuros de tiempo del dossier a partir de `games.clocks` (segundos que le quedan a cada jugador tras cada media jugada, del `[%clk]` del PGN; lo trae el 43 % de las partidas). Cuenta como apuro bajar del 5 % del tiempo inicial, y el resumen no mezcla ritmos.
+  - `timecontrol.ts`: clasifica el ritmo (estándar, rápidas, blitz) según la FIDE a partir del texto libre del torneo o de la cabecera `TimeControl`.
+  - `rating.ts`: ELO verosímiles (1000–3000).
+- `src/lib/db/`: consultas de la web. `repertoire.ts` (`getPlayerGames`) da las partidas de un jugador con un color para el repertorio y el dossier. `games.ts` (`getTournamentGames`) da las de un torneo o de una de sus rondas, con el recuento por ronda, que hace de total. `pairings.ts` da las próximas partidas emparejadas, que salen en la ficha, en la página del torneo, en el dossier y, con la cookie `yo`, en la portada.
+  - `/partidas` sin búsqueda: «Se juegan pronto» (`getTopUpcomingPairings`, las 8 mesas de más ELO medio de las próximas rondas) y «Partidas de la semana» (`getTopRecentGames`, las 10 de más ELO medio de los últimos 7 días). En las dos, como mucho dos por torneo, con `topPerTournament`: lee las candidatas sin ordenar, elige en TS y sólo después pide el detalle de las elegidas (ver «D1 cobra por filas recorridas»). `players.ts` (`getRanking`) da, sin búsqueda, el ranking de `/jugadores` (absoluto, femenino, sub-18, +50 y +65; las edades, por año natural como la FIDE y la FEDA: `ageLimit`): los 10 primeros activos y los 10 que más suben, cada lista por su índice (`players_rating_std`, `players_rating_gain`).
+  - **Menores:** el año de nacimiento de quien puede ser menor (sub-18 por año natural, `mayBeMinor`) no sale en ninguna página, aunque la FIDE lo publique. Lo quitan las consultas de `players.ts`.
+    - **Del nombre de los homónimos** («Apellido Inventado, Nombre 2011»), `publicName` (`src/ingest/nombres.ts`). Se aplica a todo nombre que se guarda, venga de donde venga: la lista FIDE, y los participantes, las plantillas, los emparejamientos y las partidas de info64 y de lichess, que copian el nombre FIDE con su año. En las partidas, también en la cabecera `White`/`Black` del PGN.
+    - **Se sanea al escribir, no al leer:** las partidas se cruzan con los participantes por el nombre completo (la salida del paso del torneo, `SyncedTournament.participants`, no lo guardado). Sin el año, dos homónimos del mismo torneo serían el mismo nombre y ninguno recibiría su FIDE ID.
+    - El año del nombre es el de nacimiento, así que no hace falta el FIDE ID. Los adultos lo conservan.
+  - **Retirada de datos** (tabla `retiradas`, migración 0010; `/acerca` explica cómo pedirla):
+    - Quien está en la tabla no tiene ficha: la lista FIDE no lo importa (`upsertFidePlayers`) y la importación borra la fila que tuviera.
+    - En participantes, partidas y emparejamientos, su nombre pasa a «Jugador retirado» (`RETIRED_NAME`), sin FIDE ID ni título. En el PGN, también sus cabeceras.
+    - Las partidas de sus rivales se conservan.
+    - Se anonimiza al escribir (`replaceParticipations`, `saveGames`, `replacePairings` en `repo.ts`), después de cruzar: el cruce necesita su nombre y su ID para saber que es él.
+    - Con FIDE ID se reconoce sólo por él. Sin él, por el nombre (`isRetired`), así que un homónimo sin ID también se anonimiza: en la duda, se protege a quien lo pidió.
+    - **Atender una petición:**
+      1. `pnpm exec wrangler d1 execute DB --remote --command "INSERT INTO retiradas (fide_id, nombre, creada) VALUES (<FIDE ID>, '<Apellidos, Nombre>', '<YYYY-MM-DD>')"`, con el nombre como en la lista FIDE.
+      2. `pnpm exec wrangler workflows trigger games-reprocess '{"retiradas":true}' --id retirada-<FIDE ID>`: aplica la lista a lo guardado (`applyRetired`) sin recorrer todas las partidas. Lo de participantes sin ID recorre la tabla entera (unas 700.000 filas).
+      3. Comprobar que la ficha da 404 y que buscar su apellido en `/partidas` no lo encuentra; después, contestar.
+    - Quedan copias en Time Travel (30 días) y en los registros (7 días), que caducan solas.
+- `src/lib/me.ts`: «tú» en el dossier: el FIDE ID propio llega como `?yo=` (desde el dossier o con «Soy yo» en tu ficha) y se recuerda en la cookie funcional `yo` (un año, `HttpOnly`); `?yo=` vacío la borra. Guardada o borrada, la ficha y el dossier redirigen (303) a la misma URL sin `yo`, para que un enlace compartido no cambie quién es «tú» para quien lo abre; el dossier no lo hace con un ID que no existe o es el del rival, para poder decirlo (`dropMeParam`). Con ella, tu ficha, tu dossier y tu repertorio te hablan a ti (`isOwn`: «Mi dossier», «Tus líneas principales»). Es la única cookie (ver `/acerca`).
+  - En el dossier, `yo` puede traer tu nombre en vez del ID (`meName`). La tarjeta «Tú contra…» lista los 8 primeros que casan (`findPlayersByName` en `db/players.ts`, sin el rival) y cada uno enlaza a `?yo=ID#tu`. No hay parámetro de vuelta desde la ficha: sería una redirección abierta.
+- `src/lib/charts.ts`: escalas y trazados para los gráficos SVG generados en el servidor (evaluación de la partida, ELO).
+- `src/layouts/Base.astro`: cabecera, pie y `<title>`. El nombre del sitio (`siteName`, «MapleChess») va detrás del título de cada página; la portada lo pone delante y Base no lo repite.
+- `src/pages/`: páginas (formularios GET, funcionan sin JS) y endpoints `.pgn`.
+  - `api/admin/sync.ts` lanza y consulta Workflows, protegido con el secreto `ADMIN_TOKEN`.
+  - `500.astro`: el error de servidor, con `Base`, que no consulta D1, para que salga aunque la base de datos falle. No enseña el error (Astro se lo pasa en la prop `error`): queda en el registro de Workers.
+- `src/middleware.ts`: `Cache-Control: private, max-age=0, must-revalidate` por defecto (`private`: las páginas cambian con la cookie `yo`). Una ruta sólo fija la suya si admite caché (las descargas PGN). Además, `X-Content-Type-Options: nosniff` y `X-Frame-Options: SAMEORIGIN` en todas las respuestas, y el límite de ritmo (ver «D1 cobra por filas recorridas»). Sin `Referrer-Policy`: «← Volver» depende del valor por defecto.
+  - **CSP:** la pone Astro (`security.csp` en `astro.config.mjs`) como cabecera, con los hashes de sus scripts y estilos en línea, `'self'`, `'wasm-unsafe-eval'` y `style-src-attr 'unsafe-inline'` (los atributos `style` de los gráficos y de chessground). Los `<script>` y `<style>` que emite Astro llevan su hash; uno creado desde JS, un atributo `on…` o un recurso de otro origen se bloquean. `pnpm dev` no la aplica: se prueba con `pnpm build` y `pnpm exec wrangler dev`, mirando la consola.
+  - Las URL de las fuentes que se enlazan pasan por `sourceUrl` (`src/lib/urls.ts`): sólo `https://info64.org/` y `https://lichess.org/`.
+- `src/client/`: código de navegador (`<visor-partida>`, motor, `<explorador-repertorio>` y el cierre del panel de búsqueda). Tiene **su propio `tsconfig`** y se incluye con `<script src>`; ver «Trampas».
+  - `visor/panel-motor.ts` (`EnginePanel`) y `components/visor/PanelMotor.astro`: el panel de Stockfish que comparten el visor y el explorador.
+  - **Teclado del visor:**
+    - ← y → valen en toda la página.
+    - ↑, ↓, Inicio, Fin y F (girar), sólo con el foco en el visor: un atajo de una letra en toda la página incumple WCAG 2.1.4.
+    - De la lista de jugadas sólo la actual está en el tabulador (`tabindex` itinerante, `markCurrent`), y el foco la sigue. En la posición inicial, la primera jugada.
+    - Los botones de navegación van en un `role="group"`, no `toolbar`: una barra de herramientas promete moverse con las flechas entre sus botones.
+    - El tablero lleva `aria-hidden`: chessground pinta las coordenadas como texto.
+  - **Lo que puede fallar o limitarse va después del estado:** la URL, el portapapeles, el almacenamiento. Safari lanza un `SecurityError` tras 100 `history.replaceState` en 30 s, así que el visor escribe `#j` 300 ms después de la última jugada, en un `try/catch`.
+  - `panel-busqueda.ts`: el popover de la cabecera se cierra cuando el foco sale de él hacia otro elemento; si no, quedaba encima del elemento enfocado. Sin `relatedTarget` no se cierra: Safari no enfoca el botón «Buscar» al pulsarlo.
+- `public/robots.txt`: bloquea repertorio, dossier y PGN, que no aportan al índice y cada visita lee todas las partidas de un jugador; el repertorio, además, tiene un enlace por jugada y es un espacio de URL casi infinito. Sin sitemap, canonical ni OpenGraph hasta tener dominio y nombre definitivos.
+- `public/_headers`: la caché de los archivos estáticos, que no pasan por el Worker (ni por `src/middleware.ts`). El adaptador le añade la regla de `/_astro/` (inmutable, un año); la del motor (`/engine/<versión>/`) es nuestra. El resto de `public/` va con la de Workers por defecto (`public, max-age=0, must-revalidate`). Todos llevan `nosniff`.
+- **Nada de comentarios en lo que se sirve:** en las plantillas, `{/* … */}` y nunca `<!-- … -->`, que Astro deja en el HTML; `public/` va sin comentarios (lo que haya que explicar, aquí o en el script que genera el archivo). El JS y el CSS los minifica Vite.
+- `src/assets/fonts/`: la serif de los titulares (`--font-serif`), Source Serif 4 de Adobe (OFL) en peso 600, recortada y renombrada «Titulares»; su licencia, en `public/fonts/OFL.txt`. Se sirve desde el propio sitio, nunca desde un CDN. Pasa por Vite, como el CSS, para que lleve hash y quede en `/_astro/`, que el adaptador sirve con caché inmutable de un año. La regenera `scripts/fuente-titulares.py` (Python con fonttools), que también calcula el ajuste de métricas de sus respaldos en `global.css`.
+- `src/styles/global.css`: **tokens** de color, espaciado, radio y tipografía, con `light-dark()`. Usar tokens, nunca valores literales.
+  - **Texto grande:** un mínimo en rem dentro de una rejilla o de un `clamp` va dentro de `min(100%, …)`. Con la letra del navegador al 150 %, `minmax(18rem, 1fr)` (las tarjetas de la portada) o `--board-min` desbordaban el móvil. Para comprobarlo, una ventana de 250 px equivale a 375 px con la letra al 150 %.
+  - **Visor en horizontal:** dos columnas desde 54rem y, en horizontal, desde 40rem, lo que piden el tablero mínimo, el hueco y el lateral. Las cuatro consultas de `VisorPartida.astro` llevan esa condición o su complemento exacto.
+  - Todo menos los `@font-face` va en `@layer base`: cualquier regla de un componente le gana, tenga la especificidad que tenga. Sin la capa mandaba el orden de las hojas, que sigue al de los imports, y por el orden alfabético los componentes llegan antes que `Base.astro`. Si un componente no debe pisar una clase global (los colores de `.result.win`), que no declare esa propiedad. `board.css` y el CSS de chessground van sin capa: `board.css` pisa a chessground por orden.
+  - Tres papeles para el color. **Marca:** madera de arce y nogal frío (`--maple`, `--walnut`, `--brand`), para logo, favicón y tablero; es distinta de las maderas de lichess y chess24, y nunca se usa para interacción. **Acento:** azul tinta (`--accent`), para enlaces, botones, foco, lo actual y la última jugada. **Significado:** resultados y ritmos, siempre con texto o leyenda al lado. En las barras de reparto (ScoreBar), las tablas van atenuadas hacia la superficie (`--result-draw-soft`): ganadas, tablas y perdidas tienen casi la misma luminosidad y, cuando faltaba un tramo, sólo el tono decía cuáles quedaban.
+  - Contraste: 4,5:1 para texto y 3:1 para bordes de campos y partes de gráficos (WCAG 2.2 AA), en claro y en oscuro.
+  - **Enlaces:** subrayado fino y tenue (el 40 % de su color), entero al pasar o enfocar. No se quita en ninguna parte: el acento frente al texto da 1,9:1 en claro y 1,5:1 en oscuro, y el color solo no basta (WCAG 1.4.1). En un titular (los nombres del h1 de la partida) el enlace va en el color del texto, con el mismo subrayado, y en el acento al pasar por encima: en acento, era lo que más pesaba de la página.
+  - **Botón principal** (`.button`): la acción principal de la vista (Buscar, preparar la partida). Descargar, copiar y navegar van en `.button.secondary`.
+    - Uno por vista. Si un componente trae el suyo, los demás pasan a secundarios: con la tarjeta de la próxima partida, los dos de «preparar» de la ficha.
+    - Todos a `--text-s` y, si parten línea, centrados y en líneas parejas. El único grande es el del buscador de la portada (`--control-height-l` y `--text-m`).
+    - Inactivo (el extremo de una lista: el visor, la paginación): `aria-disabled="true"`, nunca `disabled`, que pierde el foco justo al llegar al final.
+  - **Etiquetas** (`.tag`): neutras, para datos de clasificación (el título FIDE, «Equipos» en los torneos por equipos, que son la excepción: los individuales no llevan nada). Con un color de significado, las del cruce del dossier. Nunca con el acento, que es para lo que se pulsa.
+  - **Cabecera de página** (`.page-head`): el enlace de vuelta encima (`.back`: «← Ficha de …» en `CabeceraJugador`, «← Volver a …» en la partida), h1, sus datos en gris (`.page-meta`, a `--text-s`) y sus acciones (`.page-actions`). La usan la ficha, la partida, el torneo y `CabeceraJugador`.
+  - **Tablas:** cabecera sin fondo, con la raya en `--border-strong`. El fondo `--surface-muted` es sólo para las filas de grupo (`.group-row`: un equipo, un torneo). Al pasar por encima sólo se marcan las filas que son un enlace (GamesTable). Una celda sin dato se deja vacía: `td:empty` pinta la raya en gris.
+    - Una tabla que se apila con un container query (GamesTable, Emparejamientos, las aperturas de la ficha) pasa a columnas sólo donde le cabe lo que piden como mínimo, medido con su contenido real (la tabla a `width: min-content`). GamesTable pide de 835 a 878 px y se pone en paralelo desde 60rem.
+    - En el móvil ninguna tabla esconde tras un scroll horizontal el dato que decide. Los listados de más de 3–4 columnas sin estructura propia (la búsqueda de jugadores, los torneos de la ficha, `/torneos`) llevan `.table-wrap.stack`:
+      - por debajo de 60rem, cada fila es un bloque con la primera celda a todo el ancho y las demás debajo, en pequeño;
+      - cada cifra lleva su rótulo (`<span class="cell-label" aria-hidden="true">`), sólo en las celdas con dato, para que `td:empty` siga pintando la raya;
+      - en paralelo piden de 725 a 934 px.
+    - Las tablas cortas se compactan en vez de apilarse (el ranking y los participantes del torneo): el nombre parte línea y el relleno se estrecha bajo 26rem.
+    - Una regla de página con `@container` sobre `.data-table` debe ir acotada a su tabla. La del ranking, sin acotar, se aplicaba también a la búsqueda en cuanto ésta pasó a ser contenedor.
+    - El número de la partida en su ronda es la **mesa** («ronda 3, mesa 12»), no «tablero» ni «m.». «Tablero» queda para el puesto dentro de un equipo (las plantillas).
+  - Campos, selects, botones y Segmented miden `--control-height`, para que cuadren en una fila: el alto lo da `min-height`, no el relleno. La sombra (`--shadow-m`) es sólo para lo que flota: el buscador y el aviso de copiado.
+  - **Iconos** (`Icon.astro`, trazos de 24×24 en un mapa): sólo para acciones de significado universal (buscar, navegar, girar, descargar, copiar), que se repiten o que van donde falta sitio. Siempre con texto visible, salvo en los botones cuadrados (`.button.secondary.square`) con `aria-label` y `title`: los controles del visor, la paginación y la lupa. Nunca de adorno; tampoco para «preparar», los ritmos ni los resultados. Descargar es siempre «Descargar PGN», con un calificativo en gris si cambia lo que te llevas («· selección»).
+- `public/favicon.svg`: el logo «!?» con los colores escritos, la misma figura que `Logo.astro`. `scripts/iconos.mjs` (con resvg) saca de él `favicon.ico` y `apple-touch-icon.png`; hay que volver a ejecutarlo si cambia.
+  - Botones, tarjetas, campos y tablas son **elementos nativos con clases globales** (`.button`, `.button.secondary`, `.link` (un botón con aspecto de enlace, para una acción dentro de una frase), `.card`, `.panel`, `.form-row`, `.field-label`, `.icon`, `.tag`, `select`, `.data-table`, `.group-row`, `.section-head`, `.eco`…). No hay componentes `Button` ni `Card`, porque sólo envolverían el elemento. Las reglas del tablero que comparten el visor y el explorador van en `components/visor/board.css`.
+  - Componente sólo cuando se repite estructura o lógica: `Segmented.astro` (selector con enlaces de color, periodo, ritmo, ronda del torneo y pestañas de `/torneos`; las de periodo y ritmo están en `src/lib/options.ts`; con `showLabel`, el rótulo encima, como un campo), `Icon.astro`, `RitmoSelect.astro`, `FiltrosPlegables.astro` (los filtros del dossier y del repertorio: en el móvil, plegados en un `<details>` que resume lo elegido; desde 40rem, siempre a la vista con `::details-content`), `CabeceraJugador.astro`, `ProximasPartidas.astro` y `Emparejamientos.astro` (mesas de la próxima ronda del torneo y, agrupadas por torneo, las de «Se juegan pronto»).
+
+## Comandos
+
+```bash
+pnpm dev                 # wrangler types + astro dev (workerd, D1 y Workflows locales)
+pnpm test                # vitest dentro de workerd (@cloudflare/vitest-plugin)
+pnpm check               # astro check + tsc -p src/client
+pnpm lint
+pnpm db:migrate:local    # aplica migrations/ a la D1 local
+pnpm build               # wrangler types + check + astro build
+pnpm run deploy          # build + wrangler deploy (sin «run», pnpm ejecuta su propio «deploy»)
+```
+
+Para lanzar una sincronización en local, con el token de `.dev.vars`:
+
+```bash
+curl -X POST localhost:4321/api/admin/sync -H "Authorization: Bearer $TOKEN" \
+  -d '{"workflow":"info64","params":{"from":"","to":"","keys":["ce-individual-absoluto-2025"]}}'
+```
+
+`GET /api/admin/sync?workflow=info64&id=<instancia>` devuelve el estado. Sólo emparejamientos: `{"from":"","to":"","pairings":"only"}` (con `keys`, sólo esos torneos). Para guardar una lectura con muchas menos partidas que las guardadas (el organizador las ha retirado): `"replace": true` junto a `keys`. Para FIDE: `{"workflow":"fide","params":{"force":true}}`. Para el reprocesado de partidas: `{"workflow":"reprocess"}`. Para lichess: `{"workflow":"lichess"}` (pasada diaria), `{"workflow":"lichess","params":{"tours":["zK5CoVvF"]}}` o `{"rounds":[…]}`; `since` (YYYY-MM-DD) mira las terminadas desde ese día y `force` relee las ya decididas.
+
+## Colaboración
+
+- **Repositorio público en GitHub** (`origin`, `SOURCE_CODE` en `src/lib/licenses.ts`, enlazado desde el pie y `/acerca`).
+  - **Nada de datos personales:** los fixtures (`test/fixtures/`) son sintéticos. Conservan la estructura de las páginas de info64, del PGN de lichess y de la lista FIDE, las jugadas, los ELO, los títulos y los torneos, pero los nombres y los FIDE ID son inventados, y no hay árbitros ni contactos. Los tests usan nombres inventados («Supuesto Irreal, Otro»). Las únicas personas reales son GM de élite que la propia web pone de ejemplo (la ayuda de las búsquedas y `scripts/humo.mjs`, que comprueba producción). Un fixture nuevo se recorta igual: sólo los elementos que lee el parser, con nombres e ID inventados.
+- **`main` es lo desplegado y está protegido:** sólo entra por PR, con la CI en verde (`.github/workflows/ci.yml`: lint, `astro check` más `tsc` del cliente, y tests) y la revisión de la otra persona.
+  - Las acciones de la CI van fijadas por SHA, con la etiqueta en un comentario, porque una etiqueta se puede mover. Las actualiza Dependabot (`.github/dependabot.yml`): cada semana, con 7 días de espera desde que sale una versión, y sus PR pasan por la CI y la revisión como los demás.
+- **Ramas cortas desde `main` actualizado:** `feature/…` o `fix/…`. El PR explica qué cambia y cómo se ha probado; si toca páginas, también en `pnpm dev`. Antes de abrirlo: `pnpm test`, `pnpm lint` y `pnpm check` (con `pnpm dev` parado).
+- **Producción sólo la opera quien despliega (Jorge):**
+  - `pnpm run deploy`, que sólo despliega `origin/main` (ver «Despliegue»);
+  - `pnpm db:migrate:remote`;
+  - los secretos y su rotación;
+  - los Workflows (`/api/admin/sync`, `wrangler workflows trigger`).
+  Quien colabora trabaja con la D1 local y su propio `.dev.vars` (copia de `.dev.vars.example`). Así nunca corren dos sincronizaciones de info64 a la vez.
+- **Migraciones:**
+  - Si al actualizar la rama otra migración ya ocupa tu número, renombra la tuya al siguiente libre antes de fusionar.
+  - Una migración aplicada en producción no se edita: se corrige con otra nueva.
+  - El PR que añade columnas derivadas dice que hay que lanzar el reprocesado tras desplegar.
+- **Secretos, nunca en el repositorio:** `.dev.vars` y `.admin-token.prod` están en `.gitignore`. Un secreto nuevo se declara en `secrets.required` de `wrangler.jsonc`; si no, `wrangler types` sólo lo saca de `.dev.vars` y la CI no lo tiene en `Env`.
+
+## Fuentes de datos
+
+- **info64.org** (FEDA): Django sin API.
+  - Calendario: `/events.json?start=&end=`.
+  - Ranking inicial con FIDE ID: `/{slug}`.
+  - Plantillas de equipos: `/team/{slug}/listing`.
+  - PGN en `textarea#pgnText`: `/{slug}/games`.
+  - Rondas: `/{slug}/{n}`, con la fecha y la hora en el título y `#pairing-table`; vacía si aún no está emparejada. Los jugadores van por su número del ranking inicial. En el calendario, cada entrada es una ronda («R.3 - …») con su hora.
+  - **Como máximo 1 petición/s** (servidor modesto): `step.sleep` entre pasos.
+  - Las páginas se piden en inglés (`Accept-Language: en`), porque los parsers buscan textos fijos.
+- **Lista FIDE** (`players_list.zip`, unos 45 MB): se descomprime en streaming con fflate, porque el Worker tiene 128 MB de memoria. Se filtra ESP (unos 98.000 jugadores; más de la mitad de los que tienen ELO, inactivos).
+  - **El filtro va sobre los bytes** (`FideListParser`): sólo se decodifican las líneas ESP, una a una. Decodificado el texto entero, cada nombre era un trozo de la cadena del bloque descomprimido, sin copiar, y lo retenía: los jugadores ocupaban 317 MB (el TXT entero) en vez de 30, y el 21-oct-2026 un intento falló por memoria. El TXT es ASCII y con saltos LF, así que las columnas de la cabecera valen en bytes. Los lotes de `upsertFidePlayers` se generan de uno en uno (`jsonChunks`).
+  - Al cambiar de lista, el ELO estándar que había pasa a `rating_std_prev` («Los que más suben»). `rating_list` guarda el mes de la lista (`YYYY-MM`) de la que sale el ELO de cada jugador, y es el mes en que se importa: así un reintento o un `force` en el mismo mes no lo pisa (`upsertFidePlayers` en `repo.ts`). No vale el `Last-Modified`, porque FIDE regenera el fichero a mitad de mes sin cambiar los ELO. El comentario de la migración 0007, ya aplicada, aún habla del `Last-Modified`. La primera lista con ELO anterior es la de noviembre de 2026.
+- **lichess:** una petición cada vez; ante un 429, esperar al menos un minuto (`LICHESS_STEP`).
+  - En `LICHESS_SYNC`, cada petición va en su paso y le sigue una pausa de 6 s (`LICHESS_PAUSE`). Desde Workers, a una petición cada uno o dos segundos, lichess respondía 429 tras unas quince seguidas: la primera tanda de la carga inicial (150 torneos) recibió 43 y tardó 2 h.
+  - **Datos del torneo por una de sus rondas** (`GET /api/broadcast/-/-/{idRonda}`, `fetchRound`): da lo mismo que `GET /api/broadcast/{id}` salvo las demás rondas. El del torneo daba un 429 cada tres minutos incluso a esa pausa: 59 en la segunda tanda, que tardó 3 h. El listado y la carga inicial ya traen una ronda de cada torneo. El endpoint del torneo queda para los demás torneos de un grupo y para `tours`.
+  - Retransmisiones enlazadas desde info64: sólo si info64 no publica el PGN. Se guardan las partidas con jugadas y con algún participante del torneo.
+  - Oficiales con españoles (`LICHESS_SYNC`), aunque info64 no las enlace. En la medición de abril a septiembre de 2026 eran unas 1.280 partidas nuevas al mes; el 97 % trae `%clk`.
+  - **Licencia CC BY-SA 4.0** (database.lichess.org): hay que citar la fuente y la licencia (pie, `/acerca`, torneo y partida, con `CC_BY_SA` de `src/lib/licenses.ts`). Lo derivado se ofrece con la misma licencia.
+  - Volcados mensuales de las oficiales: `database.lichess.org/broadcast/lichess_db_broadcast_YYYY-MM.pgn.zst`, de 12 a 31 MB. Son de pzstd, con marcos saltables; `scripts/lichess-rondas.mjs` los lee para la carga inicial.
+- **chess-results: NO se usa.** Sus términos prohíben copiar y republicar sus datos. Queda pendiente de que Swiss-Manager dé permiso.
+
+## Trampas conocidas
+
+- **No lances `pnpm check` (`astro check`) con `pnpm dev` arrancado:** comparten la caché de Vite (`node_modules/.vite`) y el servidor se queda con dependencias que ya no existen (error «file does not exist … optimize deps»). Para el servidor, comprueba y vuelve a arrancarlo.
+- **Tipos DOM frente a Workers:** los tipos globales de `worker-configuration.d.ts` definen un `Element` (el de HTMLRewriter) que oculta el del DOM. Por eso el código de navegador vive en `src/client/` con su propio `tsconfig`, excluido del raíz, y se carga con `<script src>` en vez de con `import`.
+- **Espacios en Astro:** como en JSX, si el texto parte de línea justo antes de una etiqueta o una expresión, el espacio desaparece. Dentro de un componente, también el espacio solo entre dos expresiones (`<CabeceraJugador>{a} {b}</CabeceraJugador>` salía «ab»). Pon `{' '}` explícito.
+- **Fila entera como enlace (`GamesTable`):** el enlace del resultado se estira sobre la fila con un `::after`. No vale `position: relative` en un `<tr>` de tabla: Safari no lo trataba como bloque contenedor hasta abril de 2026 (WebKit 240961), y la capa de cada fila tapaba la tabla entera. Por eso las filas son rejillas: con áreas en el móvil y con subgrid en la tabla ancha, todo bajo `@supports (grid-template-columns: subgrid)`. Con `display: grid` la tabla conserva sus roles: compruébalo con el `ariaSnapshot` de Playwright, no con un árbol aplanado. Por debajo de 60rem la cabecera queda sólo para los lectores de pantalla (oculta como `.visually-hidden`).
+- **PGN de info64 mal formado:** no deja línea en blanco entre partidas y a veces pega la cabecera tras el resultado (`0-1[Event …`). `separateGames()` en `src/lib/chess/pgn.ts` lo normaliza. Algunas partidas DGT traen jugadas ilegales: se conservan y se cortan en la jugada ilegal.
+- **Lecturas vacías, parciales o con otra forma:** ninguna sustituye lo guardado (guardas en `repo.ts` y en `info64/sync.ts`). Cada guarda que no deja guardar suma un aviso a `salud.*`, y la pasada sigue.
+  - `saveGames` no guarda una lectura sin partidas o con menos de la mitad de las guardadas: las conserva y da el torneo por revisado. Con `replace` (`"replace": true` en el Workflow de info64) la guarda igual, para cuando el organizador ha retirado partidas de verdad.
+  - `replaceParticipations` no vacía una lista guardada. `replacePairings` sin filas sólo quita las de otras rondas. `upsertTournament` no pisa con nulos la ciudad, las fechas ni el ritmo.
+  - Un PGN con menos partidas leídas que cabeceras `[Event` no se guarda: una llave sin cerrar en un comentario se traga el resto del texto, y chessops no lanza.
+  - Una página sin título (`PageFormatError`) o un 404 fallan el paso a la primera (`failFast`, con `NonRetryableError`). Si info64 cambia su HTML, la pasada acaba pronto, con los fallos en `salud.info64`, en vez de gastar cinco reintentos por torneo.
+  - Un torneo propio de lichess que se relee sin españoles o sin partidas suyas se conserva. Sólo se borra si pasa a estar en info64 o si todas sus partidas ya están en otro torneo.
+  - Las fechas imposibles de las fuentes (mes 13, año 9999) se guardan como NULL (`validDate` en `src/lib/dates.ts`): con una así, `addDays` lanzaba y la pasada diaria fallaba entera.
+- **Partidas repetidas en info64:** a veces publica el PGN entero dos veces (Xàbia 2026, CE Absoluto 2024), o la misma partida con y sin relojes o resultado, cortada a las pocas jugadas o sin jugadas. `uniqueGames()` junta las copias con la misma ronda y jugadores cuando la línea de una es el principio de la de la otra: se queda la de más jugadas y, si no tiene resultado, toma el de la otra. Una partida sin terminar (`*`) con otras jugadas, junto a una terminada de los mismos jugadores en la misma ronda, se descarta: es una grabación fallida o un tablero mal asignado. `seq > 0` queda para partidas distintas con la misma ronda.tablero (encuentros por equipos, desempates).
+- **ELO inverosímiles:** info64 publica a veces otra cosa en la columna FIDE (de 1 a 20 en torneos de menores, 118, 4296). Se guardan como NULL y se quitan del PGN (`plausibleRating`).
+- **Ritmo:** `tournaments.time_control` es texto libre del organizador en varios idiomas («90'+30''», «Estandar: 60 min. + 30 seg.», «90min/40moves+30min/end+30sec»). La cabecera `TimeControl` de los PGN DGT de info64 viene en minutos («30+30»), no en segundos como dice el estándar.
+- **Retransmisiones de lichess que desaparecen:** si ninguna retransmisión enlazada responde, la sincronización conserva las partidas guardadas y sólo marca el torneo como revisado (`markGamesChecked`).
+- **D1 cobra por filas recorridas:** evita `count(*)` y `ORDER BY` sin índice en páginas con tráfico. Los totales de la portada están en `site_totals` y se recalculan al final de cada sincronización.
+  - Cuenta las entradas de índice recorridas, no las lecturas de la fila por rowid: medido en producción, 228 partidas por `games_white` son 229 filas, se pidan las columnas que se pidan. Un índice cubriente no abarata nada.
+  - Ordenar sin índice vuelve a contar cada fila, aunque haya `LIMIT`, y una función de ventana, otras dos más. Medido el 21-oct-2026 con las 872 partidas de una semana por `games_date`: 872 filas leerlas, 1.731 con `ORDER BY … LIMIT 10` y 3.471 con `ROW_NUMBER() OVER (PARTITION BY tournament_id …)`. Para elegir unas pocas de unos cientos, mejor leerlas sin ordenar y elegir en TS.
+  - Sí cuentan la búsqueda de cada fila por su clave primaria (`json_each` → `games`: dos por partida), cada coincidencia que da el FTS y la lista que materializa `x IN (SELECT …)`.
+  - **Búsquedas** (`searchGames`, `searchPlayers`, `findPlayersByName`; 22-oct-2026):
+    - el orden, sin `date IS NULL` ni `rating_std IS NULL`: en DESC, SQLite ya deja los NULL al final y puede seguir el índice;
+    - las búsquedas, con tope: el recuento para en 1.001 filas (`countSql`) y las páginas en la 20 (`SEARCH_PAGES`, `searchPage`); por encima, «más de 1000». Si el nombre es el único filtro, se cuenta en el FTS. La ficha (`searchGames` con un jugador, también con un torneo o una lista) no lleva tope: su recuento va por su índice y es barato, así que da el total exacto y todas sus páginas. `pageParam` no pone tope, ni tampoco los torneos;
+    - con el nombre o el ECO, el recuento va primero y decide si recorrer el índice del orden (`games_date`, `players_rating_std`) con `INDEXED BY` (`countAndPlan`, `walkOrderIndex`). Con muchas coincidencias se recorre en las 20 páginas. Con un apellido raro, recorrerlo leería la tabla entera. Con el recuento en el tope, en una página honda se cuenta hasta √(necesarias × filas de la tabla) para decidir: «santos» (1.263 partidas) lee en la página 20 6.315 filas ordenándolas y 105.076 recorriendo `games_date`. Con `LIMIT 5000` SQLite prefería ordenar la tabla, así que con sólo fechas se recorre siempre;
+    - medido en la D1 remota, en la página 1 y en la 20: `/partidas?desde=1000-01-01`, 1.738 y 4.372 (antes del tope, 529.752 en cualquiera); `?eco=B`, 4.034 y 17.243; «garcia», 21.190 y 42.494; `/jugadores?q=garcia`, 12.241 y 43.918; `?sexo=F`, 22.840;
+    - el título y el sexo van por su índice (`players_title`, parcial, y `players_sex`, migración 0009), en el orden de `PLAYER_ORDER`: el listado para al llenar la página y el recuento cuenta sólo los suyos. `/jugadores?titulo=GM` leía 103.538 filas en remoto (el recuento recorría la tabla); con 98.000 jugadores sembrados, de 98.106 a 111;
+    - sin `sqlite_stat1`, el planificador cree que `players_sex` filtra mucho, aunque son dos valores. En «Los que más suben» femenino lo prefería a `players_rating_gain` y ordenaba a todas las jugadoras (de 206 filas a 11.885): allí el sexo va con `+p.sex`, que no usa índice. Con nombre y `sexo=M`, el recuento va por `players_sex` y lee un 15 % más (63.042 → 72.678 en local); con `sexo=F`, la mitad (149.710 → 70.798). Se acepta;
+    - la importación FIDE escribe una entrada más por jugador en `players_sex`: de 294.141 filas escritas a 393.198, el 0,8 % de los 50 M incluidos al mes.
+  - **Descargas PGN** en dos fases: los id por índice (`exportGameIds`) y los PGN de 500 en 500 (`gamesPgn`), enviados en trozos (`pgnResponse`). La de una búsqueda lleva las mismas que enseña, como mucho 1.000 (`exportLimit`); la de un jugador, un torneo o el repertorio, hasta 5.000. La segunda fase suma dos filas por partida, a cambio de la memoria constante. Medido: la de `?desde=1000-01-01` (5.000) leía unas 400.000 filas y juntaba 20,7 MB en memoria, y ahora (1.000) unas 4.200; la de «garcia», de 62.300 a unas 43.500.
+  - **Límite de ritmo** (`src/middleware.ts`, binding `RATE_LIMITER`): 30 peticiones caras por minuto y por IP (búsquedas, PGN, dossier y repertorio; nunca fichas, partidas, torneos ni `/api`), con la página 429 y `Retry-After`. **Apagado en producción** (`"RATE_LIMIT": "off"` en `wrangler.jsonc`) hasta confirmar el precio del binding; en local, `RATE_LIMIT=on` en `.dev.vars`. `robots.txt` aparta además `/partidas?`, `/jugadores?` y `/torneos?`.
+- **Migraciones:** la D1 de producción ya tiene datos, así que cualquier cambio de esquema va en una migración nueva (`migrations/NNNN_…`, con el siguiente número libre), aplicada con `pnpm db:migrate:remote` antes de desplegar. Para regenerar la D1 local hay que parar el servidor (en Windows mantiene abierto el SQLite), borrar `.wrangler/state/v3/d1` y ejecutar `pnpm db:migrate:local`.
+- **D1 local frente a remota:** wrangler identifica la base local por `preview_database_id` (`"DB"`), no por `database_id`. Si se quita, la local aparece vacía. Las órdenes `--remote` dicen «preview database», pero usan el `database_id` de producción.
+- **Bloqueos de LaLiga:** en horario de partido, las operadoras españolas bloquean IP de Cloudflare, incluidas las de `workers.dev` (188.114.96.0/23). Si la web no carga desde España, mira hayahora.futbol antes de depurar. La API de Cloudflare (wrangler) sigue funcionando.
+- **Cabeceras HTTP sólo en ASCII** (el User-Agent de `src/ingest/http.ts`).
+- **Horas de ronda en hora local:** info64 publica la hora local de España sin zona. `pairings.starts_at` se guarda así (`'YYYY-MM-DD HH:MM'`) y se compara con `madridDateTime()`; en Canarias hay una hora de desfase.
+- **Sincronizaciones a mano y crons:** son automáticas las de info64 a las 05:00 UTC y a las 15:00 y las 22:00 de Madrid (13:00 y 20:00 UTC en verano, 14:00 y 21:00 en invierno) y la de lichess a las 06:30 UTC. No lances otra a esas horas: serían dos a la vez (la de info64 también pide a lichess).
+
+## Despliegue (Cloudflare Workers Paid)
+
+En producción desde el 17-oct-2026: https://buscador-partidas-ajedrez.aportuvas.workers.dev
+
+- D1 `ajedrez` en jurisdicción `eu`.
+- El secreto `ADMIN_TOKEN` tiene su copia local en `.admin-token.prod`, ignorado por git.
+- **Desplegar: `pnpm run deploy`** (`scripts/desplegar.mjs`). En orden:
+  1. Se niega si el árbol tiene cambios, si `HEAD` no es `origin/main` tras un `git fetch` o si es la media hora que sigue a un cron de `wrangler.jsonc`: 05:00 y 06:30 UTC, las cuatro horas de emparejamientos (13, 14, 20 y 21 UTC) y el día 3 a las 06:00. `pnpm run deploy --comprobar` sólo hace estas comprobaciones; con `--comprobar=<fecha ISO>`, la del cron como si fuera esa hora.
+  2. `copy-engine`: `git pull` no ejecuta el postinstall, y sin él un cambio de versión del motor deja producción sin Stockfish.
+  3. Apunta en `despliegues.log` (ignorado, como todos los `.log`) la hora, el commit y el marcador de Time Travel de D1.
+  4. `pnpm build` y `wrangler deploy`.
+  5. `scripts/humo.mjs`: 10 URL a una petición por segundo, con su estado, un texto de la página y sus cabeceras; sin búsquedas. También a mano: `node scripts/humo.mjs [URL base]`. Un 503 de `/api/estado` es un aviso, no un fallo: falla la ingesta, no el despliegue.
+  - No mira si corre alguna instancia: antes, la primera fila de `wrangler workflows instances list` de cada Workflow debe estar Completed.
+  - Si otra sesión trabaja en el checkout, despliega desde un worktree de `main` (`git worktree add --detach`), que también es `origin/main`.
+- **Volver atrás:**
+  - El Worker: `wrangler deployments list` y `wrangler rollback <versión>`. Es inmediato y no toca D1.
+  - D1: `wrangler d1 time-travel restore ajedrez --bookmark=<marcador>`, con el de `despliegues.log`, o `--timestamp=<ISO>` (Time Travel guarda 30 días). Sustituye la base entera en el sitio: se pierde todo lo escrito después, también lo de las sincronizaciones. Sólo si el problema está en los datos, como una migración o una ingesta que los rompió. Al acabar, dice el marcador anterior, para deshacerlo. Sin ensayar todavía.
+  - Por eso las migraciones sólo añaden (tablas, columnas, índices): el Worker anterior funciona con el esquema nuevo, y volver atrás el Worker no obliga a restaurar D1.
+- **Rotar credenciales:**
+  - `ADMIN_TOKEN`: genera uno nuevo (p. ej. `openssl rand -hex 32`), súbelo con `wrangler secret put ADMIN_TOKEN` y guárdalo en `.admin-token.prod`. El secreto nuevo vale en cuanto se sube.
+  - El token OAuth de wrangler: `wrangler logout`, que lo revoca, y `wrangler login`.
+- **Vigilancia de la ingesta** (`src/lib/salud.ts`):
+  - Al terminar, cada pasada guarda en `sync_state` la clave `salud.<pasada>` (`info64`, `emparejamientos`, `lichess` y `fide`) con un JSON `{fin, ok, fallos, avisos}`: torneos bien, torneos fallidos y avisos de las guardas. Se escribe con `saveHealth`. Las escriben sólo las pasadas programadas: la diaria de info64 (también `emparejamientos`), las de emparejamientos, la diaria de lichess y la FIDE (también sin cambios en la lista, y con un fallo si la importación falla). Una pasada a mano (`keys`, `chain`, `tours`, `rounds`) no, para no tapar que falle la programada. Para verlas: `wrangler d1 execute DB --remote --command "SELECT key, value FROM sync_state WHERE key GLOB 'salud.*'"`.
+  - `GET /api/estado` es público y sin caché. Da 503 si alguna pasada está caducada (más de 26 h la diaria de info64 y la de lichess, 14 h la de emparejamientos y 35 días la FIDE) o con más del 20 % de torneos fallidos. Si no, 200. Sólo dice el estado de cada pasada, sin recuentos ni fechas. Una pasada que aún no ha escrito su clave sale «sin datos», con 200.
+  - `.github/workflows/vigilancia.yml` lo pide a las 07:30 y a las 23:30 UTC, y a mano con «Run workflow». Si falla, GitHub manda un correo, y el registro del paso dice qué pasada falla. En un repositorio público, GitHub desactiva los `schedule` tras 60 días sin actividad; se reactivan en la pestaña Actions.
+- Lanzar sincronizaciones, de una de estas dos formas:
+  - Por `/api/admin/sync` con `-H "Authorization: Bearer $(cat .admin-token.prod)"`.
+  - Por la API de Cloudflare: `wrangler workflows trigger <info64-sync|lichess-sync|fide-sync> '<params>'`. Para ventanas de info64, pasa `--id info64-<from>-<to>`, como hace el endpoint, para que relanzar no duplique.
+- Seguir las instancias: panel de Cloudflare → Workers → Workflows, o `wrangler workflows instances list info64-sync` y `wrangler workflows instances describe info64-sync <id>` (línea `Status:`).
+- Resincronizar torneos concretos (p. ej. tras arreglar un parser): `{"from":"","to":"","keys":[…]}`. Con `keys` se releen aunque estén cerrados. Las claves se sacan de la D1 remota (`tournaments.source_key`). Para cientos de torneos, mejor en tandas de unos 100 lanzadas una tras otra: cada instancia se sigue y se relanza mejor, y **nunca dos a la vez** (1 petición/s). El límite no es el de pasos: Workers Paid admite 10.000 por instancia, `step.sleep` no cuenta y un torneo usa de 2 a 4.
+- Con una migración, el marcador va antes de migrar: el que apunta `pnpm run deploy` ya sería posterior. Primero `pnpm run deploy --comprobar` y `wrangler d1 time-travel info ajedrez`, y se apunta el marcador en `despliegues.log`. Después:
+  - si la migración sólo añade tablas (como `0004_pairings`): `pnpm db:migrate:remote` y luego `pnpm run deploy`;
+  - si añade columnas derivadas: `pnpm db:migrate:remote`, `pnpm run deploy` y `wrangler workflows trigger games-reprocess '{}' --id <nombre>`.
+- Carga inicial (17 y 18-oct-2026, terminada sin errores; no hay que repetirla):
+  - FIDE: `{"force":true}`.
+  - info64, de 2014-01-01 a 2026-10-17, en ventanas mensuales encadenadas: `{"from":"2014-01-01","to":"2014-01-31","chain":{"until":"2026-10-17","months":1}}`. Tardó unas 11 h a 1 petición/s.
+- Carga inicial de lichess, de una vez:
+  1. `scripts/lichess-rondas.mjs` saca una ronda por torneo con españoles de los volcados mensuales. Hace falta la lista de FIDE ID españoles de la D1 remota.
+  2. El Workflow las recibe en `{"rounds":[…]}`, en tandas de unos 150 lanzadas una tras otra, nunca dos a la vez ni a la hora de un cron.
+  3. Al final, una pasada con `{"since":"<día siguiente al último volcado>"}` cubre el mes en curso, que aún no tiene volcado. La API sólo da unas tres semanas de terminadas.
+- **Campeonatos históricos (1902–2013): pendientes.** No lances su cadena mientras corra otra de info64, porque dos a la vez pasan de 1 petición/s: `{"from":"1902-01-01","to":"1902-12-31","chain":{"until":"2013-12-31","months":12}}` con id `info64-1902-01-01-1902-12-31`.

@@ -1,0 +1,20 @@
+---
+import Base from '../layouts/Base.astro'
+
+// Demasiadas peticiones: el middleware trae aquí las búsquedas, descargas,
+// dossieres y repertorios de quien pasa del límite de ritmo, con la cabecera
+// Retry-After. La URL del navegador sigue siendo la que se pidió, así que
+// basta con recargar. Base no consulta D1.
+Astro.response.status = 429
+---
+
+<Base title="Demasiadas peticiones" noindex>
+	<h1>Demasiadas peticiones</h1>
+	<p>
+		Has hecho muchas búsquedas o descargas en poco tiempo. Espera un minuto y vuelve a cargar la página. Las fichas, las
+		partidas y los torneos se pueden seguir viendo.
+	</p>
+	<p class="page-actions">
+		<a class="button secondary" href="/">Ir a la portada</a>
+	</p>
+</Base>

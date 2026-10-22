@@ -1,0 +1,64 @@
+---
+// Buscador de jugadores: formulario GET a /jugadores, sin JS. Lo usan el panel
+// de la cabecera (Base.astro) y el 404; la portada tiene el suyo, más grande.
+// Los demás atributos (id, popover…) van al <form>, y el hueco, tras «Buscar»,
+// es para lo que añada quien lo usa (el «Cerrar» del panel).
+import type { HTMLAttributes } from 'astro/types'
+
+interface Props extends HTMLAttributes<'form'> {
+	/** Enfoca el campo al mostrarse: en un popover, al abrirse. */
+	autofocus?: boolean
+}
+
+const { autofocus = false, ...rest } = Astro.props
+---
+
+<form action="/jugadores" method="get" role="search" {...rest}>
+	{/*
+		La fila va en un div y no en el form: una regla de autor con display
+		en el form ganaría a la del navegador que oculta el popover cerrado.
+	*/}
+	<div class="form-row">
+		<label>
+			Nombre del jugador
+			<input
+				name="q"
+				type="search"
+				placeholder="Apellidos o nombre"
+				autocomplete="off"
+				enterkeyhint="search"
+				required
+				autofocus={autofocus}
+			/>
+		</label>
+		<button class="button" type="submit">Buscar</button>
+		<slot />
+	</div>
+</form>
+
+<style>
+	label {
+		flex: 1 1 14rem;
+	}
+
+	/*
+	 * Como popover (el panel de la cabecera), arriba y centrado. El navegador lo
+	 * pone fixed con inset: 0 y margin: auto, centrado en los dos ejes. Con el
+	 * borde de abajo en auto y la altura según el contenido, el margen vertical
+	 * vale 0 y queda arriba; con los dos lados fijos, width: auto llena el
+	 * hueco hasta el ancho máximo y el margen auto de los lados lo centra. El
+	 * display sigue siendo cosa del navegador: oculto mientras está cerrado.
+	 */
+	form[popover] {
+		inset: var(--space-4) var(--space-4) auto;
+		width: auto;
+		max-inline-size: var(--reading-width);
+		margin: 0 auto;
+		padding: var(--space-4);
+		border: 1px solid var(--border);
+		border-radius: var(--radius-l);
+		background: var(--surface);
+		color: var(--text);
+		box-shadow: var(--shadow-m);
+	}
+</style>

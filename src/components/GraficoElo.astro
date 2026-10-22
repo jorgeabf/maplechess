@@ -1,0 +1,245 @@
+---
+// ELO del jugador en cada torneo (el de su inscripción), con una serie por
+// ritmo. SVG generado en el servidor, estirado al ancho disponible: las líneas
+// y los puntos no se deforman (vector-effect) y las etiquetas de los ejes son
+// HTML para que no encojan en el móvil. La tabla de torneos da lo mismo en texto.
+import { linePath, linearScale, minorLabels, niceTicks } from '../lib/charts'
+import { plausibleRating } from '../lib/chess/rating'
+import { TIME_CLASS_LABEL, TIME_CLASSES, timeClassOf, type TimeClass } from '../lib/chess/timecontrol'
+import type { ParticipationRow } from '../lib/db/players'
+import { formatDate } from '../lib/format'
+
+interface Props {
+	tournaments: ParticipationRow[]
+}
+
+interface Mark {
+	date: string
+	rating: number
+	name: string
+}
+
+// Coordenadas del SVG en tanto por cien del alto y del ancho.
+const SIZE = 100
+const INSET = 4
+
+const series = new Map<TimeClass, Mark[]>()
+for (const t of Astro.props.tournaments) {
+	const rating = plausibleRating(t.rating)
+	// El ELO es el de la inscripción: va en la fecha de inicio. Con la de fin,
+	// una liga de toda la temporada (la Bundesliga 2026/27 acaba en abril de
+	// 2027) salía en el futuro y estiraba el eje.
+	const date = t.startDate ?? t.endDate
+	const timeClass = timeClassOf(t.timeControl)
+	if (rating === null || !date || !timeClass) continue
+	const marks = series.get(timeClass) ?? []
+	marks.push({ date, rating, name: t.tournamentName })
+	series.set(timeClass, marks)
+}
+for (const marks of series.values()) marks.sort((a, b) => a.date.localeCompare(b.date))
+const all = [...series.values()].flat()
+
+const time = (date: string) => Date.parse(`${date}T00:00:00Z`)
+const times = all.map((m) => time(m.date))
+const ratings = all.map((m) => m.rating)
+const [lo, hi] = [Math.min(...ratings) - 20, Math.max(...ratings) + 20]
+const x = linearScale(Math.min(...times), Math.max(...times), INSET, SIZE - INSET)
+const y = linearScale(lo, hi, SIZE - INSET, INSET)
+const point = (m: Mark) => ({ x: x(time(m.date)), y: y(m.rating) })
+const ticks = niceTicks(lo, hi, 4)
+// Una marca por cada 1 de enero dentro del intervalo.
+const [firstYear, lastYear] = [Math.min(...times), Math.max(...times)].map((t) => new Date(t).getUTCFullYear())
+const inRange = Array.from({ length: lastYear - firstYear + 1 }, (_, i) => firstYear + i)
+	.map((year) => ({ year, at: x(time(`${year}-01-01`)) }))
+	.filter((t) => t.at >= INSET && t.at <= SIZE - INSET)
+// Con más de 6 años, los intermedios se ocultan en un gráfico estrecho (ver .minor).
+const minor = minorLabels(inRange.length, 6)
+const years = inRange.map((t, i) => ({ ...t, minor: minor[i] }))
+const percent = (n: number) => `${Math.round(n * 100) / 100}%`
+---
+
+{
+	all.length >= 2 && (
+		<figure class="elo-chart">
+			<div class="plot">
+				<svg viewBox={`0 0 ${SIZE} ${SIZE}`} preserveAspectRatio="none" aria-hidden="true">
+					{ticks.map((t) => (
+						<line class="grid" x1="0" x2={SIZE} y1={y(t)} y2={y(t)} />
+					))}
+					{TIME_CLASSES.filter((c) => series.has(c)).map((c) => (
+						<g class={c}>
+							<path class="line" d={linePath(series.get(c)!.map(point))} />
+							{series.get(c)!.map((m) => (
+								<path class="dot" d={`${linePath([point(m)])}h0`}>
+									<title>
+										{m.name}: {m.rating} ({formatDate(m.date)})
+									</title>
+								</path>
+							))}
+						</g>
+					))}
+				</svg>
+				{ticks.map((t) => (
+					<span class="y-label num" style={{ top: percent(y(t)) }}>
+						{t}
+					</span>
+				))}
+				{years.map((t) => (
+					<span class:list={['x-label', 'num', { minor: t.minor }]} style={{ left: percent(t.at) }}>
+						{t.year}
+					</span>
+				))}
+			</div>
+			<figcaption>
+				{TIME_CLASSES.filter((c) => series.has(c)).map((c) => (
+					<span class:list={['key', c]}>
+						<svg class="sample" viewBox="0 0 24 8" aria-hidden="true">
+							<line class="line" x1="2" x2="22" y1="4" y2="4" />
+						</svg>
+						{TIME_CLASS_LABEL[c]}
+					</span>
+				))}
+				<span class="muted">· ELO con el que jugó cada torneo</span>
+			</figcaption>
+		</figure>
+	)
+}
+
+<style>
+	.elo-chart {
+		margin: 0 0 var(--space-5);
+	}
+
+	.plot {
+		position: relative;
+		block-size: 10rem;
+		margin-inline-start: var(--space-7);
+		margin-block-end: var(--space-5);
+		container-type: inline-size;
+	}
+
+	.plot svg {
+		position: absolute;
+		inset: 0;
+		inline-size: 100%;
+		block-size: 100%;
+		overflow: visible;
+	}
+
+	.grid,
+	.line,
+	.dot {
+		fill: none;
+		vector-effect: non-scaling-stroke;
+	}
+
+	.grid {
+		stroke: var(--border);
+		stroke-width: 1;
+	}
+
+	.line {
+		stroke: currentColor;
+		stroke-width: 2;
+	}
+
+	/* Un trazo de longitud cero con extremo redondo es un punto que no se deforma. */
+	.dot {
+		stroke: currentColor;
+		stroke-width: 5;
+		stroke-linecap: round;
+	}
+
+	.standard {
+		color: var(--chart-standard);
+	}
+
+	.rapid {
+		color: var(--chart-rapid);
+	}
+
+	.blitz {
+		color: var(--chart-blitz);
+	}
+
+	/*
+	 * Cada ritmo con su trazo, para que el color no sea lo único que los
+	 * distingue: con protanopía o deuteranopía el azul y el morado se
+	 * confunden. Con vector-effect, los guiones se miden en píxeles de pantalla.
+	 */
+	.rapid .line {
+		stroke-dasharray: 6 4;
+	}
+
+	.blitz .line {
+		stroke-dasharray: 0 4;
+		stroke-linecap: round;
+	}
+
+	.y-label,
+	.x-label {
+		position: absolute;
+		font-size: var(--text-xs);
+		color: var(--text-muted);
+	}
+
+	.y-label {
+		inset-inline-end: calc(100% + var(--space-2));
+		translate: 0 -50%;
+	}
+
+	.x-label {
+		inset-block-start: calc(100% + var(--space-1));
+		translate: -50% 0;
+	}
+
+	/*
+	 * Cada año pide unos 34 px (la etiqueta y aire). En un gráfico estrecho
+	 * (a 375 px mide 295) doce o trece años se montaban unos sobre otros
+	 * («20152016…»): se quedan uno de cada dos o tres (minorLabels).
+	 */
+	@container (width < 30rem) {
+		.x-label.minor {
+			display: none;
+		}
+	}
+
+	figcaption {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: var(--space-1) var(--space-3);
+		font-size: var(--text-s);
+	}
+
+	/*
+	 * La leyenda en el color del texto; el de la serie, sólo en la muestra, que
+	 * dibuja la misma línea que el gráfico. Como las del gráfico, conserva su
+	 * color en alto contraste: si no, no diría qué línea es cuál.
+	 */
+	figcaption .key {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--space-1);
+		color: var(--text);
+	}
+
+	.sample {
+		inline-size: 1.5rem;
+		block-size: 0.5rem;
+		overflow: visible;
+		forced-color-adjust: none;
+	}
+
+	.key.standard .sample {
+		color: var(--chart-standard);
+	}
+
+	.key.rapid .sample {
+		color: var(--chart-rapid);
+	}
+
+	.key.blitz .sample {
+		color: var(--chart-blitz);
+	}
+</style>

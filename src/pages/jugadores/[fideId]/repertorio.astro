@@ -1,0 +1,201 @@
+---
+// Repertorio del jugador para preparar una partida contra él: en cada
+// posición, qué se ha jugado en sus partidas con un color y cómo le fue.
+// Página aparte de la ficha para que cada clic sólo cueste la consulta del
+// repertorio (una fila por partida) y no todas las de la ficha.
+import { env } from 'cloudflare:workers'
+import CabeceraJugador from '../../../components/CabeceraJugador.astro'
+import FiltrosPlegables from '../../../components/FiltrosPlegables.astro'
+import GamesTable from '../../../components/GamesTable.astro'
+import Icon from '../../../components/Icon.astro'
+import Pagination from '../../../components/Pagination.astro'
+import Explorador from '../../../components/repertorio/Explorador.astro'
+import Segmented from '../../../components/Segmented.astro'
+import Base from '../../../layouts/Base.astro'
+import { explore, parseLine } from '../../../lib/chess/repertoire'
+import { TIME_CLASS_LABEL } from '../../../lib/chess/timecontrol'
+import { addYears, isoDate } from '../../../lib/dates'
+import { getGamesByIds, type GameListRow } from '../../../lib/db/games'
+import { offset, PAGE_SIZE, toPage } from '../../../lib/db/pagination'
+import { getPlayer } from '../../../lib/db/players'
+import { getPlayerGames, repertoireGames } from '../../../lib/db/repertoire'
+import { COLOR_NAME, displayName, formatGames } from '../../../lib/format'
+import { ME_COOKIE, isOwn, resolveMe } from '../../../lib/me'
+import { PERIOD_OPTIONS, periodSummary, TIME_CLASS_OPTIONS, timeClassSummary } from '../../../lib/options'
+import { positiveInt, repertoireParams, withParams, type RepertoireSearch } from '../../../lib/params'
+
+const fideId = positiveInt(Astro.params.fideId)
+if (fideId === null) return Astro.rewrite('/404')
+
+const { color, period, timeClass, minElo, maxElo, moves, page } = repertoireParams(Astro.url.searchParams)
+const from = period ? addYears(isoDate(new Date()), -Number(period)) : null
+const [player, playerGames] = await Promise.all([
+	getPlayer(env.DB, fideId),
+	getPlayerGames(env.DB, fideId, color, { from, timeClass, minOpponentElo: minElo, maxOpponentElo: maxElo })
+])
+if (!player) return Astro.rewrite('/404')
+const games = repertoireGames(playerGames)
+// Tu propio repertorio (cookie yo): los textos te hablan a ti.
+const own = isOwn(resolveMe(null, Astro.cookies.get(ME_COOKIE)?.value), fideId)
+
+const line = parseLine(moves)
+const exploration = explore(games, line.position, color)
+
+// Partidas de la posición, paginadas; cada una se abre en el visor en la
+// jugada en la que llega a ella.
+const listed = toPage(exploration.games.slice(offset(page), offset(page) + PAGE_SIZE), exploration.games.length, page)
+const plies = new Map(listed.rows.map((g) => [g.id, g.ply]))
+const details = new Map((await getGamesByIds(env.DB, [...plies.keys()])).map((g) => [g.id, g]))
+const rows = listed.rows.map((g) => details.get(g.id)).filter((g): g is GameListRow => g !== undefined)
+
+// Enlaces: la página siempre vuelve a la primera de partidas. Blancas y
+// "todas" son los valores por defecto y no van en la URL. En el enlace al
+// dossier el color sí: sin él, abriría con el de vuestra partida.
+const link = (changes: Record<string, string | null>) => withParams(Astro.url, { ...changes, p: null })
+const lineHref = (ucis: string[]) => link({ jugadas: ucis.join(' ') || null })
+const colors: { id: RepertoireSearch['color']; label: string }[] = [
+	{ id: 'white', label: 'Con blancas' },
+	{ id: 'black', label: 'Con negras' }
+]
+const eloFiltered = minElo !== null || maxElo !== null
+const dossierHref = withParams(new URL(`/jugadores/${fideId}/preparar`, Astro.url), {
+	color,
+	periodo: period || null,
+	ritmo: timeClass
+})
+const pgnHref = withParams(new URL(`/jugadores/${fideId}/repertorio.pgn${Astro.url.search}`, Astro.url), { p: null })
+
+const name = displayName(player.name)
+const title = own ? 'Mi repertorio' : `Repertorio de ${name}`
+const colorText = COLOR_NAME[color]
+const filterText = [
+	period && `en los últimos ${period} años`,
+	timeClass && `a ${TIME_CLASS_LABEL[timeClass].toLowerCase()}`,
+	eloFiltered && `contra rivales de ELO ${minElo ?? '…'}–${maxElo ?? '…'}`
+]
+	.filter(Boolean)
+	.map((t) => ` ${t}`)
+	.join('')
+// Lo elegido, para el resumen de los filtros plegados del móvil.
+const summary = [
+	colors.find((c) => c.id === color)!.label.toLowerCase(),
+	periodSummary(period),
+	timeClassSummary(timeClass),
+	...(eloFiltered ? [`ELO del rival ${minElo ?? '…'}–${maxElo ?? '…'}`] : [])
+]
+---
+
+<Base
+	title={title}
+	section="jugadores"
+	description={`Aperturas de ${name} (FIDE ${fideId}) con ${colorText}: jugadas, resultados y partidas.`}
+	noindex
+>
+	<CabeceraJugador fideId={fideId} name={name} title={title} own={own}>
+		{formatGames(games.length)} con {colorText}
+		{filterText}.{' '}
+		{
+			own ? (
+				<>
+					Lo que ven tus rivales, resumido en{' '}
+					<a href={dossierHref} rel="nofollow">
+						Mi dossier
+					</a>
+					.
+				</>
+			) : (
+				<>
+					Resumen para preparar la partida en su{' '}
+					<a href={dossierHref} rel="nofollow">
+						dossier
+					</a>
+					.
+				</>
+			)
+		}
+	</CabeceraJugador>
+
+	<FiltrosPlegables summary={summary}>
+		<Segmented showLabel label="Color" options={colors} current={color} href={(id) => link({ color: id === 'white' ? null : id })} />
+		<Segmented showLabel label="Periodo" options={PERIOD_OPTIONS} current={period} href={(id) => link({ periodo: id || null })} />
+		<Segmented
+			showLabel
+			label="Ritmo"
+			options={TIME_CLASS_OPTIONS}
+			current={timeClass ?? ''}
+			href={(id) => link({ ritmo: id || null })}
+		/>
+		{/* Con el rótulo encima, como los selectores de al lado. */}
+		<form method="get" class="elo-filter">
+			{color !== 'white' && <input type="hidden" name="color" value={color} />}
+			{period && <input type="hidden" name="periodo" value={period} />}
+			{timeClass && <input type="hidden" name="ritmo" value={timeClass} />}
+			{line.moves.length > 0 && <input type="hidden" name="jugadas" value={line.moves.map((m) => m.uci).join(' ')} />}
+			<span class="field-label" aria-hidden="true">ELO del rival</span>
+			<div class="elo-fields">
+				<label>
+					<span class="visually-hidden">ELO mínimo del rival</span>
+					<input name="elo_min" type="number" min="1000" max="3000" value={minElo ?? ''} placeholder="desde" />
+				</label>
+				<label>
+					<span class="visually-hidden">ELO máximo del rival</span>
+					<input name="elo_max" type="number" min="1000" max="3000" value={maxElo ?? ''} placeholder="hasta" />
+				</label>
+				<button class="button secondary" type="submit">Aplicar</button>
+				{eloFiltered && <a href={link({ elo_min: null, elo_max: null })} rel="nofollow">Quitar</a>}
+			</div>
+		</form>
+	</FiltrosPlegables>
+
+	{
+		games.length > 0 ? (
+			<Explorador line={line} exploration={exploration} color={color} name={name} own={own} lineHref={lineHref} />
+		) : (
+			<p class="muted">
+				No hay partidas {own ? 'tuyas' : 'suyas'} con {colorText}
+				{filterText} que tengan jugadas.
+			</p>
+		)
+	}
+
+	{
+		exploration.games.length > 0 && (
+			<section id="partidas">
+				<div class="section-head">
+					<h2>Partidas que pasan por esta posición</h2>
+					<a class="button secondary" href={pgnHref} rel="nofollow" download>
+						<Icon name="download" />
+						Descargar PGN
+					</a>
+				</div>
+				<GamesTable games={rows} fideId={fideId} ply={(g) => plies.get(g.id)} />
+				<Pagination page={listed.page} pages={listed.pages} total={listed.total} noun={['partida', 'partidas']} anchor="partidas" />
+			</section>
+		)
+	}
+</Base>
+
+<style>
+	.elo-filter {
+		display: grid;
+		justify-items: start;
+		gap: var(--space-1);
+	}
+
+	.elo-fields {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: var(--space-2);
+		font-size: var(--text-s);
+	}
+
+	.elo-filter input {
+		inline-size: 6rem;
+	}
+
+	#partidas {
+		margin-top: var(--space-7);
+	}
+
+</style>

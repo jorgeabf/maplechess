@@ -1,0 +1,4 @@
+allowBuilds:
+  # Comprueban/enlazan el binario de su plataforma; los usan wrangler y Vite.
+  esbuild: true
+  workerd: true

@@ -1,0 +1,40 @@
+# Comprobaciones de cada PR y de main: lint, tipos y tests. No despliega: el
+# despliegue y las operaciones de producción se hacen a mano (ver CLAUDE.md).
+# El nombre del job ("CI") es la comprobación obligatoria de la protección de main.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ci:
+    name: CI
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      # Las acciones, fijadas por SHA (la etiqueta, en el comentario): una etiqueta
+      # se puede mover. Dependabot las actualiza (.github/dependabot.yml).
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+      # Sin versión: usa la de packageManager en package.json.
+      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5.0.0
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # worker-configuration.d.ts no se versiona; wrangler lo genera sin credenciales.
+      - run: pnpm exec wrangler types
+      - run: pnpm lint
+      - run: pnpm check
+      - run: pnpm test

@@ -1,0 +1,284 @@
+---
+import { env } from 'cloudflare:workers'
+import Pagination from '../../components/Pagination.astro'
+import PlayerName from '../../components/PlayerName.astro'
+import Segmented from '../../components/Segmented.astro'
+import Base from '../../layouts/Base.astro'
+import { madridYear } from '../../lib/dates'
+import { ageLimit, getRanking, RANKING_CATEGORIES, searchPlayers, TITLES, type RankingCategory } from '../../lib/db/players'
+import { formatMonth, formatNumber } from '../../lib/format'
+import { isPlayerSearch, playerFilters, rankingCategory, withParams } from '../../lib/params'
+
+const filters = playerFilters(Astro.url.searchParams)
+const searched = isPlayerSearch(filters)
+// Las casillas solas no buscan (serían decenas de miles de jugadores): se dice, como en /partidas.
+const refineOnly = !searched && (filters.withGames || filters.active)
+const year = madridYear(new Date())
+const result = searched ? await searchPlayers(env.DB, filters, year) : null
+const filtersOpen = Boolean(filters.title || filters.sex || filters.minElo || filters.maxElo)
+
+// Sin búsqueda, el ranking de España en la categoría elegida.
+const category = rankingCategory(Astro.url.searchParams)
+const ranking = searched ? null : await getRanking(env.DB, category, year)
+// Sin el año de los menores (mayBeMinor), en sub-18 la columna saldría vacía.
+const showBorn = ranking?.top.some((p) => p.birthYear) ?? false
+const categoryLabels: Record<RankingCategory, string> = {
+	'': 'Absoluto',
+	femenino: 'Femenino',
+	sub18: 'Sub-18',
+	mas50: '+50',
+	mas65: '+65'
+}
+const categories = RANKING_CATEGORIES.map((id) => ({ id, label: categoryLabels[id] }))
+// En las categorías por edad, la nota dice qué años de nacimiento entran.
+const age = ageLimit(category, year)
+const ageNote = age
+	? ` ${categoryLabels[category]}: nacidos en ${age.year} ${age.born === 'since' ? 'o después' : 'o antes'}.`
+	: ''
+// Títulos de las dos tablas: en femenino, concuerdan; en las de edad, dicen la categoría.
+const titles: Record<RankingCategory, { top: (n: number) => string; risers: string }> = {
+	'': { top: (n) => `Los ${n} primeros`, risers: 'Los que más suben' },
+	femenino: { top: (n) => `Las ${n} primeras`, risers: 'Las que más suben' },
+	sub18: { top: (n) => `Los ${n} primeros sub-18`, risers: 'Los sub-18 que más suben' },
+	mas50: { top: (n) => `Los ${n} primeros de +50`, risers: 'Los de +50 que más suben' },
+	mas65: { top: (n) => `Los ${n} primeros de +65`, risers: 'Los de +65 que más suben' }
+}
+const categoryHref = (id: string) => `${withParams(Astro.url, { categoria: id })}#ranking`
+---
+
+<Base title={filters.q ? `Jugadores: ${filters.q}` : 'Jugadores'} section="jugadores" noindex={searched}>
+	<h1>Jugadores</h1>
+	<form method="get" role="search" class="filters form-row">
+		<label class="grow">
+			Nombre
+			<input name="q" type="search" value={filters.q} placeholder="Apellidos o nombre" autocomplete="off" />
+		</label>
+		<label class="check">
+			<input type="checkbox" name="con_partidas" value="1" checked={filters.withGames} />
+			Sólo con partidas
+		</label>
+		<label class="check">
+			<input type="checkbox" name="activos" value="1" checked={filters.active} />
+			Sólo activos
+		</label>
+		<details open={filtersOpen}>
+			<summary>Más filtros</summary>
+			<div class="more">
+				<label>
+					Título
+					<select name="titulo">
+						<option value="">Cualquiera</option>
+						{TITLES.map((t) => <option value={t} selected={filters.title === t}>{t}</option>)}
+					</select>
+				</label>
+				<label>
+					Sexo
+					<select name="sexo">
+						<option value="">Cualquiera</option>
+						<option value="M" selected={filters.sex === 'M'}>Masculino</option>
+						<option value="F" selected={filters.sex === 'F'}>Femenino</option>
+					</select>
+				</label>
+				<label>
+					ELO mínimo
+					<input name="elo_min" type="number" inputmode="numeric" min="1000" max="3000" value={filters.minElo ?? ''} />
+				</label>
+				<label>
+					ELO máximo
+					<input name="elo_max" type="number" inputmode="numeric" min="1000" max="3000" value={filters.maxElo ?? ''} />
+				</label>
+			</div>
+		</details>
+		<button class="button" type="submit">Buscar</button>
+	</form>
+
+	{
+		refineOnly && (
+			<p class="note">
+				«Sólo con partidas» y «Sólo activos» sólo afinan una búsqueda: indica también un nombre, un título, el sexo o
+				un ELO.
+			</p>
+		)
+	}
+
+	{
+		ranking && (
+			<>
+				<p class="muted intro">
+					Busca entre los jugadores de la federación española en la lista FIDE. Escribe sólo el principio de cada
+					palabra, sin acentos: <a href="/jugadores?q=ant+guij">«ant guij»</a> encuentra a David Antón Guijarro.
+					También puedes filtrar por título, ELO o actividad, como <a href="/jugadores?elo_min=1800&elo_max=2000&activos=1">los activos de 1800 a 2000</a>.
+				</p>
+				{ranking.top.length > 0 && (
+					<section id="ranking" aria-labelledby="ranking-titulo">
+						<h2 id="ranking-titulo">Ranking de España</h2>
+						<p class="muted list">
+							{category === 'femenino' ? 'Jugadoras activas' : 'Jugadores activos'} en la lista FIDE{ranking.listDate && ` de ${formatMonth(ranking.listDate)}`}, a ritmo
+							estándar.{ageNote}
+						</p>
+						<div class="selectors">
+							<Segmented showLabel label="Categoría" options={categories} current={category} href={categoryHref} />
+						</div>
+						<div class="ranking">
+							<section class="card" aria-labelledby="primeros">
+								<h3 id="primeros">{titles[category].top(ranking.top.length)}</h3>
+								<table class="data-table">
+									<thead>
+										<tr>
+											<th scope="col" class="end">Nº</th>
+											<th scope="col">Jugador</th>
+											<th scope="col" class="end">ELO</th>
+											{showBorn && (
+												<th scope="col" class="end">
+													<span aria-hidden="true">Nac.</span>
+													<span class="visually-hidden">Año de nacimiento</span>
+												</th>
+											)}
+										</tr>
+									</thead>
+									<tbody>
+										{ranking.top.map((p, i) => (
+											<tr>
+												<td class="end num">{i + 1}</td>
+												<td class="name">
+													<PlayerName name={p.name} fideId={p.fideId} title={p.title} />
+												</td>
+												<td class="end num">{p.ratingStd}</td>
+												{showBorn && <td class="end num">{p.birthYear}</td>}
+											</tr>
+										))}
+									</tbody>
+								</table>
+							</section>
+							{ranking.risers.length > 0 && (
+								<section class="card" aria-labelledby="suben">
+									<h3 id="suben">{titles[category].risers}</h3>
+									<table class="data-table">
+										<thead>
+											<tr>
+												<th scope="col">Jugador</th>
+												<th scope="col" class="end">ELO</th>
+												<th scope="col" class="end">
+													Sube<span class="visually-hidden"> desde la lista anterior</span>
+												</th>
+											</tr>
+										</thead>
+										<tbody>
+											{ranking.risers.map((p) => (
+												<tr>
+													<td class="name">
+														<PlayerName name={p.name} fideId={p.fideId} title={p.title} />
+													</td>
+													<td class="end num">{p.ratingStd}</td>
+													<td class="end num">+{p.gain}</td>
+												</tr>
+											))}
+										</tbody>
+									</table>
+								</section>
+							)}
+						</div>
+					</section>
+				)}
+			</>
+		)
+	}
+
+	{
+		result && (
+			<>
+				<Pagination page={result.page} pages={result.pages} total={result.total} capped={result.capped} noun={['jugador', 'jugadores']} />
+				{result.rows.length > 0 ? (
+					<div class="table-wrap stack">
+						<table class="data-table">
+							<thead>
+								<tr>
+									<th scope="col">Jugador</th>
+									<th scope="col">Título</th>
+									<th scope="col" class="end">Estándar</th>
+									<th scope="col" class="end">Rápidas</th>
+									<th scope="col" class="end">Blitz</th>
+									<th scope="col" class="end">Nacimiento</th>
+									<th scope="col" class="end">Partidas</th>
+								</tr>
+							</thead>
+							{/* Apilada en el móvil (.stack): cada cifra lleva su rótulo, sólo si la hay. */}
+							<tbody>
+								{result.rows.map((p) => (
+									<tr>
+										<td>
+											<a href={`/jugadores/${p.fideId}`}>{p.name}</a>
+											{p.inactive ? <span class="muted"> · inactivo</span> : null}
+										</td>
+										<td>{p.title && <span class="tag">{p.title}</span>}</td>
+										<td class="end num">{p.ratingStd && <><span class="cell-label" aria-hidden="true">Estándar </span>{p.ratingStd}</>}</td>
+										<td class="end num">{p.ratingRapid && <><span class="cell-label" aria-hidden="true">Rápidas </span>{p.ratingRapid}</>}</td>
+										<td class="end num">{p.ratingBlitz && <><span class="cell-label" aria-hidden="true">Blitz </span>{p.ratingBlitz}</>}</td>
+										<td class="end num">{p.birthYear && <><span class="cell-label" aria-hidden="true">Nac. </span>{p.birthYear}</>}</td>
+										<td class="end num">{p.games ? <><span class="cell-label" aria-hidden="true">Partidas </span>{formatNumber(p.games)}</> : null}</td>
+									</tr>
+								))}
+							</tbody>
+						</table>
+					</div>
+				) : (
+					<p>No hay jugadores con esos datos.</p>
+				)}
+				<Pagination page={result.page} pages={result.pages} total={result.total} capped={result.capped} noun={['jugador', 'jugadores']} />
+			</>
+		)
+	}
+</Base>
+
+<style>
+	.filters {
+		margin-bottom: var(--space-5);
+	}
+
+	.more {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+		gap: var(--space-3);
+	}
+
+	.intro {
+		max-inline-size: var(--reading-width);
+		margin-bottom: var(--space-6);
+	}
+
+	.list {
+		font-size: var(--text-s);
+	}
+
+	/*
+	 * auto-fill y no auto-fit: hasta que haya dos listas FIDE no hay «Los que
+	 * más suben», y el ranking solo ocuparía todo el ancho con cuatro columnas.
+	 */
+	.ranking {
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(min(100%, 26rem), 1fr));
+		gap: var(--space-4);
+	}
+
+	.ranking .card {
+		container-type: inline-size;
+		overflow-x: auto;
+	}
+
+	.data-table .name {
+		white-space: normal;
+	}
+
+	/*
+	 * En una tarjeta de menos de 26rem (la pista mínima de la rejilla), como a
+	 * 375 px, la tabla de los primeros pedía 355 px de 294: el nombre ya va a su
+	 * mínimo (la palabra más larga), así que se estrecha el relleno, como en los
+	 * emparejamientos del torneo, y la cabecera del año es «Nac.». Quedan 284.
+	 */
+	@container (width < 26rem) {
+		.ranking .data-table th,
+		.ranking .data-table td {
+			padding-inline: var(--space-2);
+		}
+	}
+</style>

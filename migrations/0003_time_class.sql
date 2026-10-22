@@ -1,0 +1,15 @@
+-- Ritmo de cada partida según la FIDE: estándar, rápidas o blitz.
+--
+-- Sale del ritmo del torneo (tournaments.time_control, texto libre del
+-- organizador) o, si no se entiende, de la cabecera TimeControl del PGN; ver
+-- src/lib/chess/timecontrol.ts. Es NULL si no se sabe.
+--
+-- Va en games y no en tournaments para filtrar las partidas de un jugador sin
+-- JOIN, y porque la cabecera de cada partida puede decidirlo.
+--
+-- Se rellena en la ingesta. Para las partidas que ya había, el Workflow
+-- games-reprocess lo calcula a partir del PGN guardado y del ritmo del torneo.
+--
+-- Sin índice: el filtro siempre acompaña a otro que ya usa uno (jugador, nombre
+-- o torneo), y una búsqueda sólo por ritmo recorrería media tabla.
+ALTER TABLE games ADD COLUMN time_class TEXT CHECK (time_class IN ('standard', 'rapid', 'blitz'));

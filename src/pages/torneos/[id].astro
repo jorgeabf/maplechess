@@ -1,0 +1,243 @@
+---
+import { env } from 'cloudflare:workers'
+import Emparejamientos from '../../components/Emparejamientos.astro'
+import GamesTable from '../../components/GamesTable.astro'
+import Icon from '../../components/Icon.astro'
+import Pagination from '../../components/Pagination.astro'
+import PlayerName from '../../components/PlayerName.astro'
+import Segmented from '../../components/Segmented.astro'
+import Base from '../../layouts/Base.astro'
+import { TIME_CLASS_LABEL, timeClassOf } from '../../lib/chess/timecontrol'
+import { getTournamentGames } from '../../lib/db/games'
+import { getUpcomingRound } from '../../lib/db/pairings'
+import { getTournament, getTournamentParticipants } from '../../lib/db/tournaments'
+import { formatCount, formatNumber, formatRange, formatRoundTime } from '../../lib/format'
+import { CC_BY_SA } from '../../lib/licenses'
+import { ME_COOKIE, resolveMe } from '../../lib/me'
+import { dossierHref, pageParam, positiveInt, roundParam, withParams } from '../../lib/params'
+import { sourceUrl } from '../../lib/urls'
+
+const id = positiveInt(Astro.params.id)
+const tournament = id === null ? null : await getTournament(env.DB, id)
+if (id === null || !tournament) return Astro.rewrite('/404')
+
+const page = pageParam(Astro.url.searchParams.get('p'))
+const round = roundParam(Astro.url.searchParams)
+const [participants, { rounds, games }, upcoming] = await Promise.all([
+	getTournamentParticipants(env.DB, id),
+	getTournamentGames(env.DB, id, round, page),
+	getUpcomingRound(env.DB, id)
+])
+// Selector de ronda: todas, las numeradas y, al final, las que no traen ronda (0).
+const roundOptions = [
+	{ id: '', label: 'Todas' },
+	...rounds.filter((r) => r.round > 0).map((r) => ({ id: String(r.round), label: String(r.round) })),
+	...(rounds.some((r) => r.round === 0) ? [{ id: '0', label: 'Sin ronda' }] : [])
+]
+const roundHref = (option: string) => `${withParams(Astro.url, { ronda: option, p: null })}#partidas`
+const isTeam = tournament.type === 'team'
+// Torneo que no está en info64, sacado de su retransmisión (ingest/lichess/sync.ts).
+const fromLichess = tournament.source === 'lichess'
+const timeClass = timeClassOf(tournament.timeControl)
+// Sin cookie yo, la próxima ronda explica cómo recibir el aviso de las tuyas.
+const me = resolveMe(null, Astro.cookies.get(ME_COOKIE)?.value).fideId
+// Agrupados por equipo; en torneos individuales hay un único grupo sin nombre.
+const teams = [...Map.groupBy(participants, (p) => p.team).entries()]
+// Las páginas del torneo y de su retransmisión, sólo si son de una fuente.
+const tournamentUrl = sourceUrl(tournament.url)
+const broadcastUrl = sourceUrl(tournament.gamesSourceUrl)
+---
+
+<Base title={tournament.name} section="torneos" description={`${tournament.name}: participantes y partidas.`}>
+	<header class="page-head">
+		<h1>{tournament.name}</h1>
+		<p class="page-meta">
+			{
+				isTeam && (
+					<>
+						<span class="tag">Equipos</span>{' '}
+					</>
+				)
+			}
+			{tournament.city && `${tournament.city} · `}
+			{formatRange(tournament.startDate, tournament.endDate)}
+			{timeClass && ` · ${TIME_CLASS_LABEL[timeClass]}`}
+			{tournament.timeControl && (timeClass ? ` (${tournament.timeControl})` : ` · ${tournament.timeControl}`)}
+		</p>
+		<p class="page-actions">
+			{
+				tournament.gamesCount > 0 && (
+					<a class="button secondary" href={`/torneos/${id}.pgn`} download>
+						<Icon name="download" />
+						<span>
+							Descargar PGN
+							<span class="visually-hidden">
+								{tournament.gamesCount === 1 ? ' de la partida' : ` de las ${formatNumber(tournament.gamesCount)} partidas`}
+							</span>
+						</span>
+					</a>
+				)
+			}
+			{
+				tournamentUrl && (
+					<a class="button secondary" href={tournamentUrl} rel="noopener">
+						Ver en {tournament.source}
+					</a>
+				)
+			}
+		</p>
+	</header>
+
+	{
+		upcoming && (
+			<section id="proxima-ronda">
+				<h2>
+					Ronda {upcoming.round} · {formatRoundTime(upcoming.startsAt)}
+				</h2>
+				<p class="muted">
+					Emparejamientos publicados en {tournament.source}. «Preparar» abre el dossier del jugador con el color que lleva.
+					{!me && ' ¿Juegas? Pulsa tu nombre y, en tu ficha, «Soy yo»: la portada te avisará de cada ronda.'}
+				</p>
+				<Emparejamientos groups={[{ pairings: upcoming.pairings }]} />
+			</section>
+		)
+	}
+
+	<section id="partidas">
+		<h2>Partidas</h2>
+		{
+			fromLichess ? (
+				<p class="muted">
+					Este torneo no está en info64. Sus partidas vienen de su{' '}
+					{tournamentUrl ? (
+						<a href={tournamentUrl} rel="noopener">retransmisión oficial en lichess</a>
+					) : (
+						'retransmisión oficial en lichess'
+					)}{' '}
+					y sólo están las que juega algún
+					jugador español. Licencia <a href={CC_BY_SA} rel="license noopener">CC BY-SA 4.0</a>.
+				</p>
+			) : (
+				tournament.gamesSource === 'lichess' && (
+					<p class="muted">
+						{tournament.source} no publica las partidas de este torneo; vienen de su{' '}
+						{broadcastUrl ? (
+							<a href={broadcastUrl} rel="noopener">retransmisión en lichess</a>
+						) : (
+							'retransmisión en lichess'
+						)}
+						, que suele cubrir sólo las mesas con tablero electrónico. Licencia{' '}
+						<a href={CC_BY_SA} rel="license noopener">CC BY-SA 4.0</a>.
+					</p>
+				)
+			)
+		}
+		{
+			rounds.length > 1 && (
+				<div class="selectors">
+					<Segmented showLabel label="Ronda" options={roundOptions} current={round === null ? '' : String(round)} href={roundHref} />
+				</div>
+			)
+		}
+		{
+			games.total > 0 ? (
+				<>
+					<GamesTable games={games.rows} hideTournament />
+					<Pagination page={games.page} pages={games.pages} total={games.total} noun={['partida', 'partidas']} anchor="partidas" />
+				</>
+			) : (
+				<p class="muted">
+					{round === null ? 'La fuente no ha publicado partidas de este torneo.' : 'No hay partidas de esa ronda.'}
+				</p>
+			)
+		}
+	</section>
+
+	<section id="participantes">
+		<h2>
+			{isTeam ? 'Plantillas' : fromLichess ? 'Jugadores' : 'Participantes'} (
+			{isTeam
+				? `${formatCount(participants.length, 'jugador', 'jugadores')}, ${formatCount(teams.length, 'equipo', 'equipos')}`
+				: formatNumber(participants.length)})
+		</h2>
+		{fromLichess && <p class="muted">Los de las partidas de arriba, numerados por ELO.</p>}
+		{
+			participants.length > 0 ? (
+				<div class="table-wrap participants">
+					<table class="data-table">
+						<thead>
+							<tr>
+								<th scope="col" class="end">{isTeam ? 'Tablero' : 'Nº'}</th>
+								<th scope="col">Jugador</th>
+								<th scope="col">Fed.</th>
+								<th scope="col" class="end">ELO</th>
+								<th scope="col" class="end">FIDE ID</th>
+							</tr>
+						</thead>
+						{teams.map(([team, players]) => (
+							<tbody>
+								{team && (
+									<tr class="group-row">
+										<th scope="colgroup" colspan="5">
+											{team}
+										</th>
+									</tr>
+								)}
+								{players.map((p) => (
+									<tr>
+										<td class="end num">{p.startRank}</td>
+										<td class="name">
+											<PlayerName name={p.name} title={p.title} fideId={p.fideId} />
+											{p.fideId && p.hasGames === 1 && (
+												<span class="prepare">
+													{' '}
+													·{' '}
+													<a href={dossierHref(p.fideId)} rel="nofollow">
+														preparar
+													</a>
+												</span>
+											)}
+										</td>
+										<td>{p.fed}</td>
+										<td class="end num">{p.rating}</td>
+										<td class="end num">{p.fideId}</td>
+									</tr>
+								))}
+							</tbody>
+						))}
+					</table>
+				</div>
+			) : (
+				<p class="muted">La fuente no publica la lista de participantes.</p>
+			)
+		}
+	</section>
+</Base>
+
+<style>
+	/* Al tamaño del nombre, con relleno: la zona que se pulsa llega a los 24 px. */
+	.prepare a {
+		padding-block: var(--space-1);
+	}
+
+	/*
+	 * Participantes, como el ranking de /jugadores: el nombre parte línea (su
+	 * mínimo es la palabra más larga) y, en un hueco de menos de 26rem, el
+	 * relleno se estrecha. A 375 px la tabla pedía 544 px de 342 y el ELO
+	 * quedaba fuera; así se ven el número, el nombre, la federación y el ELO, y
+	 * sólo el FIDE ID puede quedar tras el scroll.
+	 */
+	.participants {
+		container-type: inline-size;
+	}
+
+	.participants td.name {
+		white-space: normal;
+	}
+
+	@container (width < 26rem) {
+		.participants :is(th, td) {
+			padding-inline: var(--space-2);
+		}
+	}
+</style>

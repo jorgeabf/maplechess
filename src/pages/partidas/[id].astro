@@ -1,0 +1,282 @@
+---
+import { env } from 'cloudflare:workers'
+import Icon from '../../components/Icon.astro'
+import PlayerName from '../../components/PlayerName.astro'
+import VisorPartida from '../../components/visor/VisorPartida.astro'
+import Base from '../../layouts/Base.astro'
+import { buildTree } from '../../lib/chess/movetree'
+import { getAdjacentGames, getGame } from '../../lib/db/games'
+import { displayName, formatDate, formatResult } from '../../lib/format'
+import { CC_BY_SA } from '../../lib/licenses'
+import { ME_COOKIE, isOwn, resolveMe } from '../../lib/me'
+import { backTarget, boardColor, positiveInt, type BackKind } from '../../lib/params'
+import { sourceUrl } from '../../lib/urls'
+
+const id = positiveInt(Astro.params.id)
+const game = id === null ? null : await getGame(env.DB, id)
+if (!game) return Astro.rewrite('/404')
+
+const [tree, adjacent] = [buildTree(game.pgn), await getAdjacentGames(env.DB, game)]
+const headers = tree.headers
+const white = {
+	name: game.whiteName,
+	fideId: game.whiteFideId,
+	elo: game.whiteElo,
+	title: headers.WhiteTitle ?? null
+}
+const black = {
+	name: game.blackName,
+	fideId: game.blackFideId,
+	elo: game.blackElo,
+	title: headers.BlackTitle ?? null
+}
+// Página de la partida en su fuente, para el crédito de debajo: en lichess la
+// da la cabecera GameURL; en info64 cada partida tiene su página
+// /{torneo}/{ronda}/{tablero}. La cabecera viene de fuera: sólo si es de lichess.
+// Y sólo se enlaza si es de una fuente (sourceUrl).
+const sourceHref = sourceUrl(
+	game.gamesSource === 'lichess' && headers.GameURL?.startsWith('https://lichess.org/')
+		? headers.GameURL
+		: game.tournamentSource === 'info64'
+			? `${game.tournamentUrl}/${game.round}/${game.board}`
+			: game.tournamentUrl
+)
+const title = `${displayName(game.whiteName)} – ${displayName(game.blackName)}`
+// Lado del tablero: el que pide el enlace (desde la ficha, el dossier o el
+// repertorio, el del jugador) o, si la partida es tuya (cookie yo), el tuyo.
+const requested = boardColor(Astro.url.searchParams)
+const me = resolveMe(null, Astro.cookies.get(ME_COOKIE)?.value)
+const orientation = requested ?? (game.blackFideId !== null && isOwn(me, game.blackFideId) ? 'black' : 'white')
+// Vuelta a la lista de la que se viene, si es de la web: encima del título,
+// como la de la ficha en el dossier y el repertorio. Tu ficha, tu dossier y
+// tu repertorio, en primera persona, como en sus páginas.
+const back = backTarget(Astro.request.headers.get('referer'), Astro.url)
+const BACK_LABELS: Record<BackKind, string> = {
+	search: 'a la búsqueda',
+	tournament: 'al torneo',
+	player: 'a la ficha',
+	dossier: 'al dossier',
+	repertoire: 'al repertorio'
+}
+const OWN_BACK_LABELS: Partial<Record<BackKind, string>> = {
+	player: 'a mi ficha',
+	dossier: 'a mi dossier',
+	repertoire: 'a mi repertorio'
+}
+const ownBack = back?.fideId != null && isOwn(me, back.fideId)
+const backLabel = back && `← Volver ${(ownBack && OWN_BACK_LABELS[back.kind]) || BACK_LABELS[back.kind]}`
+---
+
+<Base
+	title={title}
+	section="partidas"
+	description={`${title}, ${formatResult(game.result)}. ${game.tournamentName}, ronda ${game.round}.`}
+	noindex={requested !== null}
+>
+	<header class="game-head page-head">
+		{
+			back && (
+				<p class="back">
+					<a href={back.href} data-back>
+						{backLabel}
+					</a>
+				</p>
+			)
+		}
+		<h1>
+			<PlayerName name={game.whiteName} fideId={game.whiteFideId} title={white.title} />{' '}
+			<span class="result-big">{formatResult(game.result)}</span>{' '}
+			<PlayerName name={game.blackName} fideId={game.blackFideId} title={black.title} />
+		</h1>
+		<p class="page-meta">
+			<a href={`/torneos/${game.tournamentId}`}>{game.tournamentName}</a> · ronda {game.round}, mesa {game.board}
+			{` · ${formatDate(game.date)}`}
+			{(game.eco || game.opening) && ' · '}
+			{game.eco && <span class="eco">{game.eco}</span>}
+			{game.eco && game.opening && ' '}
+			{game.opening}
+		</p>
+	</header>
+
+	<VisorPartida
+		tree={tree}
+		pgn={game.pgn}
+		white={white}
+		black={black}
+		result={game.result}
+		orientation={orientation}
+	>
+		<div class="game-actions">
+			<div class="take">
+				<a class="button secondary" href={`/partidas/${game.id}.pgn`} download>
+					<Icon name="download" />
+					Descargar PGN
+				</a>
+				<span class="copy">
+					<button type="button" class="button secondary" data-action="copy-pgn">
+						<Icon name="copy" />
+						Copiar PGN
+					</button>
+					<span class="copied" role="status"></span>
+				</span>
+				<span class="copy">
+					<button type="button" class="button secondary" data-action="copy-link" title="Enlace a esta jugada">
+						<Icon name="copy" />
+						Copiar enlace
+					</button>
+					<span class="copied" role="status"></span>
+				</span>
+			</div>
+			{
+				(adjacent.prev || adjacent.next) && (
+					<nav class="other-games" aria-label="Otras partidas del torneo">
+						{adjacent.prev && (
+							<a class="button secondary" href={`/partidas/${adjacent.prev}`} rel="prev">
+								←&nbsp;Anterior del torneo
+							</a>
+						)}
+						{adjacent.next && (
+							<a class="button secondary" href={`/partidas/${adjacent.next}`} rel="next">
+								Siguiente del torneo&nbsp;→
+							</a>
+						)}
+					</nav>
+				)
+			}
+		</div>
+	</VisorPartida>
+	<p class="muted credit">
+		{
+			game.gamesSource === 'lichess' ? (
+				<>
+					Partida de una {sourceHref ? <a href={sourceHref}>retransmisión de lichess</a> : 'retransmisión de lichess'}, con
+					licencia{' '}
+					<a href={CC_BY_SA} rel="license noopener">CC BY-SA 4.0</a>. Aquí se han completado sus cabeceras
+					(nombres, FIDE ID, ELO y apertura).
+				</>
+			) : game.tournamentSource === 'info64' ? (
+				<>
+					Partida de {sourceHref ? <a href={sourceHref}>info64</a> : 'info64'} (FEDA).
+				</>
+			) : (
+				<>
+					Partida de {sourceHref ? <a href={sourceHref}>su fuente</a> : 'su fuente'}.
+				</>
+			)
+		}
+	</p>
+</Base>
+
+<style>
+	.game-head h1 {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: baseline;
+		gap: var(--space-2) var(--space-3);
+	}
+
+	/*
+	 * Los nombres enlazan a su ficha, pero en el color del texto, con su
+	 * subrayado tenue: en el acento, dos nombres de 28 px eran lo que más
+	 * llamaba la atención de la página, más que el tablero y la jugada actual.
+	 * Al pasar por encima, el acento, como cualquier enlace.
+	 */
+	.game-head h1 :global(a) {
+		color: var(--text);
+	}
+
+	.game-head h1 :global(a:hover) {
+		color: var(--accent-hover);
+	}
+
+	.result-big {
+		padding: 0 var(--space-2);
+		border-radius: var(--radius-m);
+		background: var(--surface-muted);
+		font-variant-numeric: tabular-nums;
+	}
+
+	/*
+	 * En el móvil, dos nombres y el resultado no caben en una línea: el
+	 * resultado quedaba pegado a las blancas. Por debajo de 40rem va como en la
+	 * lista de partidas: blancas encima de negras y el resultado a su derecha.
+	 * Sólo se coloca el resultado: los nombres caen solos en la primera
+	 * columna, y el orden del DOM (y el de lectura) sigue siendo «A 0-1 B».
+	 */
+	@media (width < 40rem) {
+		.game-head h1 {
+			display: grid;
+			grid-template-columns: minmax(0, 1fr) auto;
+			gap: var(--space-1) var(--space-3);
+			font-size: var(--text-l);
+		}
+
+		.result-big {
+			grid-column: 2;
+			grid-row: 1 / span 2;
+			align-self: center;
+		}
+	}
+
+	/*
+	 * Barra de debajo del visor, en dos grupos: lo que te llevas de la partida
+	 * (descargarla o copiarla) y moverte a otra del torneo. Botones con menos
+	 * relleno, para que en el móvil quepan dos por fila; si aun así el texto
+	 * parte línea (centrado y en líneas parejas, como todos los .button), cada
+	 * flecha va pegada a su palabra por un espacio duro. Va dentro del visor,
+	 * que la separa con el hueco de su rejilla.
+	 */
+	.game-actions {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		justify-content: space-between;
+		gap: var(--space-4);
+	}
+
+	.game-actions .button {
+		padding-inline: var(--space-3);
+	}
+
+	.take,
+	.other-games {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: var(--space-2);
+	}
+
+	/* El botón llena su .copy: en el móvil, la celda entera. */
+	.copy > .button {
+		flex-grow: 1;
+	}
+
+	/*
+	 * En el móvil, un grupo debajo del otro y dos botones por fila, del mismo
+	 * ancho y alto: «Siguiente del torneo →» parte línea a 375 px, y el de al
+	 * lado crece con él. «Siguiente del torneo» siempre a la derecha, aunque
+	 * no haya anterior.
+	 */
+	@media (width < 40rem) {
+		.game-actions {
+			flex-direction: column;
+			align-items: stretch;
+		}
+
+		.take,
+		.other-games {
+			display: grid;
+			grid-template-columns: repeat(2, minmax(0, 1fr));
+			align-items: stretch;
+		}
+
+		.other-games [rel='next'] {
+			grid-column: 2;
+		}
+	}
+
+	.credit {
+		margin-top: var(--space-4);
+		font-size: var(--text-s);
+	}
+</style>

@@ -1,0 +1,188 @@
+/*
+ * Tablero de chessground con los tokens de la web (sustituye a su tema
+ * "brown") y piezas mpchess (sustituyen a las cburnett, las de lichess por
+ * defecto).
+ */
+
+/*
+ * En el tablero el color es el contenido: en alto contraste el sistema
+ * quitaría las casillas (el degradado), la última jugada y el color de las
+ * coordenadas.
+ */
+.cg-wrap {
+	forced-color-adjust: none;
+}
+
+/* La caja del tablero, cuadrada y a todo el ancho de su columna; chessground la llena. */
+.board-box {
+	aspect-ratio: 1;
+	inline-size: 100%;
+}
+
+.board {
+	inline-size: 100%;
+	block-size: 100%;
+}
+
+/* Casillas: un conic-gradient de 2×2 repetido 4×4 veces (a8 clara). */
+cg-board {
+	background-color: var(--board-dark);
+	background-image: conic-gradient(
+		var(--board-dark) 0 25%,
+		var(--board-light) 0 50%,
+		var(--board-dark) 0 75%,
+		var(--board-light) 0
+	);
+	background-size: 25% 25%;
+}
+
+/*
+ * Piezas mpchess de Maxime Chupin (GPL-3.0), dibujadas para los diagramas
+ * del paquete mpchess de LaTeX: https://github.com/chupinmaxime/mpchess-pieces.
+ * Los SVG son los de lichess (public/piece/mpchess), con los caballos
+ * corregidos. Ninguno llega a los 4 KB de assetsInlineLimit, así que Vite los
+ * incrusta en este CSS: llegan con él, sin peticiones aparte. El contorno
+ * queda a 16:1 sobre el arce y a 4,1:1 sobre el nogal.
+ */
+.cg-wrap piece.pawn.white {
+	background-image: url('../../assets/pieces/mpchess/wP.svg');
+}
+
+.cg-wrap piece.knight.white {
+	background-image: url('../../assets/pieces/mpchess/wN.svg');
+}
+
+.cg-wrap piece.bishop.white {
+	background-image: url('../../assets/pieces/mpchess/wB.svg');
+}
+
+.cg-wrap piece.rook.white {
+	background-image: url('../../assets/pieces/mpchess/wR.svg');
+}
+
+.cg-wrap piece.queen.white {
+	background-image: url('../../assets/pieces/mpchess/wQ.svg');
+}
+
+.cg-wrap piece.king.white {
+	background-image: url('../../assets/pieces/mpchess/wK.svg');
+}
+
+.cg-wrap piece.pawn.black {
+	background-image: url('../../assets/pieces/mpchess/bP.svg');
+}
+
+.cg-wrap piece.knight.black {
+	background-image: url('../../assets/pieces/mpchess/bN.svg');
+}
+
+.cg-wrap piece.bishop.black {
+	background-image: url('../../assets/pieces/mpchess/bB.svg');
+}
+
+.cg-wrap piece.rook.black {
+	background-image: url('../../assets/pieces/mpchess/bR.svg');
+}
+
+.cg-wrap piece.queen.black {
+	background-image: url('../../assets/pieces/mpchess/bQ.svg');
+}
+
+.cg-wrap piece.king.black {
+	background-image: url('../../assets/pieces/mpchess/bK.svg');
+}
+
+cg-board square.last-move {
+	background-color: var(--board-last-move);
+}
+
+/*
+ * En el explorador se mueve (movable.showDests): la pieza elegida y sus
+ * destinos, un punto en las casillas vacías y las esquinas en las ocupadas,
+ * como en lichess. Al pasar por encima de un destino se marca entero.
+ */
+cg-board square.selected {
+	background-color: var(--board-selected);
+}
+
+cg-board square.move-dest {
+	background: radial-gradient(var(--board-dest) 22%, transparent 0);
+}
+
+cg-board square.oc.move-dest {
+	background: radial-gradient(transparent 80%, var(--board-dest) 0);
+}
+
+cg-board square.move-dest:hover {
+	background: var(--board-selected);
+}
+
+cg-board square.check {
+	background: radial-gradient(
+		ellipse at center,
+		rgb(255 0 0 / 1) 0%,
+		rgb(231 0 0 / 1) 25%,
+		rgb(169 0 0 / 0) 89%,
+		rgb(158 0 0 / 0) 100%
+	);
+}
+
+/*
+ * Coordenadas: cada una con el token de su casilla. El color de la casilla
+ * contraria, como en lichess, se quedaba en 2,3:1.
+ */
+.cg-wrap coords {
+	font-family: var(--font-sans);
+	font-weight: var(--weight-strong);
+	opacity: 1;
+}
+
+/*
+ * chessground.base.css desplaza la fila de letras con left: 24px y
+ * width: 100%, así que su caja sobresale 24px por la derecha del tablero y
+ * desborda la página. Misma posición visual (abajo a la derecha de cada
+ * casilla) pero dentro del tablero: sin desplazamiento y alineadas al final.
+ */
+.cg-wrap coords.files {
+	left: 0;
+	text-align: end;
+}
+
+.cg-wrap coords.files coord {
+	padding-inline-end: 0.3em;
+}
+
+/*
+ * Los números, igual: cada uno en la esquina de arriba a la izquierda de su
+ * casilla. chessground sube la columna 20px fijos (top: -20px) y baja cada
+ * número un 39 % de la casilla (translateY): sólo se compensan con casillas
+ * de 56px o más. En el móvil (41px) el número quedaba 4px por encima de su
+ * casilla, y el 8 fuera del tablero.
+ */
+.cg-wrap coords.ranks {
+	top: 0;
+	left: 0;
+}
+
+.cg-wrap coords.ranks coord {
+	transform: none;
+	padding-inline-start: 0.3em;
+}
+
+/*
+ * Cada coordenada cae en su casilla: los números en la columna de la
+ * izquierda y las letras en la fila de abajo. Con a1 oscura, la impar
+ * (1, 3…; a, c…) va sobre casilla oscura con las blancas abajo y sobre clara
+ * con las negras abajo. Las letras siguen la misma regla que los números
+ * porque ya no llevan el desplazamiento de chessground, que las pasaba a la
+ * casilla de al lado.
+ */
+.orientation-white :is(.ranks, .files) coord:nth-child(odd),
+.orientation-black :is(.ranks, .files) coord:nth-child(even) {
+	color: var(--board-coord-on-dark);
+}
+
+.orientation-white :is(.ranks, .files) coord:nth-child(even),
+.orientation-black :is(.ranks, .files) coord:nth-child(odd) {
+	color: var(--board-coord-on-light);
+}

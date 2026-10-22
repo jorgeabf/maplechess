@@ -1,0 +1,22 @@
+---
+import BuscadorJugadores from '../components/BuscadorJugadores.astro'
+import Base from '../layouts/Base.astro'
+
+Astro.response.status = 404
+---
+
+<Base title="No encontrado" noindex>
+	<h1>No encontramos esa página</h1>
+	<p>Puede que el enlace esté mal o que el jugador, torneo o partida ya no exista en las fuentes.</p>
+	<div class="search">
+		<BuscadorJugadores />
+	</div>
+	<p><a class="button secondary" href="/">Ir a la portada</a></p>
+</Base>
+
+<style>
+	.search {
+		max-inline-size: var(--reading-width);
+		margin-bottom: var(--space-5);
+	}
+</style>

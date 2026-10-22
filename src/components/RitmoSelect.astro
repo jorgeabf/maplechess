@@ -1,0 +1,18 @@
+---
+// Campo «Ritmo» de los formularios de partidas (parámetro GET ritmo).
+import { TIME_CLASS_LABEL, TIME_CLASSES, type TimeClass } from '../lib/chess/timecontrol'
+
+interface Props {
+	value: TimeClass | null
+}
+
+const { value } = Astro.props
+---
+
+<label>
+	Ritmo
+	<select name="ritmo">
+		<option value="">Cualquiera</option>
+		{TIME_CLASSES.map((t) => <option value={t} selected={value === t}>{TIME_CLASS_LABEL[t]}</option>)}
+	</select>
+</label>

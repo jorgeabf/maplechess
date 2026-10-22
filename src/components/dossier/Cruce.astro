@@ -1,0 +1,91 @@
+---
+// Una línea principal del rival cruzada con tus partidas: dónde dejas de
+// conocerla y qué hay a partir de ahí (ver crossReference en lib/chess/dossier.ts).
+import type { CrossPoint, MoveCount } from '../../lib/chess/dossier'
+import { parseLine } from '../../lib/chess/repertoire'
+import { formatGames, formatLine, formatMove, formatNumber } from '../../lib/format'
+import ScoreBar from '../repertorio/ScoreBar.astro'
+
+interface Props {
+	cross: CrossPoint
+	/** Nombre del rival para los textos. */
+	name: string
+}
+
+const { cross, name } = Astro.props
+const prefix = parseLine(cross.moves.join(' ')).moves
+
+/** "3.d4" o "3…d6": la jugada que sigue a `moves` con su número. */
+function label(moves: string[], uci: string): string {
+	const move = parseLine([...moves, uci].join(' ')).moves.at(-1)
+	return move ? formatMove(move.ply, move.san) : uci
+}
+
+const where = prefix.length ? `Tras ${formatLine(prefix)}` : 'Desde la primera jugada'
+const list = (moves: string[], counts: MoveCount[]) =>
+	counts.map((c) => `${label(moves, c.uci)} (${formatNumber(c.stats.games)})`).join(', ')
+const yourMain = cross.yourMoves[0]
+---
+
+<p class="cross">
+	{
+		cross.kind === 'known' && (
+			<>
+				<span class="tag known">La conoces</span> Llegas al final de la línea en {formatGames(cross.yours.games)}:{' '}
+				<ScoreBar stats={cross.yours} />
+			</>
+		)
+	}
+	{
+		cross.kind === 'new-for-you' && (
+			<>
+				<span class="tag new">Nueva para ti</span> {where}, {name} juega {label(cross.moves, cross.lineMove!)} y a ti
+				nunca te lo han jugado: prepáralo.
+			</>
+		)
+	}
+	{
+		cross.kind === 'you-deviate' &&
+			(yourMain ? (
+				<>
+					<span class="tag deviate">Te desvías</span> {where}, tú sueles jugar {list(cross.moves, cross.yourMoves)} y no{' '}
+					{label(cross.moves, cross.lineMove!)}.{' '}
+					{cross.rivalAfter ? (
+						<>
+							Contra {label(cross.moves, yourMain.uci)}, {name} tiene {formatGames(cross.rivalAfter.stats.games)}
+							{cross.rivalAfter.replies.length > 0 &&
+								`: ${list([...cross.moves, yourMain.uci], cross.rivalAfter.replies)}`}
+							.
+						</>
+					) : (
+						<>{name} nunca se ha encontrado {label(cross.moves, yourMain.uci)} en estas partidas.</>
+					)}
+				</>
+			) : (
+				<>
+					<span class="tag deviate">Hasta aquí</span> {where}, acaban tus partidas; {name} sigue con{' '}
+					{label(cross.moves, cross.lineMove!)}.
+				</>
+			))
+	}
+</p>
+
+<style>
+	.cross {
+		margin: 0;
+		font-size: var(--text-s);
+	}
+
+	/* La etiqueta (.tag, global) con el color de lo que dice: los de los resultados. */
+	.known {
+		color: var(--result-win);
+	}
+
+	.new {
+		color: var(--result-loss);
+	}
+
+	.deviate {
+		color: var(--result-draw);
+	}
+</style>

@@ -1,0 +1,331 @@
+---
+import type { GameListRow } from '../lib/db/games'
+import { formatDate, formatResult, outcomeFor } from '../lib/format'
+import { gameHref } from '../lib/params'
+import PlayerName from './PlayerName.astro'
+
+interface Props {
+	games: GameListRow[]
+	/** Jugador desde cuyo punto de vista se colorea el resultado y se abre el tablero. */
+	fideId?: number | null
+	/** Oculta la columna de torneo (en la página del torneo). */
+	hideTournament?: boolean
+	/** Media jugada en la que se abre cada partida; el repertorio, en la que llega a la posición. */
+	ply?: (game: GameListRow) => number | undefined
+}
+
+const { games, fideId, hideTournament = false, ply } = Astro.props
+
+/** Color del jugador de `fideId` en la partida. */
+function colorOf(game: GameListRow): 'white' | 'black' | undefined {
+	if (!fideId) return undefined
+	return game.whiteFideId === fideId ? 'white' : game.blackFideId === fideId ? 'black' : undefined
+}
+
+function outcomeClass(game: GameListRow): string {
+	const color = colorOf(game)
+	return color ? (outcomeFor(game.result, color) ?? '') : ''
+}
+
+/**
+ * Enlace a la ficha de un jugador, salvo el de la página (`fideId`): saldría
+ * en cada fila apuntando a donde ya estás, y así el único nombre enlazado es
+ * el del rival.
+ */
+const linkTo = (id: number | null) => (fideId && id === fideId ? null : id)
+---
+
+<div class:list={['table-wrap', 'games', { 'no-tournament': hideTournament }]}>
+	<table class="data-table">
+		<thead>
+			<tr>
+				<th scope="col" class="date">Fecha</th>
+				<th scope="col" class="white">Blancas</th>
+				<th scope="col" class="outcome center">Resultado</th>
+				<th scope="col" class="black">Negras</th>
+				<th scope="col" class="opening">Apertura</th>
+				{!hideTournament && <th scope="col" class="tournament">Torneo</th>}
+				<th scope="col" class="round end">Ronda</th>
+			</tr>
+		</thead>
+		<tbody>
+			{
+				games.map((g) => (
+					<tr>
+						<td class="date num">{formatDate(g.date)}</td>
+						<td class="white">
+							<PlayerName name={g.whiteName} fideId={linkTo(g.whiteFideId)} elo={g.whiteElo} />
+						</td>
+						<td class="outcome center">
+							<a class:list={['result', outcomeClass(g)]} href={gameHref(g.id, colorOf(g), ply?.(g))} title="Ver la partida">
+								{formatResult(g.result)}
+							</a>
+						</td>
+						<td class="black">
+							<PlayerName name={g.blackName} fideId={linkTo(g.blackFideId)} elo={g.blackElo} />
+						</td>
+						<td class="opening wrap">
+							{g.eco && <span class="eco">{g.eco}</span>} {g.opening}
+						</td>
+						{!hideTournament && (
+							<td class="tournament wrap">
+								<a href={`/torneos/${g.tournamentId}`}>{g.tournamentName}</a>
+							</td>
+						)}
+						{/* Ronda y mesa por separado: «11.407» se leía como un número. */}
+						<td class="round end num">
+							{g.round > 0 ? g.round : '—'}
+							{g.board > 0 && <span class="muted"> · mesa&nbsp;{g.board}</span>}
+						</td>
+					</tr>
+				))
+			}
+		</tbody>
+	</table>
+</div>
+
+<style>
+	.center {
+		text-align: center;
+	}
+
+	.result {
+		display: inline-block;
+		min-inline-size: 3.5rem;
+		padding: var(--space-1) var(--space-2);
+		border-radius: var(--radius-s);
+		background: var(--surface-muted);
+		text-decoration: none;
+	}
+
+	/* Sin el punto de vista de un jugador, en el color del texto; con él, el del
+	   resultado (.result.win… de global.css, que esta regla no debe pisar). */
+	.result:not(.win, .draw, .loss) {
+		color: var(--text);
+	}
+
+	.result:hover {
+		background: var(--accent-soft);
+	}
+
+	/*
+	 * Huecos estrechos (el móvil, una tableta en vertical): con las siete
+	 * columnas en paralelo la tabla pide unos 880 px como mínimo, y a 375 px el
+	 * resultado, que es el enlace a la partida, queda fuera de la pantalla. Por
+	 * debajo de 60rem cada partida pasa a cuatro líneas: blancas y negras una
+	 * encima de otra con el resultado a su derecha; la apertura; y la fecha, el
+	 * torneo y la ronda. Por encima van en paralelo, sin desplazarse (ver el
+	 * mínimo de las columnas más abajo). Así las filas se entienden solas, y la
+	 * cabecera queda sólo para los lectores de pantalla: apilada como leyenda
+	 * ocupaba unos 110 px sobre cada lista.
+	 *
+	 * Cada fila es su propia rejilla, con un área por clase de celda: el torneo
+	 * no siempre está (hideTournament) y su hueco queda vacío. Entre las celdas
+	 * hay huecos, así que el relleno, la raya y el fondo de la cabecera van en
+	 * la fila. Con display: grid en tr la tabla conserva su semántica (en Safari
+	 * desde 2023, WebKit 257458).
+	 */
+	.games {
+		container-type: inline-size;
+	}
+
+	@container (width < 60rem) {
+		.games tr {
+			display: grid;
+			grid-template-columns: auto 1fr auto;
+			grid-template-areas:
+				'white white outcome'
+				'black black outcome'
+				'opening opening opening'
+				'date tournament round';
+			gap: var(--space-1) var(--space-3);
+			padding: var(--space-2) var(--space-3);
+			border-bottom: 1px solid var(--border);
+		}
+
+		/* Como .visually-hidden: fuera de la vista, pero en el árbol de accesibilidad. */
+		.games thead {
+			position: absolute;
+			inline-size: 1px;
+			block-size: 1px;
+			overflow: hidden;
+			clip-path: inset(50%);
+			white-space: nowrap;
+		}
+
+		.games tbody tr:last-child {
+			border-bottom: 0;
+		}
+
+		/* Sin el mínimo de .wrap, que es para la tabla que se desplaza. */
+		.games th,
+		.games td {
+			min-width: 0;
+			padding: 0;
+			border-bottom: 0;
+			white-space: normal;
+		}
+
+		.date {
+			grid-area: date;
+		}
+
+		.white {
+			grid-area: white;
+		}
+
+		.outcome {
+			grid-area: outcome;
+			align-self: center;
+		}
+
+		.black {
+			grid-area: black;
+		}
+
+		.opening {
+			grid-area: opening;
+		}
+
+		.tournament {
+			grid-area: tournament;
+		}
+
+		.round {
+			grid-area: round;
+		}
+
+		.games .date,
+		.games .round {
+			white-space: nowrap;
+		}
+
+		td.date,
+		td.tournament,
+		td.round {
+			font-size: var(--text-xs);
+		}
+
+		td.date,
+		td.round {
+			color: var(--text-muted);
+		}
+	}
+
+	/*
+	 * A todo el ancho, lo que piden las siete columnas como mínimo tiene que
+	 * caber en los 60rem desde los que se ponen en paralelo. Con los nombres
+	 * enteros y 12rem para la apertura y el torneo pedían de 1086 a 1163 px, y
+	 * de unos 990 a 1210 px de ventana el torneo y la ronda quedaban fuera, tras
+	 * el scroll. Así, el nombre puede partir línea (su mínimo es la palabra más
+	 * larga) y la apertura y el torneo bajan a 10rem: piden de 835 a 878 px
+	 * (medido en /partidas, en fichas y en el dossier, 21-oct-2026). Con sitio,
+	 * cada columna crece hasta su texto y nada parte línea de más.
+	 */
+	@container (width >= 60rem) {
+		.games :is(td.white, td.black) {
+			white-space: normal;
+		}
+
+		.games td.wrap {
+			min-width: 10rem;
+		}
+	}
+
+	/*
+	 * Toda la fila lleva a la partida, en los dos anchos: el enlace del
+	 * resultado se estira sobre ella con un ::after, y los nombres y el torneo
+	 * quedan encima con su propio enlace. Sigue habiendo un solo enlace a la
+	 * partida, así que el tabulador y los lectores de pantalla no cambian.
+	 * isolation deja ese z-index dentro de la fila.
+	 *
+	 * El ::after necesita que la fila sea su bloque contenedor, y una fila de
+	 * tabla no lo era en Safari hasta 2026 (WebKit 240961): la capa de cada
+	 * fila taparía la tabla entera. Por eso las filas son rejillas: en el
+	 * móvil, con sus áreas; a todo el ancho, con subgrid sobre las columnas de
+	 * la tabla, que pasa a ser la rejilla. Sin subgrid (Safari 15, Chrome 116)
+	 * la tabla ancha sigue siendo tabla y el enlace es sólo el resultado.
+	 */
+	@supports (grid-template-columns: subgrid) {
+		/*
+		 * Cada columna parte de su mínimo (ver la regla de arriba). Lo que sobra
+		 * va primero a la fecha, los nombres, el resultado y la ronda, hasta su
+		 * texto entero, y después la apertura y el torneo se reparten el resto
+		 * (fr). Con todas en auto, el sobrante se repartía por igual y a 1280 px
+		 * un tercio de los nombres partía línea para ensanchar el torneo. La raya
+		 * y el centrado vertical, que en la tabla eran de las celdas, pasan a la
+		 * fila: las celdas ya no se estiran a su alto.
+		 */
+		@container (width >= 60rem) {
+			.games table {
+				--name: minmax(min-content, max-content);
+				--long: minmax(10rem, 1fr);
+				display: grid;
+				grid-template-columns: auto var(--name) auto var(--name) var(--long) var(--long) auto;
+			}
+
+			.no-tournament table {
+				grid-template-columns: auto var(--name) auto var(--name) var(--long) auto;
+			}
+
+			.games thead,
+			.games tbody,
+			.games tr {
+				display: grid;
+				grid-column: 1 / -1;
+				grid-template-columns: subgrid;
+			}
+
+			.games tr {
+				align-items: center;
+				border-bottom: 1px solid var(--border);
+			}
+
+			.games thead tr {
+				border-bottom-color: var(--border-strong);
+			}
+
+			.games tbody tr:last-child {
+				border-bottom: 0;
+			}
+
+			.games th,
+			.games td {
+				border-bottom: 0;
+			}
+		}
+
+		/* La fila se marca al pasar por encima porque es un enlace: en las demás tablas, no. */
+		tbody tr {
+			position: relative;
+			isolation: isolate;
+		}
+
+		tbody tr:hover {
+			background: var(--surface-hover);
+		}
+
+		/* El foco del enlace a la partida marca la fila entera, que es lo que se abre. */
+		@supports selector(:has(a)) {
+			tbody tr:has(.result:focus-visible) {
+				outline: 2px solid var(--focus-ring);
+				outline-offset: -2px;
+			}
+
+			.result:focus-visible {
+				outline: none;
+			}
+		}
+
+		.result::after {
+			content: '';
+			position: absolute;
+			inset: 0;
+		}
+
+		tbody tr :global(a:not(.result)) {
+			position: relative;
+			z-index: 1;
+		}
+	}
+</style>

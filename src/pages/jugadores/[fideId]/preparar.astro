@@ -1,0 +1,662 @@
+---
+// Dossier para preparar una partida contra un jugador: lo esencial de sus
+// partidas con un color (sus líneas principales, qué ha cambiado, cómo rinde
+// según el rival y sus últimas partidas) en una página que se lee en el móvil
+// o se imprime. Una consulta: sus partidas con ese color, sin el PGN.
+//
+// Si quien prepara la partida dice quién es (parámetro yo, que se recuerda en
+// una cookie; ver lib/me.ts), se añaden vuestras partidas y el cruce de sus
+// líneas con las tuyas: dónde te separas tú o dónde juega algo nuevo para ti.
+// Con tu nombre en vez de tu ID, lista los jugadores que casan para que elijas.
+// Si además estáis emparejados en una ronda próxima, lo avisa y abre con el
+// color que llevará el rival. De las partidas con reloj en el PGN sale si
+// suele apurarse de tiempo.
+import { env } from 'cloudflare:workers'
+import CabeceraJugador from '../../../components/CabeceraJugador.astro'
+import Cruce from '../../../components/dossier/Cruce.astro'
+import FiltrosPlegables from '../../../components/FiltrosPlegables.astro'
+import GamesTable from '../../../components/GamesTable.astro'
+import ScoreBar from '../../../components/repertorio/ScoreBar.astro'
+import Segmented from '../../../components/Segmented.astro'
+import Base from '../../../layouts/Base.astro'
+import { clockSummary, clockTimeClasses, MIN_CLOCK_GAMES, OPENING_MOVE, TROUBLE_SHARE } from '../../../lib/chess/clock'
+import { crossReference, ELO_GAP, mainLines, recentChanges, resultsByEloGap, type EloGap } from '../../../lib/chess/dossier'
+import { addGame, emptyStats, indexPositions, parseLine } from '../../../lib/chess/repertoire'
+import { TIME_CLASS_LABEL } from '../../../lib/chess/timecontrol'
+import { addYears, isoDate } from '../../../lib/dates'
+import { getGamesByIds, getHeadToHead, type GameListRow } from '../../../lib/db/games'
+import { getUpcomingGames } from '../../../lib/db/pairings'
+import { findPlayersByName, getPlayer } from '../../../lib/db/players'
+import { getPlayerGames, repertoireGames } from '../../../lib/db/repertoire'
+import {
+	COLOR_NAME,
+	displayName,
+	formatCount,
+	formatDate,
+	formatDuration,
+	formatGames,
+	formatLine,
+	formatNumber,
+	formatPercent,
+	formatRoundTime
+} from '../../../lib/format'
+import { ME_COOKIE, ME_COOKIE_OPTIONS, ME_PARAM, dropMeParam, isOwn, meCookieAction, meHref, meName, resolveMe } from '../../../lib/me'
+import { PERIOD_OPTIONS, periodSummary, TIME_CLASS_OPTIONS, timeClassSummary } from '../../../lib/options'
+import { positiveInt, repertoireParams, withParams, type RepertoireSearch } from '../../../lib/params'
+
+const fideId = positiveInt(Astro.params.fideId)
+if (fideId === null) return Astro.rewrite('/404')
+
+const search = repertoireParams(Astro.url.searchParams)
+const { period, timeClass } = search
+const today = isoDate(new Date())
+
+const me = resolveMe(Astro.url.searchParams.get(ME_PARAM), Astro.cookies.get(ME_COOKIE)?.value)
+const meId = me.fideId !== fideId ? me.fideId : null
+// Tu nombre, si en vez de tu ID lo escribiste en «Tú contra…».
+const meSearch = meName(Astro.url.searchParams.get(ME_PARAM))
+// Tu propio dossier (cookie yo): lo que ven tus rivales al prepararse contra
+// ti. Los textos te hablan a ti, el color es el tuyo y no hay «Tú contra».
+const own = isOwn(me, fideId)
+
+// Primero lo que cuesta poco (el rival, tú y tus próximas partidas): con eso se
+// decide la cookie y, si toca, se vuelve a la URL sin `yo` antes de leer las
+// partidas del rival.
+const [player, mePlayer, myUpcoming] = await Promise.all([
+	getPlayer(env.DB, fideId),
+	meId ? getPlayer(env.DB, meId) : null,
+	meId ? getUpcomingGames(env.DB, meId) : []
+])
+if (!player) return Astro.rewrite('/404')
+
+// La cookie, sólo ahora que se sabe si tu ID existe (meCookieAction). Una vez
+// guardada o borrada, la URL no lleva `yo` (dropMeParam), para que no quede en
+// un enlace que se comparta; el navegador conserva el ancla (#tu).
+const cookie = meCookieAction(me, fideId, me.fideId === fideId || mePlayer !== null)
+if (cookie === 'set') {
+	Astro.cookies.set(ME_COOKIE, String(me.fideId), ME_COOKIE_OPTIONS)
+} else if (cookie === 'delete') {
+	Astro.cookies.delete(ME_COOKIE, { path: '/' })
+}
+if (dropMeParam(me, cookie)) return Astro.redirect(withParams(Astro.url, { [ME_PARAM]: null }), 303)
+
+const pairing = myUpcoming.find((g) => g.opponent.fideId === fideId) ?? null
+// Color del rival si la URL no lo dice: el de vuestra partida o, si no la hay, blancas.
+const defaultColor = pairing?.color === 'white' ? 'black' : 'white'
+const color = Astro.url.searchParams.has('color') ? search.color : defaultColor
+const myColor = color === 'white' ? 'black' : 'white'
+
+const [all, myGames, headToHead, meChoices] = await Promise.all([
+	getPlayerGames(env.DB, fideId, color, { timeClass }, { clocks: true }),
+	mePlayer ? getPlayerGames(env.DB, mePlayer.fideId, myColor, { timeClass }) : [],
+	mePlayer ? getHeadToHead(env.DB, mePlayer.fideId, fideId) : [],
+	meSearch ? findPlayersByName(env.DB, meSearch, fideId) : null
+])
+
+// El periodo acota las líneas, los resultados y las últimas partidas; los
+// cambios recientes comparan siempre el último año con los dos anteriores.
+const from = period ? addYears(today, -Number(period)) : null
+const games = from ? all.filter((g) => g.date !== null && g.date >= from) : all
+const rivalIndex = indexPositions(repertoireGames(games), color)
+// Tu índice: todas tus partidas con el otro color y el mismo ritmo.
+const myIndex = mePlayer ? indexPositions(repertoireGames(myGames), myColor) : null
+const lines = mainLines(rivalIndex).map((l) => ({
+	...l,
+	line: parseLine(l.moves.join(' ')),
+	cross: myIndex ? crossReference(l, myIndex, rivalIndex, color) : null
+}))
+const headToHeadStats = emptyStats()
+for (const g of headToHead) addGame(headToHeadStats, g, g.whiteFideId === meId ? 'white' : 'black')
+const changes = recentChanges(all, today)
+const byElo = resultsByEloGap(games, color)
+// El reloj, sin mezclar ritmos: el elegido arriba o, si no, el que más partidas con reloj tiene.
+const clockClasses = clockTimeClasses(games, color)
+const clockClass = timeClass ?? clockClasses[0]?.timeClass ?? null
+const otherClockClasses = timeClass ? [] : clockClasses.slice(1)
+const clock = clockSummary(clockClass ? games.filter((g) => g.timeClass === clockClass) : games, color)
+const clockClassText = clockClass ? ` a ${TIME_CLASS_LABEL[clockClass].toLowerCase()}` : ''
+const listText = (items: string[]) => (items.length > 1 ? `${items.slice(0, -1).join(', ')} y ${items.at(-1)}` : (items[0] ?? ''))
+// El umbral en tiempo de reloj, redondeado: «4 min 30 s» y no «4 min 33 s».
+const troubleSeconds = (clock.initial ?? 0) * TROUBLE_SHARE
+const troubleLimit = `${formatDuration(troubleSeconds >= 60 ? Math.round(troubleSeconds / 15) * 15 : troubleSeconds)} (el ${formatPercent(TROUBLE_SHARE)} de ${own ? 'tu' : 'su'} tiempo)`
+const troublePhases = listText(
+	[
+		{ n: clock.phases.early, label: 'antes de la jugada 30' },
+		{ n: clock.phases.middle, label: 'entre la jugada 30 y la 40' },
+		{ n: clock.phases.late, label: 'después de la jugada 40' }
+	]
+		.filter((phase) => phase.n > 0)
+		.map((phase) => `${phase.label} en ${formatNumber(phase.n)}`)
+)
+
+const latestIds = [...games]
+	.sort((a, b) => (b.date ?? '').localeCompare(a.date ?? '') || b.id - a.id)
+	.slice(0, 10)
+	.map((g) => g.id)
+const details = new Map((await getGamesByIds(env.DB, latestIds)).map((g) => [g.id, g]))
+const latest = latestIds.map((id) => details.get(id)).filter((g): g is GameListRow => g !== undefined)
+
+// Enlaces. El color por defecto (el de vuestra partida o blancas) y "todas"
+// no van en la URL. Tu ID queda en la cookie: los enlaces no lo arrastran.
+// Los de decir quién eres vuelven a «Tú contra…» (#tu), como su formulario.
+const link = (changes: Record<string, string | null>) => withParams(Astro.url, { ...changes, [ME_PARAM]: null })
+const forgetMeHref = `${meHref(link({}), null)}#tu`
+const chooseMeHref = (id: number) => `${meHref(link({}), id)}#tu`
+const filters = { color: color === 'white' ? null : color, periodo: period || null, ritmo: timeClass }
+const repertoireHref = (moves: string[], file = 'repertorio') =>
+	withParams(new URL(`/jugadores/${fideId}/${file}`, Astro.url), { ...filters, jugadas: moves.join(' ') || null })
+const colors: { id: RepertoireSearch['color']; label: string }[] = own
+	? [
+			{ id: 'white', label: 'Con blancas' },
+			{ id: 'black', label: 'Con negras' }
+		]
+	: [
+			{ id: 'black', label: 'Juegas con blancas' },
+			{ id: 'white', label: 'Juegas con negras' }
+		]
+// Lo elegido, para el resumen de los filtros plegados del móvil.
+const colorSummary = colors.find((c) => c.id === color)!.label.toLowerCase()
+const eloGroups: { id: EloGap; label: string }[] = [
+	{ id: 'stronger', label: `Más fuerte (+${ELO_GAP})` },
+	{ id: 'similar', label: `De ${own ? 'tu' : 'su'} nivel (±${ELO_GAP})` },
+	{ id: 'weaker', label: `Más débil (−${ELO_GAP})` },
+	{ id: 'unknown', label: 'Sin ELO' }
+]
+
+const name = displayName(player.name)
+const title = own ? 'Mi dossier' : `Preparar contra ${name}`
+const yours = own ? 'tuyas' : 'suyas'
+const myName = mePlayer ? displayName(mePlayer.name) : null
+const myColorText = COLOR_NAME[myColor]
+const colorText = COLOR_NAME[color]
+const filterText = [period && `en los últimos ${period} años`, timeClass && `a ${TIME_CLASS_LABEL[timeClass].toLowerCase()}`]
+	.filter(Boolean)
+	.map((t) => ` ${t}`)
+	.join('')
+// Sin partidas, qué probar: todas las fechas si el periodo las deja fuera
+// (sabemos cuántas), todos los ritmos y el otro color. Sin contar estas dos,
+// que costaría leer otra vez sus partidas.
+const otherColor = color === 'white' ? 'black' : 'white'
+const alternatives: { href: string; label: string }[] = []
+if (period && all.length > 0) {
+	alternatives.push({ href: link({ periodo: null }), label: `todas las fechas (${formatGames(all.length)})` })
+}
+if (timeClass && all.length === 0) alternatives.push({ href: link({ ritmo: null }), label: 'todos los ritmos' })
+alternatives.push({
+	href: link({ color: otherColor === defaultColor ? null : otherColor }),
+	label: `${own ? 'tus' : 'sus'} partidas con ${COLOR_NAME[otherColor]}`
+})
+---
+
+<Base
+	title={title}
+	section="jugadores"
+	description={`Dossier de ${name} (FIDE ${fideId}) con ${colorText}: líneas principales, cambios y resultados.`}
+	noindex
+>
+	<CabeceraJugador fideId={fideId} name={name} title={title} own={own}>
+		{own && 'Lo que ven tus rivales al prepararse contra ti: '}
+		{formatCount(games.length, `partida ${own ? 'tuya' : 'suya'}`, `partidas ${yours}`)} con {colorText}{filterText}
+		{player.ratingStd && ` · ELO ${player.ratingStd}`} · FIDE {fideId}
+	</CabeceraJugador>
+
+	{
+		pairing && (
+			<p class="note">
+				Juegas contra {name} el {formatRoundTime(pairing.startsAt)}, con {COLOR_NAME[pairing.color]}: ronda{' '}
+				{pairing.round} del <a href={`/torneos/${pairing.tournamentId}`}>{pairing.tournamentName}</a>, mesa {pairing.board}.
+			</p>
+		)
+	}
+
+	<FiltrosPlegables summary={[colorSummary, periodSummary(period), timeClassSummary(timeClass)]}>
+		<Segmented showLabel label={own ? 'Color' : 'Tu color'} options={colors} current={color} href={(id) => link({ color: id === defaultColor ? null : id })} />
+		<Segmented showLabel label="Periodo" options={PERIOD_OPTIONS} current={period} href={(id) => link({ periodo: id || null })} />
+		<Segmented
+			showLabel
+			label="Ritmo"
+			options={TIME_CLASS_OPTIONS}
+			current={timeClass ?? ''}
+			href={(id) => link({ ritmo: id || null })}
+		/>
+	</FiltrosPlegables>
+
+	{
+		games.length === 0 ? (
+			<p class="muted">
+				No hay partidas {yours} con {colorText}{filterText}. Prueba con{' '}
+				{alternatives.map((a, i) => (
+					<>
+						{i > 0 && (i === alternatives.length - 1 ? ' o ' : ', ')}
+						<a href={a.href}>{a.label}</a>
+					</>
+				))}
+				.
+			</p>
+		) : (
+			<div class="dossier">
+				<section class="card lines" aria-labelledby="lineas">
+					<h2 id="lineas">
+						{own ? 'Tus' : 'Sus'} líneas principales con {colorText}
+					</h2>
+					{lines.length > 0 ? (
+						<ol>
+							{lines.map((l) => (
+								<li>
+									<p class="moves">{formatLine(l.line.moves)}</p>
+									{l.line.opening && (
+										<p class="opening">
+											<span class="eco">{l.line.opening.eco}</span> {l.line.opening.name}
+										</p>
+									)}
+									<p class="facts">
+										<span class="num">{formatGames(l.stats.games)}</span>
+										<ScoreBar stats={l.stats} />
+										<span class="muted">última {formatDate(l.stats.lastDate)}</span>
+										<span class="links">
+											<a href={repertoireHref(l.moves)} rel="nofollow">
+												Explorar
+											</a>
+											<a href={repertoireHref(l.moves, 'repertorio.pgn')} rel="nofollow" download>
+												PGN
+											</a>
+										</span>
+									</p>
+								</li>
+							))}
+						</ol>
+					) : (
+						<p class="muted">
+							{own
+								? 'No repites ninguna línea en dos o más partidas: varías desde la primera jugada. Mira tus partidas en el'
+								: 'No repite ninguna línea en dos o más partidas: varía desde la primera jugada. Mira sus partidas en el'}{' '}
+							<a href={repertoireHref([])} rel="nofollow">repertorio</a>.
+						</p>
+					)}
+				</section>
+
+				{!own && (
+					<section class="card you" aria-labelledby="tu">
+						<h2 id="tu">Tú contra {name}</h2>
+						{mePlayer ? (
+							<>
+								<p class="muted">
+									Tú: {myName} (FIDE {meId}) ·{' '}
+									<a href={forgetMeHref} rel="nofollow">
+										No soy yo
+									</a>
+								</p>
+								<h3>Vuestras partidas</h3>
+								{headToHead.length > 0 ? (
+									<>
+										<p>
+											{formatGames(headToHead.length)}: <ScoreBar stats={headToHeadStats} />
+										</p>
+										<GamesTable games={headToHead} fideId={meId} />
+									</>
+								) : (
+									<p class="muted">No hay partidas entre vosotros en las fuentes.</p>
+								)}
+								<h3>Sus líneas frente a tu repertorio con {myColorText}</h3>
+								{lines.length === 0 ? (
+									<p class="muted">No tiene líneas repetidas que cruzar.</p>
+								) : lines.every((l) => l.cross === null) ? (
+									<p class="muted">
+										No hay partidas tuyas con {myColorText}
+										{timeClass && ` a ${TIME_CLASS_LABEL[timeClass].toLowerCase()}`} en las fuentes.
+									</p>
+								) : (
+									<ol class="crosses">
+										{lines.map((l) => (
+											<li>
+												<p class="moves small">{formatLine(l.line.moves)}</p>
+												{l.cross && <Cruce cross={l.cross} name={name} />}
+											</li>
+										))}
+									</ol>
+								)}
+							</>
+						) : (
+							<>
+								{me.fideId === fideId && <p class="muted">Ese es su propio ID: indica el tuyo.</p>}
+								{me.fideId !== null && me.fideId !== fideId && (
+									<p class="muted">No encontramos el ID FIDE {me.fideId}.</p>
+								)}
+								<form method="get" class="me-form form-row" action="#tu">
+									{color !== 'white' && <input type="hidden" name="color" value={color} />}
+									{period && <input type="hidden" name="periodo" value={period} />}
+									{timeClass && <input type="hidden" name="ritmo" value={timeClass} />}
+									<label>
+										Tu nombre o ID FIDE
+										<input name={ME_PARAM} value={meSearch} required autocomplete="name" />
+									</label>
+									<button class="button secondary" type="submit">
+										Cruzar con mis partidas
+									</button>
+								</form>
+								{meChoices && (
+									<div class="choices">
+										{meChoices.rows.length > 0 ? (
+											<>
+												<p>¿Cuál eres tú?</p>
+												<ul>
+													{meChoices.rows.map((p) => (
+														<li>
+															<a href={chooseMeHref(p.fideId)} rel="nofollow">
+																{displayName(p.name)}
+															</a>
+															{p.title && <span class="tag">{p.title}</span>}
+															{(p.ratingStd || p.birthYear) && (
+																<span class="muted">
+																	{[p.ratingStd && `ELO ${p.ratingStd}`, p.birthYear && `n. ${p.birthYear}`]
+																		.filter(Boolean)
+																		.join(' · ')}
+																</span>
+															)}
+														</li>
+													))}
+												</ul>
+												{meChoices.more && (
+													<p class="muted small">
+														Hay más con ese nombre: añade otra palabra (el segundo apellido o el nombre) o escribe tu ID
+														FIDE.
+													</p>
+												)}
+											</>
+										) : (
+											<p class="muted">
+												No hay nadie con ese nombre en la lista FIDE española: prueba con menos palabras o escribe tu ID
+												FIDE.
+											</p>
+										)}
+									</div>
+								)}
+								<p class="muted small">
+									Verás vuestras partidas y en qué punto de sus líneas te separas tú o juega algo nuevo para ti. Del
+									nombre basta el principio de cada palabra. Se recuerda en una cookie de este sitio y nada más.
+								</p>
+							</>
+						)}
+					</section>
+				)}
+
+				<section class="card" aria-labelledby="cambios">
+					<h2 id="cambios">Cambios en el último año</h2>
+					{changes === null ? (
+						<p class="muted">Pocas partidas con {colorText} en los últimos tres años para comparar.</p>
+					) : changes.adopted.length === 0 && changes.dropped.length === 0 ? (
+						<p>
+							{own ? 'Juegas' : 'Juega'} lo mismo que antes: {formatGames(changes.recentGames)} desde el{' '}
+							{formatDate(changes.since)} frente a {formatNumber(changes.beforeGames)} en los dos años anteriores.
+						</p>
+					) : (
+						<>
+							<p class="muted">
+								{formatGames(changes.recentGames)} desde el {formatDate(changes.since)} frente a{' '}
+								{formatNumber(changes.beforeGames)} en los dos años anteriores.
+							</p>
+							{changes.adopted.length > 0 && (
+								<>
+									<h3>Nuevas</h3>
+									<ul>
+										{changes.adopted.map((s) => (
+											<li>
+												{s.family} <span class="muted num">({formatGames(s.recent)})</span>
+											</li>
+										))}
+									</ul>
+								</>
+							)}
+							{changes.dropped.length > 0 && (
+								<>
+									<h3>{own ? 'Las has dejado' : 'Las ha dejado'}</h3>
+									<ul>
+										{changes.dropped.map((s) => (
+											<li>
+												{s.family} <span class="muted num">({formatGames(s.before)} antes)</span>
+											</li>
+										))}
+									</ul>
+								</>
+							)}
+						</>
+					)}
+				</section>
+
+				<section class="card rivals" aria-labelledby="rivales">
+					<h2 id="rivales">Resultados según el rival</h2>
+					<table class="data-table">
+						<thead>
+							<tr>
+								<th scope="col">Rival</th>
+								<th scope="col" class="end">Partidas</th>
+								<th scope="col" class="end">Puntuación</th>
+							</tr>
+						</thead>
+						<tbody>
+							{eloGroups
+								.filter((g) => byElo[g.id].games > 0)
+								.map((g) => (
+									<tr>
+										<th scope="row">{g.label}</th>
+										<td class="end num">{formatNumber(byElo[g.id].games)}</td>
+										<td class="end">
+											<ScoreBar stats={byElo[g.id]} />
+										</td>
+									</tr>
+								))}
+						</tbody>
+					</table>
+				</section>
+
+				<section class="card clock" aria-labelledby="reloj">
+					<h2 id="reloj">Apuros de tiempo</h2>
+					{clock.games < MIN_CLOCK_GAMES ? (
+						<p class="muted">
+							Pocas partidas {yours} con {colorText}
+							{clockClassText} traen el reloj en el PGN ({formatNumber(clock.games)}) para decir nada.
+						</p>
+					) : (
+						<div class="clock-body">
+							<div>
+								<p>
+									{clock.trouble === 0
+										? `${own ? 'No bajaste' : 'No bajó'} de ${troubleLimit} en ninguna de ${own ? 'tus' : 'sus'} ${formatGames(clock.games)}${clockClassText} con reloj.`
+										: `${own ? 'Bajaste' : 'Bajó'} de ${troubleLimit} en ${formatNumber(clock.trouble)} de ${own ? 'tus' : 'sus'} ${formatGames(clock.games)}${clockClassText} con reloj (${formatPercent(clock.trouble / clock.games)}); suele ser hacia la jugada ${clock.troubleMove}.`}
+									{clock.afterOpening !== null &&
+										` Tras ${OPENING_MOVE} jugadas ${own ? 'te' : 'le'} suele quedar el ${formatPercent(clock.afterOpening)} (${formatDuration((clock.initial ?? 0) * clock.afterOpening)}).`}
+								</p>
+								{clock.trouble > 0 && (
+									<p class="muted">
+										{own ? 'Empezaste' : 'Empezó'} {troublePhases}.
+									</p>
+								)}
+								{otherClockClasses.length > 0 && (
+									<p class="muted">
+										A otro ritmo, apurarse no es lo mismo: {own ? 'tienes' : 'tiene'} también{' '}
+										{listText(
+											otherClockClasses.map((c) => `${formatNumber(c.games)} a ${TIME_CLASS_LABEL[c.timeClass].toLowerCase()}`)
+										)}{' '}
+										con reloj. Elige el ritmo arriba.
+									</p>
+								)}
+							</div>
+							<table class="data-table">
+								<thead>
+									<tr>
+										<td />
+										<th scope="col" class="end">Partidas</th>
+										<th scope="col" class="end">Puntuación</th>
+									</tr>
+								</thead>
+								<tbody>
+									{[
+										{ label: 'Con apuro', stats: clock.withTrouble },
+										{ label: 'Sin apuro', stats: clock.withoutTrouble }
+									]
+										.filter((row) => row.stats.games > 0)
+										.map((row) => (
+											<tr>
+												<th scope="row">{row.label}</th>
+												<td class="end num">{formatNumber(row.stats.games)}</td>
+												<td class="end">
+													<ScoreBar stats={row.stats} />
+												</td>
+											</tr>
+										))}
+								</tbody>
+							</table>
+						</div>
+					)}
+				</section>
+
+				<section class="latest" aria-labelledby="ultimas">
+					<h2 id="ultimas">
+						{own ? 'Tus' : 'Sus'} últimas partidas con {colorText}
+					</h2>
+					<GamesTable games={latest} fideId={fideId} />
+				</section>
+			</div>
+		)
+	}
+</Base>
+
+<style>
+	/*
+	 * Como mucho dos columnas: cada pista mide al menos la mitad del ancho
+	 * (menos el hueco), así que las tarjetas de cambios y resultados van de dos
+	 * en dos y no en tres pistas estrechas con una vacía. Por debajo de dos
+	 * veces 24rem, una sola columna.
+	 */
+	.dossier {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(max(min(100%, 24rem), (100% - var(--space-4)) / 2), 1fr));
+		gap: var(--space-4);
+	}
+
+	.lines,
+	.you,
+	.clock,
+	.latest {
+		grid-column: 1 / -1;
+	}
+
+	/* A todo el ancho, el texto y la tabla van en dos columnas; en el móvil, una. */
+	.clock-body {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr));
+		gap: var(--space-4);
+		align-items: start;
+	}
+
+	.dossier h3 {
+		margin-block: var(--space-3) var(--space-2);
+	}
+
+	.lines ol {
+		display: grid;
+		gap: var(--space-4);
+		margin: 0;
+		padding-inline-start: var(--space-5);
+	}
+
+	.lines li p {
+		margin: 0;
+	}
+
+	/* Un punto por debajo del título de su tarjeta, que medía lo mismo; las del cruce, otro más. */
+	.moves {
+		font-family: var(--font-serif);
+		font-size: var(--text-m);
+		font-weight: var(--weight-strong);
+	}
+
+	.opening {
+		font-size: var(--text-s);
+		color: var(--text-muted);
+	}
+
+	.facts {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: var(--space-2) var(--space-4);
+		margin-top: var(--space-1);
+		font-size: var(--text-s);
+	}
+
+	.links {
+		display: inline-flex;
+		gap: var(--space-3);
+	}
+
+	.small {
+		font-size: var(--text-s);
+	}
+
+	.moves.small {
+		font-size: var(--text-s);
+	}
+
+	.crosses {
+		display: grid;
+		gap: var(--space-3);
+		margin: 0;
+		padding-inline-start: var(--space-5);
+	}
+
+	.crosses p {
+		margin: 0;
+	}
+
+	.me-form {
+		margin-bottom: var(--space-2);
+	}
+
+	/*
+	 * Los jugadores que casan con tu nombre, uno por línea. Si no cabe, el ELO
+	 * y el año bajan juntos a la siguiente, sin partirse.
+	 */
+	.choices ul {
+		display: grid;
+		gap: var(--space-2);
+		margin: 0 0 var(--space-3);
+		padding: 0;
+		list-style: none;
+	}
+
+	.choices li {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: baseline;
+		gap: 0 var(--space-2);
+	}
+
+	.choices li .muted {
+		white-space: nowrap;
+	}
+
+	/*
+	 * Con la fila de cabeceras, las dos tablas piden unos 270 px como mínimo:
+	 * caben desde unos 350 px de pantalla (a 360 hay 278). Más estrecho, se
+	 * desplazan dentro de su tarjeta, como las de la ficha.
+	 */
+	.rivals,
+	.clock {
+		overflow-x: auto;
+	}
+
+	/* Las etiquetas de fila («De su nivel (±100)») parten línea antes que sacar
+	   la tabla de su tarjeta. */
+	.data-table th[scope='row'] {
+		white-space: normal;
+	}
+
+	@media print {
+		.links,
+		.me-form,
+		.choices {
+			display: none;
+		}
+	}
+</style>

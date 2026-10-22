@@ -1,0 +1,38 @@
+# Vigilancia de la ingesta: dos veces al día pide /api/estado, que responde 503
+# si alguna pasada (info64, emparejamientos, lichess o la lista FIDE) lleva
+# demasiado sin terminar o falla en muchos torneos (ver src/lib/salud.ts).
+#
+# Si falla, GitHub manda un correo a quien creó el workflow o cambió por última
+# vez su schedule (Settings → Notifications → Actions, activado por defecto). El
+# registro del paso dice qué pasada falla.
+#
+# Ojo: en los repositorios públicos, GitHub desactiva los schedule tras 60 días
+# sin actividad en el repositorio. Se vuelven a activar a mano, en la pestaña
+# Actions.
+name: Vigilancia
+
+on:
+  # Después de las pasadas de la mañana (info64 a las 05:00 y lichess a las
+  # 06:30 UTC) y de la de emparejamientos de las 22:00 de Madrid.
+  schedule:
+    - cron: '30 7 * * *'
+    - cron: '30 23 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  # Con el dominio definitivo, cambia aquí la URL.
+  ESTADO_URL: https://buscador-partidas-ajedrez.aportuvas.workers.dev/api/estado
+
+jobs:
+  estado:
+    name: Estado de la ingesta
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      # --fail-with-body falla con un 503 como -f, pero deja en el registro el
+      # cuerpo, que dice qué pasada falla. Los reintentos evitan una falsa
+      # alarma por un fallo de red pasajero.
+      - run: curl -sS --fail-with-body --max-time 30 --retry 2 --retry-delay 20 "$ESTADO_URL"

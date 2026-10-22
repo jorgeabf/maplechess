@@ -1,0 +1,284 @@
+---
+import titularesUrl from '../assets/fonts/titulares-600.woff2'
+import BuscadorJugadores from '../components/BuscadorJugadores.astro'
+import Icon from '../components/Icon.astro'
+import Logo from '../components/Logo.astro'
+import { CC_BY_SA, SOURCE_CODE } from '../lib/licenses'
+import '../styles/global.css'
+
+interface Props {
+	/** Base le añade el nombre del sitio detrás, salvo si ya empieza por él (la portada). */
+	title: string
+	description?: string
+	/** Sección activa del menú. */
+	section?: 'jugadores' | 'partidas' | 'torneos'
+	/** Las fichas y búsquedas sin resultados no se indexan. */
+	noindex?: boolean
+}
+
+const { title, description = 'Buscador de jugadores españoles de ajedrez y de sus partidas, con visor y motor de análisis.', section, noindex = false } = Astro.props
+const siteName = 'MapleChess'
+const fullTitle = title.startsWith(siteName) ? title : `${title} · ${siteName}`
+
+const nav = [
+	{ href: '/jugadores', label: 'Jugadores', id: 'jugadores' },
+	{ href: '/partidas', label: 'Partidas', id: 'partidas' },
+	{ href: '/torneos', label: 'Torneos', id: 'torneos' }
+] as const
+---
+
+<!doctype html>
+<html lang="es">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>{fullTitle}</title>
+		<meta name="description" content={description} />
+		{noindex && <meta name="robots" content="noindex" />}
+		{/* El ICO con sizes="32x32": así los navegadores que leen SVG se quedan con
+		    el SVG. El ICO y el icono de iOS salen de scripts/iconos.mjs. */}
+		<link rel="icon" href="/favicon.ico" sizes="32x32" />
+		<link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+		<link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+		{/* La marca y el h1 van en serif nada más cargar: la fuente se pide a la vez que el CSS. */}
+		<link rel="preload" href={titularesUrl} as="font" type="font/woff2" crossorigin />
+	</head>
+	<body>
+		<a class="skip" href="#contenido">Saltar al contenido</a>
+		<header class="site-header">
+			<div class="page bar">
+				<a class="brand" href="/">
+					<Logo size={32} />
+					<span>{siteName}</span>
+				</a>
+				<div class="end">
+					<nav aria-label="Secciones">
+						<ul>
+							{
+								nav.map((item) => (
+									<li>
+										<a href={item.href} aria-current={section === item.id ? 'page' : undefined}>
+											{item.label}
+										</a>
+									</li>
+								))
+							}
+						</ul>
+					</nav>
+					{/* Popover nativo: se abre sin JS, con el campo enfocado, y se cierra con Esc o tocando fuera. */}
+					<button class="search-toggle" type="button" popovertarget="buscar-jugador">
+						<Icon name="search" />
+						<span class="visually-hidden">Buscar jugador</span>
+					</button>
+					<BuscadorJugadores id="buscar-jugador" popover="auto" autofocus>
+						<button class="button secondary" type="button" popovertarget="buscar-jugador" popovertargetaction="hide">
+							Cerrar
+						</button>
+					</BuscadorJugadores>
+					{/* Lo cierra también cuando el foco sale de él (src/client/panel-busqueda.ts). */}
+					<script src="../client/panel-busqueda.ts"></script>
+				</div>
+			</div>
+		</header>
+		<main id="contenido" class="page">
+			<slot />
+		</main>
+		<footer class="site-footer">
+			<div class="page">
+				{/* {' '} explícitos: Astro, como JSX, quita el espacio con salto de línea entre texto y etiqueta. */}
+				<p>
+					Datos de <a href="https://info64.org" rel="noopener">info64</a> (FEDA), de la{' '}
+					<a href="https://ratings.fide.com" rel="noopener">lista FIDE</a> y de las{' '}
+					<a href="https://lichess.org/broadcast" rel="noopener">retransmisiones de lichess</a> (
+					<a href={CC_BY_SA} rel="license noopener">CC BY-SA 4.0</a>). Motor{' '}
+					<a href="https://stockfishchess.org" rel="noopener">Stockfish</a>.{' '}
+					<a href={SOURCE_CODE} rel="noopener">Código libre</a> bajo GPL-3.0 ·{' '}
+					<a href="/acerca">Acerca de</a>
+				</p>
+			</div>
+		</footer>
+	</body>
+</html>
+
+<style>
+	.skip {
+		position: absolute;
+		inset-inline-start: var(--space-4);
+		inset-block-start: calc(-1 * var(--space-8));
+		padding: var(--space-2) var(--space-3);
+		background: var(--accent);
+		color: var(--text-inverse);
+		border-radius: var(--radius-m);
+		z-index: 10;
+	}
+
+	.skip:focus {
+		inset-block-start: var(--space-2);
+	}
+
+	.site-header {
+		border-bottom: 1px solid var(--border);
+		background: var(--surface);
+		margin-bottom: var(--space-6);
+	}
+
+	/*
+	 * Marca y menú comparten fila mientras quepan. Si no, el menú baja solo,
+	 * sin punto de corte: el salto de línea de flexbox mide su contenido
+	 * entero, así que no hay que tocar nada al añadir secciones. Solo en su
+	 * línea, space-between lo deja al principio; y si ni así cabe, encoge
+	 * (min-width: 0) y las pestañas se desplazan en horizontal.
+	 */
+	.bar {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: stretch;
+		justify-content: space-between;
+		column-gap: var(--space-5);
+	}
+
+	.brand {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--space-2);
+		padding-block: var(--space-2);
+		font-family: var(--font-serif);
+		font-size: var(--text-l);
+		font-weight: var(--weight-strong);
+		color: var(--text);
+		text-decoration: none;
+	}
+
+	/*
+	 * Menú y lupa van juntos: a la derecha de la marca si caben con ella y, si
+	 * no, juntos en la fila siguiente, al principio. Si ni así caben las
+	 * pestañas, el menú encoge y se desplaza; la lupa queda siempre a la vista.
+	 */
+	.end {
+		/* Grosor del subrayado de la pestaña. */
+		--marca: 3px;
+		display: flex;
+		min-width: 0;
+	}
+
+	nav {
+		display: flex;
+		min-width: 0;
+	}
+
+	/*
+	 * La lista es la zona que se desplaza. Por la izquierda llega hasta el
+	 * borde de la pantalla (margen negativo) y su padding deja el texto de la
+	 * primera pestaña a plomo con el logo. Por la derecha acaba en la lupa.
+	 */
+	nav ul {
+		display: flex;
+		margin: 0;
+		margin-inline-start: calc(-1 * var(--space-4));
+		padding: 0;
+		padding-inline-start: calc(var(--space-4) - var(--space-3));
+		list-style: none;
+		overflow-x: auto;
+		overscroll-behavior-x: contain;
+		scrollbar-width: none;
+	}
+
+	nav li {
+		display: flex;
+	}
+
+	/* El borde va arriba y abajo para que el texto quede centrado; el de abajo
+	   es el subrayado, que en la fila de la marca toca el borde de la cabecera. */
+	nav a {
+		display: flex;
+		align-items: center;
+		padding: var(--space-2) var(--space-3);
+		border-block: var(--marca) solid transparent;
+		color: var(--text-muted);
+		text-decoration: none;
+		font-weight: var(--weight-strong);
+		white-space: nowrap;
+	}
+
+	/* La lista recorta lo que sale de ella por arriba y por abajo: el anillo de
+	   foco, del mismo grosor que el global, va por dentro. */
+	nav a:focus-visible {
+		outline-offset: -2px;
+	}
+
+	nav a:hover {
+		border-block-end-color: var(--border-strong);
+		color: var(--text);
+	}
+
+	nav a[aria-current='page'] {
+		border-block-end-color: var(--accent);
+		color: var(--accent);
+	}
+
+	/*
+	 * La lupa, como una pestaña más. Su margen negativo deja el icono a plomo
+	 * con el borde del contenido, como el logo al otro lado.
+	 */
+	.search-toggle {
+		display: flex;
+		align-items: center;
+		margin-inline-end: calc(-1 * var(--space-3));
+		padding: var(--space-2) var(--space-3);
+		border: 0;
+		border-block: var(--marca) solid transparent;
+		background: none;
+		color: var(--text-muted);
+		cursor: pointer;
+	}
+
+	.search-toggle:hover {
+		border-block-end-color: var(--border-strong);
+		color: var(--text);
+	}
+
+	/* En alto contraste el sistema pinta los bordes transparentes con el color
+	   de los enlaces: se funden con el fondo y la activa se marca con el de
+	   selección. */
+	@media (forced-colors: active) {
+		nav a,
+		.search-toggle {
+			border-color: Canvas;
+		}
+
+		nav a[aria-current='page'] {
+			border-block-end-color: Highlight;
+		}
+	}
+
+	main {
+		flex: 1;
+		padding-bottom: var(--space-7);
+	}
+
+	.site-footer {
+		border-top: 1px solid var(--border);
+		padding-block: var(--space-5);
+		font-size: var(--text-s);
+		color: var(--text-muted);
+	}
+
+	.site-footer p {
+		margin: 0;
+	}
+
+	/* En papel sobran el menú y el pie; la marca queda para saber de dónde sale. */
+	@media print {
+		.site-header {
+			margin-bottom: var(--space-4);
+			background: none;
+		}
+
+		nav,
+		.search-toggle,
+		.site-footer,
+		.skip {
+			display: none;
+		}
+	}
+</style>

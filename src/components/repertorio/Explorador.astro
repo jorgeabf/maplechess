@@ -1,0 +1,337 @@
+---
+// Explorador del repertorio: la secuencia de jugadas hasta la posición, el
+// tablero y las jugadas que se han hecho desde ella. Todo son enlaces GET, así
+// que funciona sin JavaScript; <explorador-repertorio> añade el tablero.
+import '@lichess-org/chessground/assets/chessground.base.css'
+import '../visor/board.css'
+import { OPENING_MOVES_PLIES } from '../../lib/chess/pgn'
+import type { Color, Exploration, Line } from '../../lib/chess/repertoire'
+import { formatDate, formatMove, formatNumber, formatPercent } from '../../lib/format'
+import PanelMotor from '../visor/PanelMotor.astro'
+import ScoreBar from './ScoreBar.astro'
+
+interface Props {
+	line: Line
+	exploration: Exploration
+	/** Color del jugador. */
+	color: Color
+	/** Nombre del jugador para los textos. */
+	name: string
+	/** Tu propio repertorio (cookie yo; ver isOwn): los textos te hablan a ti. */
+	own?: boolean
+	/** URL de la misma página con otra secuencia de jugadas (UCI). */
+	lineHref: (moves: string[]) => string
+}
+
+const { line, exploration, color, name, own = false, lineHref } = Astro.props
+const { total } = exploration
+const moves = line.moves.map((m) => m.uci)
+const last = line.moves.at(-1)
+const atLimit = line.moves.length >= OPENING_MOVES_PLIES
+const nextPly = line.moves.length + 1
+const moveNumber = (ply: number) => Math.ceil(ply / 2)
+const nextLabel = (san: string) => formatMove(nextPly, san)
+const share = (games: number) => formatPercent(games / total.games)
+// Los enlaces de jugadas llevan el ancla del explorador: al cargar la posición
+// siguiente, el navegador lo deja en el mismo sitio en vez de volver arriba.
+const ANCHOR = 'explorador'
+const positionHref = (moves: string[]) => `${lineHref(moves)}#${ANCHOR}`
+---
+
+<explorador-repertorio
+	id={ANCHOR}
+	class="explorer"
+	data-fen={line.fen}
+	data-orientation={color}
+	data-moves={moves.join(' ')}
+	data-last-move={last?.uci}
+	data-movable={atLimit ? 'false' : 'true'}
+>
+	<div class="board-col">
+		{/* Oculto a los lectores de pantalla: chessground pinta las coordenadas
+		    como texto («8 7 6 … a b c») y no hay nada enfocable dentro. La tabla
+		    ofrece las mismas jugadas como enlaces. */}
+		<div class="board-box" aria-hidden="true"><div class="board"></div></div>
+	</div>
+
+	<div class="side">
+		<nav class="line" aria-label="Jugadas hasta esta posición">
+			<a href={positionHref([])} rel="nofollow" aria-current={last ? undefined : 'page'}>Inicio</a>
+			{
+				line.moves.map((m, i) => (
+					<span class="step">
+						{m.ply % 2 === 1 && <span class="num-label">{moveNumber(m.ply)}.</span>}
+						<a href={positionHref(moves.slice(0, i + 1))} rel="nofollow" aria-current={m === last ? 'page' : undefined}>
+							{m.san}
+						</a>
+					</span>
+				))
+			}
+		</nav>
+		<div class="position-head">
+			<p class="opening">
+				{line.opening ? <><span class="eco">{line.opening.eco}</span> {line.opening.name}</> : !last && 'Posición inicial'}
+			</p>
+			{last && <a class="button secondary" href={positionHref(moves.slice(0, -1))} rel="nofollow">← Atrás</a>}
+		</div>
+
+		<section class="card moves-card" aria-labelledby="turno">
+			<h2 id="turno">
+				{line.position.turn === color ? (own ? 'Juegas tú' : `Juega ${name}`) : `Juegan ${own ? 'tus' : 'sus'} rivales`}
+			</h2>
+			{
+				total.games === 0 ? (
+					<p class="muted">Ninguna partida de esta selección pasa por esta posición.</p>
+				) : (
+					<>
+						<table class="data-table moves-table">
+							<thead>
+								<tr>
+									<th scope="col">Jugada</th>
+									<th scope="col" class="end">Partidas</th>
+									<th scope="col">Resultado</th>
+									<th scope="col" class="end last-date">Última vez</th>
+								</tr>
+							</thead>
+							<tbody>
+								{exploration.moves.map((m) => (
+									<tr data-uci={m.uci}>
+										<td class="move">
+											<a href={positionHref([...moves, m.uci])} rel="nofollow">{nextLabel(m.san)}</a>
+										</td>
+										<td class="end num">
+											{formatNumber(m.games)} <span class="muted">({share(m.games)})</span>
+										</td>
+										<td><ScoreBar stats={m} /></td>
+										<td class="end num last-date">{formatDate(m.lastDate)}</td>
+									</tr>
+								))}
+								{exploration.ended && (
+									<tr>
+										<td class="muted">Acaba aquí</td>
+										<td class="end num">
+											{formatNumber(exploration.ended.games)}{' '}
+											<span class="muted">({share(exploration.ended.games)})</span>
+										</td>
+										<td><ScoreBar stats={exploration.ended} /></td>
+										<td class="end num last-date">{formatDate(exploration.ended.lastDate)}</td>
+									</tr>
+								)}
+							</tbody>
+							<tfoot>
+								<tr>
+									<th scope="row">Total</th>
+									<td class="end num">{formatNumber(total.games)}</td>
+									<td><ScoreBar stats={total} /></td>
+									<td class="end num last-date">{formatDate(total.lastDate)}</td>
+								</tr>
+							</tfoot>
+						</table>
+						<p class="muted legend">{own ? 'Tus resultados y puntuación.' : `Resultados y puntuación de ${name}.`}</p>
+						{atLimit && (
+							<p class="note">
+								El repertorio llega hasta la jugada {OPENING_MOVES_PLIES / 2}: abre las partidas para ver cómo siguen.
+							</p>
+						)}
+					</>
+				)
+			}
+		</section>
+	</div>
+
+	{/* El motor, detrás de las jugadas: en una columna, la tabla, que se consulta
+	    en cada paso, va justo después del tablero. En dos, la rejilla lo pone
+	    bajo el tablero. Se ordena en el DOM y no con order, para que el
+	    tabulador siga el orden visual. */}
+	<PanelMotor />
+</explorador-repertorio>
+
+{/* Con src y no con import: el código de navegador va en su propio programa
+    de TypeScript (ver src/client/tsconfig.json). */}
+<script src="../../client/repertorio/explorador-repertorio.ts"></script>
+
+<style>
+	/*
+	 * La columna lateral nunca baja del min-content de la tabla de jugadas (sus
+	 * celdas no parten línea y la barra de resultados encoge hasta 3rem): el
+	 * tablero crece hasta --board-max y lo que sobra ensancha la tabla.
+	 * Por debajo de 60rem se quedaría pequeño y las columnas se apilan.
+	 *
+	 * En dos columnas el motor va bajo el tablero y, como en el visor, el
+	 * tablero cabe a lo alto con lo que lleva debajo: si no, el interruptor del
+	 * motor quedaba bajo el pliegue (a 1280×900 el tablero empieza a 285 px y
+	 * debajo van 61 de hueco y panel del motor). 23rem lo deja a la vista al
+	 * cargar, con algo de margen.
+	 */
+	.explorer {
+		--board-room: max(var(--board-min), 100svh - 23rem);
+		display: grid;
+		grid-template-columns: minmax(0, min(var(--board-room), var(--board-max))) minmax(min-content, 1fr);
+		gap: var(--space-5);
+		align-items: start;
+		scroll-margin-top: var(--space-3);
+	}
+
+	.board-col {
+		display: grid;
+		min-inline-size: 0;
+	}
+
+	/*
+	 * El motor va en el DOM detrás de las jugadas (ver la plantilla) y aquí sube
+	 * a la segunda fila, bajo el tablero, mientras las jugadas ocupan las dos.
+	 * La segunda es 1fr y no auto: así lo que la columna de jugadas tenga de más
+	 * alto va a esa fila y no separa el motor del tablero. Sólo con JavaScript:
+	 * sin él no hay tablero ni motor, y colocar las jugadas en la segunda
+	 * columna crearía una implícita.
+	 */
+	@media (width >= 60rem) and (scripting: enabled) {
+		.explorer {
+			grid-template-rows: auto 1fr;
+			row-gap: var(--space-3);
+		}
+
+		.side {
+			grid-column: 2;
+			grid-row: 1 / -1;
+		}
+
+		.explorer > :global(.engine) {
+			grid-column: 1;
+			grid-row: 2;
+		}
+	}
+
+	@media (width < 60rem) {
+		.explorer {
+			grid-template-columns: minmax(0, 1fr);
+		}
+
+		/*
+		 * En una columna, a todo el ancho el tablero llenaría la pantalla y las
+		 * jugadas quedarían debajo: deja unos 20rem de alto para que se vean,
+		 * junto al tablero, la secuencia, la posición y las primeras filas de la
+		 * tabla. El motor va al final y no cuenta. El mínimo, limitado al ancho:
+		 * con la letra aumentada, 16rem no cabrían en un móvil.
+		 */
+		.board-box {
+			inline-size: clamp(min(var(--board-min), 100%), 100svh - 20rem, 100%);
+			justify-self: center;
+		}
+	}
+
+	/*
+	 * Sin JavaScript no hay tablero: la columna de jugadas ocupa todo el ancho.
+	 * Con JavaScript el hueco del tablero está desde el primer pintado (no
+	 * esperando a que se defina el elemento), para que al montarse chessground
+	 * no empuje la tabla ni descoloque el ancla.
+	 */
+	@media (scripting: none) {
+		.explorer {
+			grid-template-columns: minmax(0, 1fr);
+		}
+
+		.board-col {
+			display: none;
+		}
+	}
+
+	/*
+	 * Flex y no grid: en una pista auto de grid la tarjeta con scroll aporta 0
+	 * de mínimo y el min-content de la columna no incluiría la tabla.
+	 */
+	.side {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-3);
+		min-inline-size: 0;
+	}
+
+	.line {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: baseline;
+		gap: var(--space-1) var(--space-2);
+		font-weight: var(--weight-strong);
+	}
+
+	.step {
+		display: inline-flex;
+		align-items: baseline;
+		gap: var(--space-1);
+	}
+
+	.line a {
+		padding: 0 var(--space-1);
+		border-radius: var(--radius-s);
+		color: var(--text);
+		text-decoration: none;
+	}
+
+	.line a:hover {
+		background: var(--surface-hover);
+	}
+
+	.line a[aria-current] {
+		background: var(--accent);
+		color: var(--text-inverse);
+	}
+
+	/* En alto contraste el fondo de acento desaparece: los colores de selección
+	   del sistema, sin ajuste (como en Segmented.astro). */
+	@media (forced-colors: active) {
+		.line a[aria-current] {
+			forced-color-adjust: none;
+			background: Highlight;
+			color: HighlightText;
+		}
+	}
+
+	.num-label {
+		color: var(--text-muted);
+		font-variant-numeric: tabular-nums;
+	}
+
+	.position-head {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		justify-content: space-between;
+		gap: var(--space-3);
+	}
+
+	.opening {
+		margin: 0;
+	}
+
+
+	/*
+	 * El scroll queda para jugadas o recuentos muy largos. Con sus cuatro
+	 * columnas la tabla pide al menos unos 375 px; por debajo de 30rem la
+	 * tarjeta ocupa todo el ancho y no llega, así que se oculta «Última vez».
+	 */
+	.moves-card {
+		overflow-x: auto;
+	}
+
+	@media (width < 30rem) {
+		.last-date {
+			display: none;
+		}
+	}
+
+	.moves-table td.move a {
+		display: block;
+		font-weight: var(--weight-strong);
+		text-decoration: none;
+	}
+
+	.legend {
+		margin: var(--space-2) 0 0;
+		font-size: var(--text-xs);
+	}
+
+	.note {
+		margin: var(--space-3) 0 0;
+	}
+</style>

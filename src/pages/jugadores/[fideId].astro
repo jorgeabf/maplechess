@@ -1,0 +1,568 @@
+---
+import { env } from 'cloudflare:workers'
+import GamesTable from '../../components/GamesTable.astro'
+import GraficoElo from '../../components/GraficoElo.astro'
+import Icon from '../../components/Icon.astro'
+import RitmoSelect from '../../components/RitmoSelect.astro'
+import Pagination from '../../components/Pagination.astro'
+import ProximasPartidas from '../../components/ProximasPartidas.astro'
+import Base from '../../layouts/Base.astro'
+import { score } from '../../lib/chess/repertoire'
+import { searchGames } from '../../lib/db/games'
+import { getUpcomingGames } from '../../lib/db/pairings'
+import { getPlayer, getPlayerSummary, getPlayerTournaments } from '../../lib/db/players'
+import { displayName, formatNumber, formatPercent, formatPoints, formatRange } from '../../lib/format'
+import { ME_COOKIE, ME_COOKIE_OPTIONS, ME_PARAM, claimCookieAction, isOwn, meHref, resolveMe } from '../../lib/me'
+import { dossierHref, gameFilters, positiveInt, withParams } from '../../lib/params'
+
+const fideId = positiveInt(Astro.params.fideId)
+const player = fideId === null ? null : await getPlayer(env.DB, fideId)
+if (fideId === null || !player) return Astro.rewrite('/404')
+
+const params = Astro.url.searchParams
+// «Soy yo» y «No soy yo» (lib/me.ts): guarda o borra la cookie y vuelve a la
+// misma URL sin `yo`, para que no quede en un enlace que se comparta.
+const me = resolveMe(params.get(ME_PARAM), Astro.cookies.get(ME_COOKIE)?.value)
+if (params.has(ME_PARAM)) {
+	const cookie = claimCookieAction(me, fideId)
+	if (cookie === 'set') Astro.cookies.set(ME_COOKIE, String(fideId), ME_COOKIE_OPTIONS)
+	else if (cookie === 'delete') Astro.cookies.delete(ME_COOKIE, { path: '/' })
+	return Astro.redirect(withParams(Astro.url, { [ME_PARAM]: null }), 303)
+}
+const here = withParams(Astro.url, {})
+// En tu ficha (cookie yo), los textos te hablan a ti.
+const own = isOwn(me, fideId)
+const { color, result, eco, timeClass, page } = gameFilters(params)
+// En la ficha, "resultado" es desde el punto de vista del jugador.
+const ownResult = result === 'win' || result === 'draw' || result === 'loss' ? result : ''
+const filters = { fideId, color, result: ownResult, eco, timeClass } as const
+
+const [games, stats, tournaments, upcoming] = await Promise.all([
+	searchGames(env.DB, filters, page),
+	getPlayerSummary(env.DB, fideId),
+	getPlayerTournaments(env.DB, fideId),
+	getUpcomingGames(env.DB, fideId)
+])
+
+const pgnQuery = new URLSearchParams()
+if (color !== 'any') pgnQuery.set('color', color)
+if (ownResult) pgnQuery.set('resultado', ownResult)
+if (eco) pgnQuery.set('eco', eco)
+if (timeClass) pgnQuery.set('ritmo', timeClass)
+const pgnHref = `/jugadores/${fideId}.pgn${pgnQuery.size ? `?${pgnQuery}` : ''}`
+const filtered = color !== 'any' || ownResult !== '' || eco !== '' || timeClass !== null
+
+const totalGames = stats.colors.reduce((n, c) => n + c.games, 0)
+const percent = (n: number, of: number) => (of ? formatPercent(n / of) : '—')
+const colorName = { white: 'Blancas', black: 'Negras' } as const
+const openingGroups = (['white', 'black'] as const)
+	.map((color) => ({ color, openings: stats.openings.filter((o) => o.color === color) }))
+	.filter((group) => group.openings.length > 0)
+const outcomes = [
+	{ result: 'win', label: 'Ganadas', key: 'wins' },
+	{ result: 'draw', label: 'Tablas', key: 'draws' },
+	{ result: 'loss', label: 'Perdidas', key: 'losses' }
+] as const
+const name = displayName(player.name)
+// En el dossier de otro eliges tu color y el dossier muestra el suyo, el
+// contrario; en el tuyo, el color es el tuyo.
+const dossierLinks = own
+	? ([
+			{ label: 'Con blancas', color: 'white' },
+			{ label: 'Con negras', color: 'black' }
+		] as const)
+	: ([
+			{ label: 'Juegas con blancas', color: 'black' },
+			{ label: 'Juegas con negras', color: 'white' }
+		] as const)
+// Un botón principal por vista: si la próxima partida trae el suyo (la misma
+// condición que en ProximasPartidas), éstos pasan a secundarios. En la ficha
+// de otro, uno de ellos lleva además al mismo dossier.
+const upcomingPrepares = own
+	? upcoming.some((g) => g.opponent.fideId && g.opponent.hasGames === 1)
+	: upcoming.length > 0
+---
+
+<Base title={name} section="jugadores" description={`Partidas y torneos de ${name} (FIDE ${fideId}).`}>
+	<header class="profile page-head">
+		<div>
+			<h1>
+				{player.title && <span class="tag">{player.title}</span>}{player.title && ' '}
+				{name}
+			</h1>
+			<p class="page-meta">
+				FIDE ID <a href={`https://ratings.fide.com/profile/${fideId}`} rel="noopener">{fideId}</a>
+				{player.birthYear && ` · nacido en ${player.birthYear}`}
+				{player.inactive ? ' · inactivo' : ''}
+			</p>
+			<p class="page-meta me">
+				{
+					own ? (
+						<>
+							Es tu ficha ·{' '}
+							<a href={meHref(here, null)} rel="nofollow">
+								No soy yo
+							</a>
+						</>
+					) : (
+						<>
+							¿Es tu ficha?{' '}
+							<a href={meHref(here, fideId)} rel="nofollow">
+								Soy yo
+							</a>
+							: la portada te avisará de tu próxima partida y el dossier cruzará tus partidas con las del rival.
+						</>
+					)
+				}
+			</p>
+			{
+				!player.inFideList && (
+					<p class="note">
+						{own
+							? 'No figuras en la lista FIDE como jugador español; los datos salen de tus torneos.'
+							: 'No figura en la lista FIDE como jugador español; los datos salen de sus torneos.'}
+					</p>
+				)
+			}
+		</div>
+		<dl class="ratings">
+			<div class="panel"><dt>Estándar</dt><dd class="num">{player.ratingStd ?? '—'}</dd></div>
+			<div class="panel"><dt>Rápidas</dt><dd class="num">{player.ratingRapid ?? '—'}</dd></div>
+			<div class="panel"><dt>Blitz</dt><dd class="num">{player.ratingBlitz ?? '—'}</dd></div>
+		</dl>
+	</header>
+
+	<ProximasPartidas class="upcoming" games={upcoming} you={own} owner={{ fideId, name, hasGames: totalGames > 0 }} />
+
+	{
+		totalGames > 0 && (
+			<nav class="prepare" aria-label={own ? 'Mi dossier y mi repertorio' : 'Preparar una partida'}>
+				<span class="muted">{own ? 'Mi dossier:' : 'Preparar una partida:'}</span>
+				{dossierLinks.map((l) => (
+					<a class:list={['button', { secondary: upcomingPrepares }]} href={dossierHref(fideId, l.color)} rel="nofollow">
+						{l.label}
+					</a>
+				))}
+				<span class="repertoire">
+					<span class="muted">{own ? 'Mi repertorio:' : 'Su repertorio:'}</span>
+					<a href={`/jugadores/${fideId}/repertorio`} rel="nofollow">con blancas</a>
+					<a href={`/jugadores/${fideId}/repertorio?color=black`} rel="nofollow">con negras</a>
+				</span>
+			</nav>
+		)
+	}
+
+	{
+		totalGames > 0 && (
+			<section class="stats">
+				<div class="card">
+					<h2>Resultados</h2>
+					<table class="data-table by-color">
+						<thead>
+							<tr>
+								<td />
+								{stats.colors.map((c) => (
+									<th scope="col" class="end">
+										{colorName[c.color]}
+									</th>
+								))}
+							</tr>
+						</thead>
+						<tbody>
+							<tr>
+								<th scope="row">Partidas</th>
+								{stats.colors.map((c) => (
+									<td class="end num">{formatNumber(c.games)}</td>
+								))}
+							</tr>
+							{outcomes.map((o) => (
+								<tr>
+									<th scope="row">{o.label}</th>
+									{stats.colors.map((c) => (
+										<td class="end num">
+											<span class={`result ${o.result}`}>{c[o.key]}</span>{' '}
+											<span class="muted">({percent(c[o.key], c.games)})</span>
+										</td>
+									))}
+								</tr>
+							))}
+						</tbody>
+						{/* Lo que resume las tres filas de arriba, como la columna de las aperturas de al lado. */}
+						<tfoot>
+							<tr>
+								<th scope="row">Puntuación</th>
+								{stats.colors.map((c) => {
+									const points = score(c)
+									return <td class="end num">{points === null ? null : formatPercent(points)}</td>
+								})}
+							</tr>
+						</tfoot>
+					</table>
+				</div>
+				{stats.openings.length > 0 && (
+					<div class="card">
+						<h2>Aperturas más jugadas</h2>
+						<table class="data-table openings">
+							<thead>
+								<tr>
+									<th scope="col">Apertura</th>
+									<th scope="col" class="end">Partidas</th>
+									<th scope="col" class="end">Puntuación</th>
+								</tr>
+							</thead>
+							{/* Un grupo por color; cada apertura enlaza a sus partidas con ese color y ese ECO. */}
+							{openingGroups.map((group) => (
+								<tbody>
+									<tr class="group-row">
+										<th scope="rowgroup" colspan="3">
+											Con {colorName[group.color].toLowerCase()}
+										</th>
+									</tr>
+									{group.openings.map((o) => (
+										<tr>
+											<td class="opening">
+												<a href={`?color=${o.color}&eco=${o.eco}#partidas`}>
+													<span class="eco">{o.eco}</span> {o.opening}
+												</a>
+											</td>
+											<td class="end num">{o.games}</td>
+											<td class="end num">{o.score === null ? null : formatPercent(o.score)}</td>
+										</tr>
+									))}
+								</tbody>
+							))}
+						</table>
+					</div>
+				)}
+			</section>
+		)
+	}
+
+	<section id="partidas">
+		<div class="section-head">
+			<h2>Partidas</h2>
+			{
+				games.total > 0 && (
+					<a class="button secondary" href={pgnHref} download>
+						<Icon name="download" />
+						<span>
+							Descargar PGN{filtered && <span class="muted"> · selección</span>}
+						</span>
+					</a>
+				)
+			}
+		</div>
+		{/* Sin ninguna partida no hay nada que filtrar; con filtros, se quedan para poder quitarlos. */}
+		{
+			(filtered || games.total > 0) && (
+				<form method="get" class="filters form-row" action="#partidas">
+					<label>
+						Color
+						<select name="color">
+							<option value="any">Cualquiera</option>
+							<option value="white" selected={color === 'white'}>Blancas</option>
+							<option value="black" selected={color === 'black'}>Negras</option>
+						</select>
+					</label>
+					<label>
+						Resultado
+						<select name="resultado">
+							<option value="">Cualquiera</option>
+							<option value="win" selected={ownResult === 'win'}>Ganadas</option>
+							<option value="draw" selected={ownResult === 'draw'}>Tablas</option>
+							<option value="loss" selected={ownResult === 'loss'}>Perdidas</option>
+						</select>
+					</label>
+					<RitmoSelect value={timeClass} />
+					<label>
+						ECO
+						<input name="eco" value={eco} placeholder="B90, C…" size="6" maxlength="3" pattern="[A-Ea-e][0-9]{0,2}" />
+					</label>
+					<button class="button secondary" type="submit">Filtrar</button>
+					{filtered && <a href={`/jugadores/${fideId}#partidas`}>Quitar filtros</a>}
+				</form>
+			)
+		}
+		{
+			games.total > 0 ? (
+				<>
+					<GamesTable games={games.rows} fideId={fideId} />
+					<Pagination page={games.page} pages={games.pages} total={games.total} capped={games.capped} noun={['partida', 'partidas']} anchor="partidas" />
+				</>
+			) : (
+				<p class="muted">
+					{filtered
+						? 'Ninguna partida con esos filtros.'
+						: `Todavía no hay partidas ${own ? 'tuyas' : 'suyas'} con PGN en las fuentes.`}
+				</p>
+			)
+		}
+	</section>
+
+	<section id="torneos">
+		<h2>Torneos ({formatNumber(tournaments.length)})</h2>
+		<GraficoElo tournaments={tournaments} />
+		{
+			tournaments.length > 0 ? (
+				<div class="table-wrap stack tournaments">
+					<table class="data-table">
+						<thead>
+							<tr>
+								<th scope="col">Torneo</th>
+								<th scope="col">Fechas</th>
+								<th scope="col">Lugar</th>
+								<th scope="col" class="end">ELO</th>
+								<th scope="col" class="end" title="Número inicial o, por equipos, tablero">Nº</th>
+								<th scope="col" class="end" title={`${own ? 'Tus' : 'Sus'} partidas con PGN en ese torneo`}>
+									Partidas
+								</th>
+								<th scope="col" class="end" title={`Puntos en ${own ? 'tus' : 'sus'} partidas con PGN y resultado`}>
+									Puntos
+								</th>
+							</tr>
+						</thead>
+						<tbody>
+							{tournaments.map((t) => {
+								const score = stats.byTournament.get(t.tournamentId)
+								return (
+									<tr>
+										<td class="wrap">
+											<a href={`/torneos/${t.tournamentId}`}>{t.tournamentName}</a>
+											{t.team && (
+												<span class="team">
+													<span class="tag">Equipos</span> <span class="muted">{t.team}</span>
+												</span>
+											)}
+										</td>
+										<td class="num">{formatRange(t.startDate, t.endDate)}</td>
+										<td>{t.city}</td>
+										{/* Apilada en el móvil (.stack): cada cifra lleva su rótulo, sólo si la hay. */}
+										<td class="end num stat">{t.rating && <><span class="cell-label" aria-hidden="true">ELO </span>{t.rating}</>}</td>
+										<td class="end num stat">{t.startRank && <><span class="cell-label" aria-hidden="true">Nº </span>{t.startRank}</>}</td>
+										<td class="end num stat">{score ? <><span class="cell-label" aria-hidden="true">Partidas </span>{formatNumber(score.games)}</> : null}</td>
+										<td class="end num stat">{score?.decided ? <><span class="cell-label" aria-hidden="true">Puntos </span>{`${formatPoints(score.points)} / ${score.decided}`}</> : null}</td>
+									</tr>
+								)
+							})}
+						</tbody>
+					</table>
+				</div>
+			) : (
+				<p class="muted">No hay torneos suyos en las fuentes.</p>
+			)
+		}
+	</section>
+</Base>
+
+<style>
+	/* Las cajas de ELO, con su altura: sin estirarse hasta la del bloque del nombre. */
+	.profile {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: start;
+		justify-content: space-between;
+		gap: var(--space-5);
+	}
+
+	.profile h1 {
+		display: flex;
+		align-items: center;
+		gap: var(--space-2);
+	}
+
+	/*
+	 * El nombre ocupa lo que dejen las cajas de ELO. Éstas bajan de línea si no
+	 * caben junto al nombre o el FIDE ID, pero no por la línea de «Soy yo»:
+	 * contain: inline-size la saca del ancho mínimo del bloque, y se parte en
+	 * el que le quede.
+	 */
+	.profile > div {
+		flex-grow: 1;
+	}
+
+	.me {
+		contain: inline-size;
+	}
+
+	/*
+	 * Tres cajas iguales de 6rem; si no caben (en un móvil de 320 px quedan
+	 * 288 px para los 312 que suman), encogen por igual hasta su contenido.
+	 */
+	.ratings {
+		display: grid;
+		grid-template-columns: repeat(3, minmax(min-content, 6rem));
+		gap: var(--space-3);
+		margin: 0;
+	}
+
+	/*
+	 * Si ni así caben (unos 312 px: la letra del navegador muy grande, o una
+	 * pantalla muy estrecha), dos por fila y a todo el ancho; si no, se salían
+	 * de la pantalla. En em, que en una media query sigue al tamaño de letra
+	 * del navegador.
+	 */
+	@media (width < 19.5em) {
+		.ratings {
+			flex-basis: 100%;
+			grid-template-columns: repeat(2, minmax(0, 1fr));
+		}
+	}
+
+	.ratings div {
+		text-align: center;
+	}
+
+	.ratings dt {
+		font-size: var(--text-xs);
+		color: var(--text-muted);
+	}
+
+	.ratings dd {
+		margin: 0;
+		font-family: var(--font-serif);
+		font-size: var(--text-xl);
+		font-weight: var(--weight-strong);
+	}
+
+	.upcoming {
+		margin-bottom: var(--space-5);
+	}
+
+	.prepare {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: var(--space-3);
+		margin-bottom: var(--space-5);
+		font-size: var(--text-s);
+	}
+
+	/* Va junta: si no cabe en la línea, baja entera; si ni sola cabe (con la
+	   letra muy grande), parte entre sus enlaces, nunca dentro de uno. */
+	.repertoire {
+		display: inline-flex;
+		flex-wrap: wrap;
+		gap: var(--space-2);
+		white-space: nowrap;
+	}
+
+	/*
+	 * En el móvil, el rótulo, los dos botones en dos columnas iguales y el
+	 * repertorio debajo: en una fila que se partía quedaba un botón solo.
+	 */
+	@media (width < 40rem) {
+		.prepare {
+			display: grid;
+			grid-template-columns: repeat(2, minmax(0, 1fr));
+		}
+
+		.prepare > .muted,
+		.repertoire {
+			grid-column: 1 / -1;
+		}
+	}
+
+	/* Cada tarjeta, con su alto: «Resultados» no se estira hasta el de las aperturas. */
+	.stats {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(min(100%, 26rem), 1fr));
+		align-items: start;
+		gap: var(--space-4);
+		margin-bottom: var(--space-6);
+	}
+
+	/*
+	 * Las dos tablas caben en su tarjeta también a 375 px: Resultados va con
+	 * los colores en columnas (con cinco columnas, sólo las cabeceras pedían
+	 * 370 px de 294) y el porcentaje puede bajar de línea; la apertura parte
+	 * línea sin el mínimo de .wrap, que es para las tablas que se desplazan.
+	 * El scroll queda por si acaso.
+	 */
+	.stats .card {
+		container-type: inline-size;
+		overflow-x: auto;
+	}
+
+	/*
+	 * Aperturas en una tarjeta de menos de 26rem (la pista mínima de la
+	 * rejilla): en tres columnas, «Partidas» y «Puntuación» dejan unos 120 px
+	 * al nombre, que parte en cinco o seis líneas. Cada fila pasa a dos: la
+	 * apertura a todo el ancho y, debajo, sus números bajo su cabecera. Cada
+	 * fila es su propia rejilla, así que esas dos columnas son fijas para que
+	 * cuadren: caben sus cabeceras con el relleno. La segunda línea no tiene
+	 * celda bajo el nombre: la raya y el fondo de la cabecera van en la fila.
+	 */
+	@container (width < 26rem) {
+		.openings tr {
+			display: grid;
+			grid-template-columns: 1fr 5rem 6.5rem;
+			border-bottom: 1px solid var(--border);
+		}
+
+		.openings tr > * {
+			border-bottom: 0;
+		}
+
+		.openings tbody tr:last-child {
+			border-bottom: 0;
+		}
+
+		.openings thead tr {
+			border-bottom-color: var(--border-strong);
+		}
+
+		.openings tr > :first-child {
+			grid-column: 1 / -1;
+		}
+
+		/* La fila de grupo (el color) es una sola celda y conserva su relleno. */
+		.openings tr:not(.group-row) > :first-child {
+			padding-bottom: 0;
+		}
+
+		.openings tr > :nth-child(2) {
+			grid-column: 2;
+		}
+
+		.openings tr > :nth-child(3) {
+			grid-column: 3;
+		}
+	}
+
+	.by-color td,
+	.stats td.opening {
+		white-space: normal;
+	}
+
+	.filters {
+		margin-bottom: var(--space-4);
+	}
+
+	/* En los torneos por equipos, debajo del nombre del torneo: con qué equipo jugó. */
+	.team {
+		display: block;
+	}
+
+	/*
+	 * Torneos apilados en el móvil (.stack, en global.css): sus cifras (ELO,
+	 * número, partidas y puntos) van en su propia línea, debajo de las fechas y
+	 * el lugar. El salto es el ::after de la fila, un elemento de todo el ancho
+	 * que order pone entre los dos grupos; el orden de lectura no cambia.
+	 */
+	@container (width < 60rem) {
+		.tournaments tr::after {
+			content: '';
+			flex-basis: 100%;
+			order: 1;
+		}
+
+		.tournaments .stat {
+			order: 2;
+		}
+	}
+
+	.filters > a {
+		align-self: center;
+		font-size: var(--text-s);
+	}
+</style>

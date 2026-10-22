@@ -1,0 +1,2 @@
+# Copia a .dev.vars para desarrollo local. En producción: wrangler secret put ADMIN_TOKEN
+ADMIN_TOKEN=pon-aqui-un-token-largo-y-aleatorio

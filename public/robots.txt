@@ -1,0 +1,8 @@
+User-agent: *
+Disallow: /api/
+Disallow: /*.pgn
+Disallow: /jugadores/*/repertorio
+Disallow: /jugadores/*/preparar
+Disallow: /partidas?
+Disallow: /jugadores?
+Disallow: /torneos?

@@ -1,0 +1,28 @@
+---
+// Icono de trazo de la interfaz: 24×24, del color del texto (.icon en
+// global.css). Siempre aria-hidden: el nombre accesible lo da el botón o el
+// enlace que lo lleva. Sólo para acciones de significado universal; ver
+// «Iconos» en CLAUDE.md.
+
+const PATHS = {
+	// La lupa: un círculo (dos arcos) y el mango.
+	search: 'M17 11a6 6 0 1 1-12 0 6 6 0 1 1 12 0M20 20l-4.5-4.5',
+	first: 'M6 5v14M18 6l-8 6 8 6',
+	prev: 'M15 6l-6 6 6 6',
+	next: 'M9 6l6 6-6 6',
+	last: 'M18 5v14M6 6l8 6-8 6',
+	flip: 'M7 20V4M3 8l4-4 4 4M17 4v16M13 16l4 4 4-4',
+	// Una flecha que cae en una bandeja.
+	download: 'M12 4v11M7 10l5 5 5-5M5 20h14',
+	// Dos hojas: la de delante entera y la de detrás asomando.
+	copy: 'M9 9h10v10H9zM15 9V5H5v10h4'
+} as const
+
+interface Props {
+	name: keyof typeof PATHS
+}
+
+const { name } = Astro.props
+---
+
+<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d={PATHS[name]}></path></svg>

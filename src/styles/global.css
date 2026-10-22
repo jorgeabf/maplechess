@@ -1,0 +1,916 @@
+/*
+ * Tokens y estilos base. Va fuera de los <style> de Astro a propósito: lo que
+ * está en un <style> con scope no llega a los componentes. Los estilos propios
+ * de cada componente siguen en su <style>.
+ *
+ * Todo, menos las fuentes, va en la capa «base»: cualquier regla de un
+ * componente (sin capa) le gana, sea cual sea su especificidad y el orden en
+ * que Astro junte las hojas. Ese orden sigue el de los imports, y como van por
+ * orden alfabético los componentes llegan antes que Base.astro y este archivo.
+ * Si un componente no debe pisar una clase de aquí (los colores de .result.win),
+ * que no declare esa propiedad.
+ *
+ * Los colores usan light-dark(): el tema sigue al del sistema sin duplicar
+ * reglas para el modo oscuro.
+ */
+
+/*
+ * Serif de titulares, cifras y jugadas: Source Serif 4 de Adobe (OFL 1.1),
+ * servida desde el propio sitio. Un solo woff2 de 17 KB: peso 600, el único
+ * que usa la web en serif, con el tamaño óptico fijado en 24 y recortada a
+ * latín para español. Lo que quede fuera del recorte sale de la siguiente
+ * fuente de la pila. Va renombrada «Titulares» porque la licencia reserva el
+ * nombre «Source» a la original: ver public/fonts/OFL.txt y
+ * scripts/fuente-titulares.py, que la genera.
+ *
+ * Va en src/assets y no en public/ para que Vite le ponga un hash de
+ * contenido, como al CSS y al JS: queda en /_astro/, que el adaptador de
+ * Cloudflare sirve con caché de un año (immutable). El preload de Base.astro
+ * importa el mismo archivo y recibe la misma URL.
+ */
+@font-face {
+	font-family: 'Titulares';
+	src: url('../assets/fonts/titulares-600.woff2') format('woff2');
+	font-weight: 600;
+	font-display: swap;
+	unicode-range: U+0020-007E, U+00A0-00FF, U+2013-2014, U+2018-2019, U+201C-201D, U+2022, U+2026, U+20AC;
+}
+
+/*
+ * Respaldo mientras se descarga: una negrita del sistema con las métricas de
+ * Titulares, para que el texto ocupe lo mismo y no salte al cambiar de fuente.
+ * size-adjust iguala el ancho medio sobre nombres de jugadores, torneos y
+ * titulares. Los *-override son la altura sobre y bajo la línea base de
+ * Titulares (1036 y 335 milésimas de em) divididas por size-adjust, que
+ * también los escala. Georgia está en Windows, macOS e iOS; Noto Serif, en
+ * Android y en muchos Linux. Safari no admite los *-override, pero con la
+ * altura de línea fija sólo cambiarían la posición del texto dentro de su
+ * línea. Los valores salen de scripts/fuente-titulares.py.
+ */
+@font-face {
+	font-family: 'Titulares Georgia';
+	src: local('Georgia Bold'), local('Georgia-Bold');
+	font-weight: 600;
+	size-adjust: 86.71%;
+	ascent-override: 119.47%;
+	descent-override: 38.63%;
+	line-gap-override: 0%;
+}
+
+@font-face {
+	font-family: 'Titulares Noto';
+	src: local('Noto Serif Bold'), local('NotoSerif-Bold');
+	font-weight: 600;
+	size-adjust: 88.93%;
+	ascent-override: 116.5%;
+	descent-override: 37.67%;
+	line-gap-override: 0%;
+}
+
+@layer base {
+	:root {
+		color-scheme: light dark;
+
+		/* Tipografía */
+		--font-sans: system-ui, 'Segoe UI', -apple-system, sans-serif;
+		--font-serif:
+			'Titulares', 'Titulares Georgia', 'Titulares Noto', 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia,
+			serif;
+		--font-mono: ui-monospace, 'Cascadia Mono', 'SF Mono', Consolas, monospace;
+		--text-xs: 0.75rem;
+		--text-s: 0.875rem;
+		--text-m: 1rem;
+		--text-l: 1.25rem;
+		/*
+		 * Los tamaños grandes (títulos y cifras destacadas) crecen con la pantalla:
+		 * van del mínimo a 320px de ancho al máximo a 800px, en línea recta. La
+		 * parte en rem hace que sigan el tamaño de letra del navegador.
+		 */
+		--text-xl: clamp(1.375rem, 1.125rem + 1.25vw, 1.75rem);
+		--text-2xl: clamp(1.75rem, 1.25rem + 2.5vw, 2.5rem);
+		--leading: 1.5;
+		--weight-strong: 600;
+
+		/* Espaciado */
+		--space-1: 0.25rem;
+		--space-2: 0.5rem;
+		--space-3: 0.75rem;
+		--space-4: 1rem;
+		--space-5: 1.5rem;
+		--space-6: 2rem;
+		--space-7: 3rem;
+		--space-8: 4rem;
+
+		/* Radios */
+		--radius-s: 0.25rem;
+		--radius-m: 0.5rem;
+		--radius-l: 0.875rem;
+		--radius-round: 999px;
+
+		/* Anchos */
+		--content-width: 76rem;
+		/* Textos que se leen de corrido y buscadores sueltos (portada, 404, panel). */
+		--reading-width: 46rem;
+		--board-max: 36rem;
+		/* El tablero nunca baja de aquí, aunque no quepa a lo alto (visor y explorador). */
+		--board-min: 16rem;
+
+		/* Alto de campos, selects y botones; el grande, el buscador de la portada. */
+		--control-height: 2.5rem;
+		--control-height-l: 3rem;
+
+		/*
+		 * Madera de la marca: arce natural y nogal frío. Son fijas en los dos
+		 * modos, como el tablero, y distintas de las maderas de lichess y chess24
+		 * (tostadas y anaranjadas). La marca es identidad (logo, favicón,
+		 * tablero), nunca interacción: un enlace de nogal se confundiría con el
+		 * texto y, con daltonismo, con los resultados. Para eso está el acento.
+		 * El nogal deja las piezas negras a 4,1:1; más claro se parecería al
+		 * tablero de lichess.
+		 */
+		--maple: #e8e1cf;
+		--maple-pale: #fbf7ee;
+		--walnut: #806a52;
+		--walnut-dark: #3f3324;
+		--brand: var(--walnut);
+		--brand-ink: var(--maple-pale);
+
+		/* Superficies: papel en claro y nogal casi negro en oscuro. */
+		--bg: light-dark(#f5f2ea, #15120f);
+		--surface: light-dark(#fffdf8, #1f1b17);
+		--surface-muted: light-dark(#ece7db, #2b2521);
+		--surface-hover: light-dark(#f1ece1, #322b26);
+
+		/* Bordes */
+		--border: light-dark(#ddd5c4, #3e3631);
+		/* Límite de campos y selects, que dentro de una tarjeta tienen su mismo
+		   fondo: 3:1 sobre --surface y --bg (WCAG 1.4.11). */
+		--border-strong: light-dark(#948978, #76695e);
+		/* El anillo de foco, del acento: es interacción. */
+		--focus-ring: var(--accent);
+
+		/* Texto */
+		--text: light-dark(#1d1f24, #eae5dd);
+		/* En oscuro, Lc 59–63 de APCA: el gris de 5:1 de WCAG 2 se leía flojo. */
+		--text-muted: light-dark(#5b5f6b, #bdb6ac);
+		--text-inverse: light-dark(#fffdf8, #15120f);
+
+		/* Acento: azul tinta (papel y tinta, como un libro de ajedrez) */
+		--accent: light-dark(#1f4e79, #8cc3f0);
+		--accent-hover: light-dark(#173c5e, #a9d3f4);
+		--accent-soft: light-dark(#e1ebf4, #1b2c3d);
+
+		/*
+		 * Resultados (desde el punto de vista de quien se mira). Las tablas en ocre
+		 * oliva: 6:1 sobre --surface-muted (etiquetas del dossier) y, con
+		 * deuteranopía, lejos de la perdida, que con el ocre de antes se confundía.
+		 */
+		--result-win: light-dark(#2f6b4f, #7fd0a4);
+		--result-draw: light-dark(#5d5600, #d8c27a);
+		--result-loss: light-dark(#9b3b2f, #f0907f);
+		/*
+		 * Las tablas en una barra de reparto (ScoreBar): el mismo ocre, atenuado
+		 * hacia la superficie (más claro en claro, más oscuro en oscuro). Los
+		 * tres colores tienen casi la misma luminosidad (de 1,04 a 1,3:1 entre sí)
+		 * y, cuando falta un tramo, sólo el tono decía cuáles quedaban. Así las
+		 * tablas se separan de los otros dos: 2,8 y 3,1:1 en claro, 3,4 y 2,7:1
+		 * en oscuro.
+		 */
+		--result-draw-soft: color-mix(in oklab, var(--result-draw) 45%, var(--surface));
+
+		/*
+		 * Tablero y barra de evaluación. Las casillas, de la madera de la marca.
+		 * La última jugada en el azul claro del acento (es «dónde estás»), y no en
+		 * el verde de lichess.
+		 */
+		--board-light: var(--maple);
+		--board-dark: var(--walnut);
+		--board-last-move: rgb(140 195 240 / 0.5);
+		/*
+		 * Pieza elegida y casillas a las que puede ir (el explorador del
+		 * repertorio): el azul tinta casi negro. Un punto de 3:1 sobre las dos
+		 * casillas sólo puede ser muy oscuro: 12,4:1 sobre arce y 3,2:1 sobre
+		 * nogal. La casilla elegida, el mismo al 50 %.
+		 */
+		--board-dest: #0a2238;
+		--board-selected: rgb(10 34 56 / 0.5);
+		/* Coordenadas sobre cada casilla: 9,4:1 y 4,8:1. */
+		--board-coord-on-light: var(--walnut-dark);
+		--board-coord-on-dark: var(--maple-pale);
+		/* Blanco puro en modo claro: el crema de la página se confundiría con él. */
+		--eval-white: light-dark(#ffffff, #f4f2ec);
+		--eval-black: #2a2b2f;
+
+		/* Series de los gráficos por ritmo (ELO). Sin verde: queda para los resultados. */
+		--chart-standard: var(--accent);
+		--chart-rapid: light-dark(#a0612a, #e3a46b);
+		--chart-blitz: light-dark(#7a3f8f, #c99ae0);
+
+		/* Sombra: sólo para lo que flota sobre la página (el buscador, el aviso de copiado). */
+		--shadow-m: 0 4px 16px light-dark(rgb(40 30 10 / 0.1), rgb(0 0 0 / 0.45));
+
+		font-family: var(--font-sans);
+		font-size: 100%;
+		line-height: var(--leading);
+		color: var(--text);
+		background: var(--bg);
+		/* Casillas, radios, range y progress nativos, en el color del acento. */
+		accent-color: var(--accent);
+	}
+
+	*,
+	*::before,
+	*::after {
+		box-sizing: border-box;
+	}
+
+	body {
+		margin: 0;
+		min-height: 100dvh;
+		display: flex;
+		flex-direction: column;
+	}
+
+	h1,
+	h2,
+	h3 {
+		font-family: var(--font-serif);
+		font-weight: var(--weight-strong);
+		line-height: 1.2;
+		margin: 0 0 var(--space-4);
+		text-wrap: balance;
+	}
+
+	h1 {
+		font-size: var(--text-xl);
+	}
+
+	/* Lo mismo que bajo una cabecera de sección con acción (.section-head). */
+	h2 {
+		margin-bottom: var(--space-3);
+		font-size: var(--text-l);
+	}
+
+	h3 {
+		font-size: var(--text-m);
+	}
+
+	p {
+		margin: 0 0 var(--space-4);
+	}
+
+	/*
+	 * Subrayado fino y tenue: en las tablas hay tres o cuatro enlaces por fila y
+	 * el subrayado pleno era una trama que tapaba los datos. No se quita: el
+	 * acento frente al texto da 1,9:1 en claro y 1,5:1 en oscuro, y el color
+	 * solo no basta para distinguir un enlace (WCAG 1.4.1). Al pasar por encima
+	 * o enfocarlo, entero.
+	 */
+	a,
+	.link {
+		color: var(--accent);
+		text-decoration-thickness: 1px;
+		text-decoration-color: color-mix(in oklab, currentColor 40%, transparent);
+		text-underline-offset: 0.15em;
+	}
+
+	a:hover,
+	.link:hover {
+		color: var(--accent-hover);
+	}
+
+	a:is(:hover, :focus-visible),
+	.link:is(:hover, :focus-visible) {
+		text-decoration-color: currentColor;
+	}
+
+	/*
+	 * Un botón con aspecto de enlace, para una acción dentro de una frase
+	 * («Seguir analizando» en el estado del motor). Inactivo (aria-disabled,
+	 * como .button.secondary), texto normal: lo que pedía ya está en marcha.
+	 */
+	.link {
+		padding: 0;
+		border: 0;
+		background: none;
+		text-decoration-line: underline;
+		cursor: pointer;
+	}
+
+	.link[aria-disabled='true'] {
+		color: inherit;
+		text-decoration: none;
+		cursor: default;
+	}
+
+	/* En alto contraste un botón toma el color de los botones: éste, el de los enlaces. */
+	@media (forced-colors: active) {
+		.link {
+			color: LinkText;
+		}
+
+		.link[aria-disabled='true'] {
+			color: GrayText;
+		}
+	}
+
+	:focus-visible {
+		outline: 2px solid var(--focus-ring);
+		outline-offset: 2px;
+	}
+
+	/* Contenedor de página */
+	.page {
+		width: 100%;
+		max-width: var(--content-width);
+		margin-inline: auto;
+		padding-inline: var(--space-4);
+	}
+
+	/* Entre las secciones de una página: las de dentro de una rejilla (el dossier) llevan su hueco. */
+	main > section + section {
+		margin-top: var(--space-7);
+	}
+
+	/*
+	 * Cabecera de página: de dónde vienes (.back, encima), qué estás viendo
+	 * (h1), sus datos en una línea gris (.page-meta) y, si las hay, sus
+	 * acciones (.page-actions). La misma en la ficha, la partida, el torneo y
+	 * las páginas de un jugador (CabeceraJugador); cada una conserva sólo lo
+	 * suyo.
+	 */
+	.page-head {
+		margin-bottom: var(--space-5);
+	}
+
+	.back {
+		margin-bottom: var(--space-2);
+		font-size: var(--text-s);
+	}
+
+	.page-head h1 {
+		margin-bottom: var(--space-2);
+	}
+
+	.page-meta {
+		margin-bottom: var(--space-2);
+		font-size: var(--text-s);
+		color: var(--text-muted);
+	}
+
+	.page-actions {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: var(--space-3);
+		margin-top: var(--space-3);
+	}
+
+	.muted {
+		color: var(--text-muted);
+	}
+
+	.visually-hidden {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		overflow: hidden;
+		clip-path: inset(50%);
+		white-space: nowrap;
+	}
+
+	.num {
+		font-variant-numeric: tabular-nums;
+	}
+
+	/* Formularios */
+	label {
+		display: grid;
+		gap: var(--space-1);
+		font-size: var(--text-s);
+		color: var(--text-muted);
+	}
+
+	/* Rótulo de lo que no es un campo (un selector, un par de campos), con el aspecto de un label. */
+	.field-label {
+		font-size: var(--text-s);
+		color: var(--text-muted);
+	}
+
+	input,
+	select,
+	button {
+		font: inherit;
+		color: inherit;
+	}
+
+	/*
+	 * El alto lo da --control-height, como a los botones, y no el relleno: con
+	 * relleno arriba y abajo medían 41,6 px junto a botones de 40 y, en una fila
+	 * alineada por abajo, sus bordes de arriba no cuadraban. El texto de un
+	 * campo queda centrado en su alto.
+	 */
+	input:not([type='checkbox'], [type='radio']),
+	select {
+		min-height: var(--control-height);
+		padding: 0 var(--space-3);
+		border: 1px solid var(--border-strong);
+		border-radius: var(--radius-m);
+		background: var(--surface);
+		color: var(--text);
+		font-size: var(--text-m);
+	}
+
+	/*
+	 * Flecha propia del select: la nativa es gruesa y queda pegada al texto y al
+	 * borde. Dos degradados de 6×6 px forman un chevrón de trazo fino ("\" y "/")
+	 * con el color de un token, así que cambia con el tema; un SVG en data URI no
+	 * puede usar variables ni currentColor. Va después de la regla común con input,
+	 * cuyo atajo background borraría la imagen.
+	 */
+	select {
+		--chevron: 0.375rem;
+		appearance: none;
+		padding-inline-end: calc(var(--space-3) + 2 * var(--chevron) + var(--space-2));
+		background-image:
+			linear-gradient(
+				45deg,
+				transparent calc(50% - 1px),
+				var(--text-muted) calc(50% - 0.5px) calc(50% + 0.5px),
+				transparent calc(50% + 1px)
+			),
+			linear-gradient(
+				-45deg,
+				transparent calc(50% - 1px),
+				var(--text-muted) calc(50% - 0.5px) calc(50% + 0.5px),
+				transparent calc(50% + 1px)
+			);
+		background-size: var(--chevron) var(--chevron);
+		background-position:
+			right calc(var(--space-3) + var(--chevron)) center,
+			right var(--space-3) center;
+		background-repeat: no-repeat;
+	}
+
+	/* En alto contraste el sistema impone los colores: mejor la flecha nativa. */
+	@media (forced-colors: active) {
+		select {
+			appearance: auto;
+			padding-inline-end: var(--space-3);
+			background-image: none;
+		}
+	}
+
+	input[type='checkbox'] {
+		inline-size: 1.1rem;
+		block-size: 1.1rem;
+	}
+
+	/* Fila de campos con su rótulo encima: alineados por abajo y, si no caben, en otra línea. */
+	.form-row {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: end;
+		gap: var(--space-3);
+	}
+
+	/* El campo principal de la fila (el nombre) se queda con el sitio que sobre. */
+	.form-row .grow {
+		flex: 1 1 16rem;
+	}
+
+	/* Casilla con su texto al lado, a la altura de los campos de la fila. */
+	.check {
+		display: flex;
+		align-items: center;
+		gap: var(--space-2);
+		min-height: var(--control-height);
+		color: var(--text);
+	}
+
+	/*
+	 * «Más filtros»: se despliega sin JavaScript, con el color de lo que se
+	 * pulsa. En una fila de campos va siempre en su propia línea, después de
+	 * «Buscar», que se queda junto a los campos principales.
+	 */
+	details > summary {
+		cursor: pointer;
+		font-size: var(--text-s);
+		color: var(--accent);
+	}
+
+	details > summary + * {
+		margin-top: var(--space-3);
+	}
+
+	.form-row > details {
+		flex-basis: 100%;
+		order: 1;
+	}
+
+	/*
+	 * Botón: del alto de los campos (--control-height) y a --text-s, como
+	 * Segmented y las tablas. El alto lo da min-height, como en los campos: con
+	 * --space-2 arriba y abajo, a --text-m medía 41,6 px y en una fila de filtros
+	 * sobresalía de los selects. Si el texto no cabe, parte en líneas parejas y
+	 * centradas.
+	 */
+	.button {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		gap: var(--space-2);
+		min-height: var(--control-height);
+		padding: var(--space-1) var(--space-4);
+		border: 1px solid transparent;
+		border-radius: var(--radius-m);
+		background: var(--accent);
+		color: var(--text-inverse);
+		font-size: var(--text-s);
+		font-weight: var(--weight-strong);
+		text-align: center;
+		text-wrap: balance;
+		text-decoration: none;
+		cursor: pointer;
+	}
+
+	.button:hover {
+		background: var(--accent-hover);
+		color: var(--text-inverse);
+	}
+
+	.button.secondary {
+		background: var(--surface);
+		border-color: var(--border-strong);
+		color: var(--text);
+	}
+
+	.button.secondary:hover {
+		background: var(--surface-hover);
+	}
+
+	/* De un icono o de una palabra corta («FEN»): cuadrado, del alto de los campos. */
+	.button.square {
+		min-inline-size: var(--control-height);
+		padding-inline: var(--space-1);
+	}
+
+	/*
+	 * Inactivo: el principio o el final de una lista (las jugadas del visor, las
+	 * páginas). Con aria-disabled y no disabled: un botón disabled pierde el foco
+	 * justo al llegar al final, y el teclado se queda sin sitio. Pulsarlo no hace
+	 * nada (lo decide quien lo maneja).
+	 */
+	.button.secondary[aria-disabled='true'] {
+		border-color: var(--border);
+		background: var(--surface);
+		color: var(--text-muted);
+		cursor: default;
+	}
+
+	/*
+	 * Copiar al portapapeles: el botón va en un .copy junto a su aviso
+	 * («PGN copiado»), que sale encima durante 2 s y no mueve nada. Va alineado
+	 * por la derecha, como el botón, para no salirse de la pantalla. Vacío no se
+	 * ve, pero sigue en el árbol de accesibilidad: así se anuncia al llenarse
+	 * (role="status"). El borde transparente lo dibuja el sistema en alto
+	 * contraste. Sin JavaScript, copiar no hace nada y no se enseña.
+	 */
+	.copy {
+		position: relative;
+		display: flex;
+	}
+
+	@media (scripting: none) {
+		.copy {
+			display: none;
+		}
+	}
+
+	.copied {
+		position: absolute;
+		inset-inline-end: 0;
+		inset-block-end: calc(100% + var(--space-1));
+		font-size: var(--text-s);
+		font-weight: var(--weight-strong);
+		white-space: nowrap;
+		pointer-events: none;
+	}
+
+	.copied:not(:empty) {
+		padding: var(--space-1) var(--space-2);
+		border: 1px solid transparent;
+		border-radius: var(--radius-m);
+		background: var(--accent);
+		color: var(--text-inverse);
+		box-shadow: var(--shadow-m);
+	}
+
+	/* Tablas de datos */
+	.table-wrap {
+		overflow-x: auto;
+		border: 1px solid var(--border);
+		border-radius: var(--radius-l);
+		background: var(--surface);
+	}
+
+	.data-table {
+		width: 100%;
+		border-collapse: collapse;
+		font-size: var(--text-s);
+	}
+
+	.data-table th,
+	.data-table td {
+		padding: var(--space-2) var(--space-3);
+		text-align: start;
+		border-bottom: 1px solid var(--border);
+		white-space: nowrap;
+	}
+
+	/*
+	 * Cabecera sin fondo: rótulos en gris sobre una raya más marcada. El fondo
+	 * queda para las filas de grupo (.group-row), que así no se confunden con
+	 * ella. Sin sticky: el overflow-x de .table-wrap hace de la envoltura el
+	 * contenedor de scroll de la cabecera, que no se desplaza en vertical, y la
+	 * cabecera nunca se pegaba. Con CSS no se puede tener a la vez el scroll
+	 * horizontal (en el móvil hace falta) y la cabecera pegada a la ventana.
+	 */
+	.data-table th {
+		font-weight: var(--weight-strong);
+		color: var(--text-muted);
+	}
+
+	.data-table thead > tr > * {
+		border-bottom-color: var(--border-strong);
+	}
+
+	/* Cabeceras de fila («Ganadas», «Más fuerte (+100)»): se leen como los datos. */
+	.data-table th[scope='row'] {
+		font-weight: normal;
+		color: var(--text);
+	}
+
+	/*
+	 * Fila que encabeza un grupo de filas: un equipo en las plantillas, un
+	 * torneo en «Se juegan pronto». Parte línea antes que ensanchar la tabla.
+	 */
+	.data-table .group-row > th {
+		background: var(--surface-muted);
+		color: var(--text);
+		white-space: normal;
+	}
+
+	.data-table tbody tr:last-child > * {
+		border-bottom: 0;
+	}
+
+	/* Fila de resumen (el total del explorador, la puntuación de la ficha), tras una raya marcada. */
+	.data-table tfoot > tr > * {
+		border-top: 1px solid var(--border-strong);
+		border-bottom: 0;
+	}
+
+	/*
+	 * En una tarjeta, la tabla va a plomo con su título: sin relleno por fuera
+	 * de la primera y la última columna. Las de .table-wrap (con su marco,
+	 * también dentro de una tarjeta) lo conservan, y también las filas de
+	 * grupo (las aperturas de la ficha, por color): sin él, su texto tocaría
+	 * el borde del fondo.
+	 */
+	.card .data-table:not(.table-wrap > *) tr:not(.group-row) > :is(th, td):first-child {
+		padding-inline-start: 0;
+	}
+
+	.card .data-table:not(.table-wrap > *) tr:not(.group-row) > :is(th, td):last-child {
+		padding-inline-end: 0;
+	}
+
+	.data-table td.wrap {
+		white-space: normal;
+		min-width: 12rem;
+	}
+
+	.data-table .end {
+		text-align: end;
+	}
+
+	/* Celda sin dato: una raya gris, que no compite con los valores de al lado. */
+	.data-table :is(tbody, tfoot) td:empty::before {
+		content: '—';
+		color: var(--text-muted);
+	}
+
+	/*
+	 * Listado que se apila en el móvil (.table-wrap.stack): la búsqueda de
+	 * jugadores, los torneos de la ficha y /torneos. A 375 px su scroll
+	 * horizontal escondía lo que decide (el ELO, los puntos) sin que nada lo
+	 * indicara. Por debajo de 60rem de contenedor, como GamesTable, cada fila
+	 * pasa a un bloque: la primera celda (el nombre) a todo el ancho y, debajo
+	 * y en pequeño, las demás seguidas, cada cifra con su rótulo (.cell-label).
+	 * En paralelo piden de 725 a 934 px (medido el 21-oct-2026), así que desde
+	 * 60rem caben sin desplazarse.
+	 *
+	 * La cabecera queda sólo para los lectores de pantalla, que siguen oyendo
+	 * la de cada columna: display flex en tr no le quita su papel (como en
+	 * GamesTable). Las celdas vacías no se enseñan: la raya es para la tabla.
+	 */
+	.table-wrap.stack {
+		container-type: inline-size;
+	}
+
+	/*
+	 * Rótulo de una cifra en un listado apilado («Rápidas 2389»). En la tabla
+	 * lo dice la cabecera de la columna, así que sólo se ve apilado. Va con
+	 * aria-hidden y sólo en celdas con dato: así td:empty sigue pintando la raya.
+	 */
+	.cell-label {
+		display: none;
+	}
+
+	@container (width < 60rem) {
+		.stack thead {
+			position: absolute;
+			inline-size: 1px;
+			block-size: 1px;
+			overflow: hidden;
+			clip-path: inset(50%);
+			white-space: nowrap;
+		}
+
+		.stack tr {
+			display: flex;
+			flex-wrap: wrap;
+			align-items: baseline;
+			gap: var(--space-1) var(--space-3);
+			padding: var(--space-2) var(--space-3);
+			border-bottom: 1px solid var(--border);
+		}
+
+		.stack tbody tr:last-child {
+			border-bottom: 0;
+		}
+
+		.stack :is(th, td) {
+			padding: 0;
+			border-bottom: 0;
+			white-space: normal;
+		}
+
+		/* Sin el mínimo de .wrap, que es para la tabla que se desplaza. */
+		.stack td.wrap {
+			min-width: 0;
+		}
+
+		.stack td:empty {
+			display: none;
+		}
+
+		.stack td:first-child {
+			flex-basis: 100%;
+		}
+
+		.stack td:not(:first-child) {
+			font-size: var(--text-xs);
+		}
+
+		/* Lo que no lleva rótulo (las fechas, el lugar), en gris, como en GamesTable. */
+		.stack td:not(:first-child, :has(.cell-label)) {
+			color: var(--text-muted);
+		}
+
+		.stack .cell-label {
+			display: inline;
+			color: var(--text-muted);
+		}
+	}
+
+	/*
+	 * Etiqueta de un dato de clasificación: el título FIDE de un jugador
+	 * («GM»), un torneo por equipos. Neutra, porque no se pulsa: el acento es
+	 * para lo interactivo. Con un color de significado, la de cada cruce del
+	 * dossier. En sans aunque vaya en un titular, y a --text-s en el h1.
+	 */
+	.tag {
+		display: inline-block;
+		padding: 0 var(--space-1);
+		border-radius: var(--radius-s);
+		background: var(--surface-muted);
+		color: var(--text);
+		font-family: var(--font-sans);
+		font-size: var(--text-xs);
+		font-weight: var(--weight-strong);
+		letter-spacing: 0.02em;
+		white-space: nowrap;
+	}
+
+	h1 .tag {
+		font-size: var(--text-s);
+	}
+
+	.result {
+		font-variant-numeric: tabular-nums;
+		font-weight: var(--weight-strong);
+	}
+
+	.result.win {
+		color: var(--result-win);
+	}
+
+	.result.draw {
+		color: var(--result-draw);
+	}
+
+	.result.loss {
+		color: var(--result-loss);
+	}
+
+	/* Tarjetas: sin sombra, que queda para lo que flota; el borde basta. */
+	.card {
+		padding: var(--space-5);
+		border: 1px solid var(--border);
+		border-radius: var(--radius-l);
+		background: var(--surface);
+	}
+
+	/* En el móvil, menos relleno: a 375 px quedaban 310 px para las tablas de una tarjeta. */
+	@media (width < 40rem) {
+		.card {
+			padding: var(--space-4);
+		}
+	}
+
+	/* Recuadro compacto y sin sombra: el panel del motor, la lista de jugadas, los ELO de la ficha. */
+	.panel {
+		padding: var(--space-3) var(--space-4);
+		border: 1px solid var(--border);
+		border-radius: var(--radius-l);
+		background: var(--surface);
+	}
+
+	/* Icono de trazo (SVG de 24×24) dentro de un botón, del color del texto. */
+	.icon {
+		inline-size: 1.25rem;
+		block-size: 1.25rem;
+		fill: none;
+		stroke: currentColor;
+		stroke-width: 2;
+		stroke-linecap: round;
+		stroke-linejoin: round;
+	}
+
+	/* Fila de selectores (Segmented) y filtros sobre un listado, alineados por abajo como los campos. */
+	.selectors {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: end;
+		gap: var(--space-3);
+		margin-bottom: var(--space-5);
+	}
+
+	/* Título de sección con una acción al lado (p. ej. «Descargar»). */
+	.section-head {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		justify-content: space-between;
+		gap: var(--space-3);
+		margin-bottom: var(--space-3);
+	}
+
+	.section-head h2 {
+		margin: 0;
+	}
+
+	/* Aviso breve dentro del contenido. */
+	.note {
+		padding: var(--space-2) var(--space-3);
+		border-radius: var(--radius-m);
+		background: var(--surface-muted);
+		font-size: var(--text-s);
+	}
+
+	/* Código ECO delante del nombre de una apertura. */
+	.eco {
+		color: var(--text-muted);
+		font-family: var(--font-mono);
+		font-size: var(--text-xs);
+	}
+
+	/* Impresión: el dossier del rival se puede llevar en papel. Siempre en claro,
+	   sin partir las tarjetas entre páginas y sin el enlace de vuelta; cada
+	   componente oculta sus controles en su propio estilo. */
+	@media print {
+		:root {
+			color-scheme: light;
+		}
+
+		.card {
+			break-inside: avoid;
+		}
+
+		.back {
+			display: none;
+		}
+	}
+}

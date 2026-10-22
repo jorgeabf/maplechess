@@ -1,0 +1,28 @@
+# Actualizaciones de las dependencias y de las acciones de la CI, una vez por
+# semana. Cada una llega como PR y pasa por la CI y la revisión, como todo.
+#
+# La espera (cooldown) deja pasar unos días desde que sale una versión: si un
+# paquete se publica comprometido, suele retirarse antes. No se aplica a las
+# actualizaciones de seguridad, que llegan en cuanto salen.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      # Las menores y los parches, en un solo PR; cada versión mayor, en el suyo.
+      menores:
+        update-types: [minor, patch]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      acciones:
+        patterns: ['*']

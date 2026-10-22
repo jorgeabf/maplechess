@@ -1,0 +1,13 @@
+-- Relojes de cada partida, para ver en el dossier si un jugador suele
+-- apurarse de tiempo y cuándo.
+--
+-- clocks guarda, por cada media jugada legal de la línea principal, los
+-- segundos que le quedan al jugador que acaba de mover según el comentario
+-- [%clk] del PGN, separados por espacios ("5457 5029 5409 …"). Una media
+-- jugada sin lectura va como '-'. Es NULL si la partida no trae ninguna.
+-- Como opening_moves, guarda el dato y las cuentas se hacen al consultar
+-- (src/lib/chess/clock.ts), así que cambiar un umbral no obliga a reprocesar.
+--
+-- Se rellena en la ingesta. Para las partidas que ya había, el Workflow
+-- games-reprocess la calcula a partir del PGN guardado.
+ALTER TABLE games ADD COLUMN clocks TEXT;

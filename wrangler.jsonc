@@ -1,0 +1,73 @@
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "buscador-partidas-ajedrez",
+	// Entrypoint propio: sirve Astro y además exporta el cron y los Workflows.
+	"main": "./src/worker.ts",
+	"compatibility_date": "2026-10-01",
+	"compatibility_flags": ["nodejs_compat"],
+	"observability": { "enabled": true },
+	// Secretos del Worker. Los valores van con `wrangler secret put` y, en local,
+	// en .dev.vars. Declarados aquí, `wrangler types` los pone en Env sin leer
+	// .dev.vars (que no se versiona), así que la CI genera los mismos tipos.
+	"secrets": { "required": ["ADMIN_TOKEN"] },
+	// Límite de ritmo de las rutas caras (búsquedas, PGN, dossier y repertorio,
+	// ver src/middleware.ts): 30 peticiones por minuto y por IP. Apagado hasta
+	// confirmar el precio del binding; se enciende con "RATE_LIMIT": "on", y en
+	// local con RATE_LIMIT=on en .dev.vars. El namespace_id es único en la cuenta.
+	"vars": { "RATE_LIMIT": "off" },
+	"ratelimits": [
+		{
+			"name": "RATE_LIMITER",
+			"namespace_id": "26102201",
+			"simple": { "limit": 30, "period": 60 }
+		}
+	],
+	// La lista FIDE se descomprime en streaming dentro de un paso de Workflow:
+	// necesita más CPU que los 30 s por defecto.
+	"limits": { "cpu_ms": 300000 },
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "ajedrez",
+			// Producción, en jurisdicción UE.
+			"database_id": "670f3b23-8610-4f85-a8af-7c93dedf1891",
+			// La base local (pnpm dev y db:migrate:local) se identifica por este id, no
+			// por database_id. "DB" es el que usaba antes de que hubiera base remota.
+			"preview_database_id": "DB",
+			"migrations_dir": "migrations"
+		}
+	],
+	"workflows": [
+		{
+			"name": "info64-sync",
+			"binding": "INFO64_SYNC",
+			"class_name": "Info64SyncWorkflow"
+		},
+		{
+			// Retransmisiones oficiales de lichess con jugadores españoles.
+			"name": "lichess-sync",
+			"binding": "LICHESS_SYNC",
+			"class_name": "LichessSyncWorkflow"
+		},
+		{
+			"name": "fide-sync",
+			"binding": "FIDE_SYNC",
+			"class_name": "FideSyncWorkflow"
+		},
+		{
+			// Recalcula las columnas derivadas del PGN (opening_moves) de las partidas guardadas.
+			"name": "games-reprocess",
+			"binding": "GAMES_REPROCESS",
+			"class_name": "GamesReprocessWorkflow"
+		}
+	],
+	"triggers": {
+		// 05:00 UTC a diario: info64 (últimos 60 días y emparejamientos).
+		// 06:30 UTC a diario: retransmisiones de lichess (después de info64, que también les pide).
+		// 15:00 y 22:00 de Madrid a diario: emparejamientos de info64. Son las 13:00 y
+		// 20:00 UTC en verano y las 14:00 y 21:00 en invierno: salta a las cuatro y
+		// src/ingest/schedule.ts sólo lanza la pasada en las dos que tocan.
+		// 06:00 UTC el día 3 de cada mes: lista FIDE (se publica a primeros de mes).
+		"crons": ["0 5 * * *", "30 6 * * *", "0 13,14,20,21 * * *", "0 6 3 * *"]
+	}
+}

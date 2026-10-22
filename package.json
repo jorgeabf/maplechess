@@ -1,0 +1,42 @@
+{
+  "name": "buscador-partidas-ajedrez",
+  "type": "module",
+  "version": "0.1.0",
+  "private": true,
+  "license": "GPL-3.0-or-later",
+  "packageManager": "pnpm@11.28.5",
+  "scripts": {
+    "postinstall": "node scripts/copy-engine.mjs",
+    "dev": "wrangler types && astro dev",
+    "build": "wrangler types && pnpm check && astro build",
+    "preview": "astro preview",
+    "deploy": "node scripts/desplegar.mjs",
+    "check": "astro check && tsc -p src/client",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "openings": "node scripts/build-openings.mjs",
+    "db:migrate:local": "wrangler d1 migrations apply DB --local",
+    "db:migrate:remote": "wrangler d1 migrations apply DB --remote"
+  },
+  "dependencies": {
+    "@astrojs/cloudflare": "14.4.0",
+    "@lichess-org/chessground": "10.4.2",
+    "astro": "7.4.0",
+    "chessops": "0.15.1",
+    "fflate": "0.8.3",
+    "stockfish": "19.0.1"
+  },
+  "devDependencies": {
+    "@astrojs/check": "0.9.10",
+    "@cloudflare/vitest-plugin": "1.4.3",
+    "@resvg/resvg-js": "2.6.2",
+    "@types/node": "^24.19.2",
+    "@typescript-eslint/parser": "8.71.2",
+    "eslint": "10.12.0",
+    "eslint-plugin-astro": "3.2.1",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.71.2",
+    "vitest": "5.0.5",
+    "wrangler": "4.151.1"
+  }
+}

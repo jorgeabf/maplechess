@@ -1,0 +1,114 @@
+---
+import Base from '../layouts/Base.astro'
+import { CC_BY_SA, SOURCE_CODE } from '../lib/licenses'
+---
+
+<Base title="Acerca de">
+	<article class="prose">
+		<h1>Acerca de MapleChess</h1>
+		<p>
+			Reúne en un solo sitio a los jugadores de ajedrez de la federación española, los torneos en los que han jugado y
+			las partidas que se han publicado de ellos, con un visor para repasarlas y el motor Stockfish funcionando en tu
+			propio navegador.
+		</p>
+
+		<h2>De dónde salen los datos</h2>
+		<ul>
+			<li>
+				<strong>Torneos, participantes y partidas:</strong>{' '}
+				<a href="https://info64.org" rel="noopener">info64.org</a>, la plataforma de resultados de la Federación
+				Española de Ajedrez. Se revisa cada día; sólo una parte de los torneos publica sus partidas.
+			</li>
+			<li>
+				<strong>Partidas de retransmisiones:</strong> las{' '}
+				<a href="https://lichess.org/broadcast" rel="noopener">retransmisiones oficiales de lichess.org</a>. Cubren
+				torneos de info64 que no publican sus partidas y torneos con jugadores españoles que no están en info64, en
+				España y en el extranjero; de estos últimos sólo se guardan las partidas en las que juega algún español. Se
+				revisan cada día. Lichess las publica con licencia{' '}
+				<a href={CC_BY_SA} rel="license noopener">CC BY-SA 4.0</a> y aquí se ofrecen con la misma licencia; se han
+				completado o corregido sus cabeceras (nombres, FIDE ID, ELO y apertura).
+			</li>
+			<li>
+				<strong>Jugadores y ELO:</strong> la{' '}
+				<a href="https://ratings.fide.com/download_lists.phtml" rel="noopener">lista de jugadores de la FIDE</a>,
+				filtrada a la federación española y actualizada cada mes.
+			</li>
+			<li>
+				<strong>Nombres de aperturas:</strong>{' '}
+				<a href="https://github.com/lichess-org/chess-openings" rel="noopener">lichess-org/chess-openings</a> (dominio
+				público, CC0).
+			</li>
+		</ul>
+		<p>
+			Los datos se copian tal como los publican las fuentes. Si encuentras un error, lo mejor es corregirlo en origen
+			(el árbitro del torneo, la retransmisión o la FIDE); aquí se actualizará en la siguiente sincronización.
+		</p>
+
+		<h2>Software</h2>
+		<ul>
+			<li>
+				Motor de análisis: <a href="https://stockfishchess.org" rel="noopener">Stockfish</a> 19 (build ligera de{' '}
+				<a href="https://github.com/nmrugg/stockfish.js" rel="noopener">stockfish.js</a>), licencia GPL-3.0.{' '}
+				<a href="/engine/Copying.txt">Texto de la licencia</a>.
+			</li>
+			<li>
+				Tablero y reglas: <a href="https://github.com/lichess-org/chessground" rel="noopener">chessground</a> y{' '}
+				<a href="https://github.com/niklasf/chessops" rel="noopener">chessops</a> de lichess, licencia GPL-3.0.
+			</li>
+			<li>
+				Piezas: <a href="https://github.com/chupinmaxime/mpchess-pieces" rel="noopener">mpchess</a> de Maxime Chupin,
+				dibujadas para los diagramas del paquete de LaTeX del mismo nombre, licencia GPL-3.0.
+			</li>
+			<li>
+				Tipografía de los titulares:{' '}
+				<a href="https://github.com/adobe-fonts/source-serif" rel="noopener">Source Serif 4</a> de Adobe, licencia
+				SIL Open Font License 1.1, recortada y renombrada «Titulares» como pide la licencia. Se sirve desde este mismo
+				sitio, sin pedir nada a terceros. <a href="/fonts/OFL.txt">Texto de la licencia</a>.
+			</li>
+			<li>
+				Este sitio es software libre bajo la misma licencia, GPL-3.0 o posterior:{' '}
+				<a href={SOURCE_CODE} rel="noopener">su código está en GitHub</a>.
+			</li>
+		</ul>
+
+		<h2>Datos personales</h2>
+		<p>
+			Sólo se muestran datos que ya son públicos en las fuentes: nombre, FIDE ID, ELO, título, resultados y, salvo en
+			los menores de edad, año de nacimiento.
+		</p>
+		<p>
+			Si quieres que se te retire, escribe a <a href="mailto:jordiabf@outlook.es">jordiabf@outlook.es</a> con tu FIDE ID
+			(o el del menor, si eres su padre, madre o tutor). En unos días tu ficha desaparece y, en las partidas, los torneos
+			y los emparejamientos, tu nombre pasa a «Jugador retirado», sin FIDE ID. Las partidas se quedan, porque también son
+			de tus rivales. No vuelve a aparecer con las siguientes actualizaciones de las fuentes. Las copias de seguridad de
+			la base de datos (30 días) y los registros técnicos (7 días) caducan solos.
+		</p>
+		<p>
+			Como cualquier web, al visitarla Cloudflare, donde está alojada, guarda durante 7 días la dirección IP y la página
+			pedida, para la seguridad y para diagnosticar errores. No se usan para nada más.
+		</p>
+
+		<h2>Cookies</h2>
+		<p>
+			Sólo hay una, y sólo si la pides: al preparar una partida puedes indicar tu FIDE ID para cruzar tus partidas con
+			las del rival, o pulsar «Soy yo» en tu ficha, y se guarda en la cookie <code>yo</code> durante un año para no
+			tener que repetirlo. Con ella, la
+			portada te avisa también de tu próximo emparejamiento. No se usa para nada más ni se comparte. «No soy yo» la
+			borra. No hay cookies de analítica ni de publicidad.
+		</p>
+	</article>
+</Base>
+
+<style>
+	.prose {
+		max-inline-size: var(--reading-width);
+	}
+
+	.prose h2 {
+		margin-top: var(--space-6);
+	}
+
+	.prose li + li {
+		margin-top: var(--space-2);
+	}
+</style>

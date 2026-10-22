@@ -1,0 +1,156 @@
+---
+// Mesas emparejadas: mesa y, de blancas y negras, el jugador y su ELO, con
+// «preparar» (el dossier del jugador con el color que lleva) si tiene partidas.
+// En el torneo es su próxima ronda, en un grupo sin encabezado: la ronda y la
+// hora las pone la página. En /partidas son las mesas destacadas, en un grupo
+// por torneo encabezado por el torneo, la ronda y la hora.
+import type { RoundPairing } from '../lib/db/pairings'
+import { formatRoundTime } from '../lib/format'
+import { dossierHref } from '../lib/params'
+import PlayerName from './PlayerName.astro'
+
+interface Props {
+	groups: {
+		tournament?: { id: number; name: string; round: number; startsAt: string }
+		pairings: RoundPairing[]
+	}[]
+}
+
+const { groups } = Astro.props
+---
+
+<div class="table-wrap pairings">
+	<table class="data-table">
+		<thead>
+			<tr>
+				<th scope="col" class="end">Mesa</th>
+				<th scope="col">Blancas</th>
+				<th scope="col" class="end">ELO</th>
+				<th scope="col">Negras</th>
+				<th scope="col" class="end">ELO</th>
+			</tr>
+		</thead>
+		{
+			groups.map(({ tournament, pairings }) => (
+				<tbody>
+					{tournament && (
+						<tr class="group-row">
+							<th scope="rowgroup" colspan="5">
+								<a href={`/torneos/${tournament.id}#proxima-ronda`}>{tournament.name}</a>
+								<span class="muted">
+									{' '}
+									· ronda {tournament.round} · {formatRoundTime(tournament.startsAt)}
+								</span>
+							</th>
+						</tr>
+					)}
+					{pairings.map((pairing) => (
+						<tr>
+							<td class="end num">{pairing.board}</td>
+							{(['white', 'black'] as const).map((color) => {
+								const player = pairing[color]
+								return (
+									<>
+										<td>
+											<PlayerName name={player.name} title={player.title} fideId={player.fideId} />
+											{player.fideId && player.hasGames === 1 && (
+												<>
+													{' '}
+													<span class="prepare">
+														·{' '}
+														<a href={dossierHref(player.fideId, color)} rel="nofollow">
+															preparar
+														</a>
+													</span>
+												</>
+											)}
+										</td>
+										<td class="end num">{player.rating}</td>
+									</>
+								)
+							})}
+						</tr>
+					))}
+				</tbody>
+			))
+		}
+	</table>
+</div>
+
+<style>
+	/* «· preparar» baja junto. Al tamaño del nombre y con relleno: la zona que se pulsa llega a los 24 px. */
+	.prepare {
+		white-space: nowrap;
+	}
+
+	.prepare a {
+		padding-block: var(--space-1);
+	}
+
+	.group-row .muted {
+		font-weight: normal;
+	}
+
+	/*
+	 * El ELO de cada jugador, en su columna y alineado a la derecha: así se ve
+	 * de un vistazo quién es más fuerte en cada mesa.
+	 *
+	 * En pantallas estrechas: con los dos jugadores en paralelo la tabla pide
+	 * 650-800 px, así que cada partida pasa a dos líneas (blancas encima, negras
+	 * debajo, cada una con su ELO a la derecha) y la mesa ocupa las dos. La
+	 * cabecera hace lo mismo y sirve de leyenda; el encabezado de un grupo
+	 * ocupa la fila entera. Cada fila es su propia rejilla, así que la mesa y el
+	 * ELO van en columnas fijas para que cuadren entre filas: caben «Mesa» y
+	 * cuatro cifras con su relleno. Con display: grid en tr la tabla conserva su
+	 * semántica (en Safari desde 2023, WebKit 257458). Un nombre muy largo parte
+	 * línea en vez de cortarse.
+	 */
+	.pairings {
+		container-type: inline-size;
+	}
+
+	/*
+	 * A todo el ancho, una raya entre las dos mitades de la mesa: el ELO de
+	 * blancas, alineado a la derecha, quedaba a 24 px del nombre de negras y a
+	 * unos 350 del suyo, y por cercanía se leía como de negras.
+	 */
+	@container (width >= 48rem) {
+		.pairings :is(th, td):nth-child(4) {
+			border-inline-start: 1px solid var(--border);
+		}
+	}
+
+	@container (width < 48rem) {
+		.pairings tr {
+			display: grid;
+			grid-template-columns: 3.25rem 1fr 3.25rem;
+		}
+
+		.pairings tr > * {
+			padding-inline: var(--space-2);
+		}
+
+		.pairings tr > :first-child {
+			grid-row: span 2;
+		}
+
+		.pairings tr.group-row > th {
+			grid-column: 1 / -1;
+			grid-row: auto;
+		}
+
+		.pairings td {
+			white-space: normal;
+		}
+
+		/* Las dos líneas de una partida van juntas: sin raya entre ellas. */
+		.pairings tr > :is(:nth-child(2), :nth-child(3)) {
+			border-bottom: 0;
+			padding-bottom: 0;
+		}
+
+		.pairings tr > :is(:nth-child(4), :nth-child(5)) {
+			padding-top: var(--space-1);
+		}
+	}
+</style>

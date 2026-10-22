@@ -1,0 +1,182 @@
+---
+import { env } from 'cloudflare:workers'
+import ProximasPartidas from '../components/ProximasPartidas.astro'
+import Base from '../layouts/Base.astro'
+import { getUpcomingGames } from '../lib/db/pairings'
+import { getTotals, latestTournamentsWithGames } from '../lib/db/tournaments'
+import { formatCount, formatGames, formatRange } from '../lib/format'
+import { ME_COOKIE, resolveMe } from '../lib/me'
+
+// Si has dicho quién eres (cookie yo), el enlace a tu ficha y, si tienes una
+// ronda emparejada, tu próximo rival en lugar de la presentación; si no, cómo
+// decirlo («Soy yo» en tu ficha).
+const me = resolveMe(null, Astro.cookies.get(ME_COOKIE)?.value).fideId
+const [totals, latest, upcoming] = await Promise.all([
+	getTotals(env.DB),
+	latestTournamentsWithGames(env.DB, 8),
+	me ? getUpcomingGames(env.DB, me) : []
+])
+// Lo que hay, en una línea: en el móvil, tres tarjetas ocupaban más que la entrada.
+const available = [
+	formatCount(totals.tournaments, 'torneo', 'torneos'),
+	formatCount(totals.players, 'jugador', 'jugadores'),
+	formatGames(totals.games)
+]
+---
+
+<Base
+	title="MapleChess · Prepara tu próxima partida de ajedrez"
+	description="¿Ya sabes contra quién juegas? Mira qué aperturas juega tu rival, cómo le van y si se apura con el reloj. Gratis y sin registro."
+>
+	<section class="hero">
+		<h1>¿Contra quién juegas?</h1>
+		{
+			upcoming.length > 0 ? (
+				<ProximasPartidas games={upcoming} you hideHeading />
+			) : (
+				<p class="muted">
+					Antes de la ronda, mira qué aperturas juega tu rival, cómo le van y si suele apurarse con el reloj. Gratis y
+					sin registro.
+				</p>
+			)
+		}
+		<form action="/jugadores" method="get" role="search" class="search">
+			<label class="visually-hidden" for="q">Nombre del jugador</label>
+			<input id="q" name="q" type="search" placeholder="Apellidos o nombre" autocomplete="off" required />
+			<button class="button" type="submit">Buscar</button>
+		</form>
+		<p class="links">
+			<a href="/partidas">Buscar partidas</a> · <a href="/torneos?con_partidas=1">Torneos con partidas</a>
+			{me && <> · <a href={`/jugadores/${me}`}>Mi ficha</a></>}
+		</p>
+		{
+			!me && (
+				<p class="note">¿Juegas torneos? Búscate y pulsa «Soy yo» en tu ficha: aquí verás tu próxima partida.</p>
+			)
+		}
+	</section>
+
+	{/*
+		Si no cabe, la línea sólo se corta tras un «·»: cada cifra va con su nombre
+		sin partir y el espacio de antes del «·» es de no separación.
+	*/}
+	<p class="totals muted">
+		{
+			available.map((item, i) => (
+				<>
+					{i > 0 && ' · '}
+					<span>{item}</span>
+				</>
+			))
+		}
+	</p>
+
+	{
+		latest.length > 0 && (
+			<section>
+				<h2>Últimos torneos con partidas</h2>
+				<ul class="latest">
+					{latest.map((t) => (
+						<li class="card">
+							<a href={`/torneos/${t.id}`}>{t.name}</a>
+							<span class="muted">
+								{t.type === 'team' && (
+									<>
+										<span class="tag">Equipos</span>{' '}
+									</>
+								)}
+								{t.city && `${t.city} · `}
+								{formatRange(t.startDate, t.endDate)}
+							</span>
+							{/* Los que no están en info64 (los de lichess) sólo guardan las partidas con
+							    algún español: sin decirlo, una o dos de un open extranjero parecían poca cosa. */}
+							<span class="muted num">
+								{formatGames(t.gamesCount)}
+								{t.source === 'lichess' && ' con españoles'}
+							</span>
+						</li>
+					))}
+				</ul>
+			</section>
+		)
+	}
+</Base>
+
+<style>
+	/*
+	 * Sin margen arriba: el h1 queda a la altura del de las demás páginas.
+	 * Los totales, cerca: dicen qué hay para buscar.
+	 */
+	.hero {
+		max-inline-size: var(--reading-width);
+		margin-block: 0 var(--space-5);
+	}
+
+	.hero h1 {
+		font-size: var(--text-2xl);
+	}
+
+	/* En pantallas estrechas, sin una palabra sola en la última línea. */
+	.hero h1 + p {
+		text-wrap: pretty;
+	}
+
+	/*
+	 * Campo y botón, siempre en una fila: el campo encoge (min-width: 0, porque
+	 * un input mide de por sí unos 20 caracteres) y el botón conserva su texto.
+	 */
+	.search {
+		display: flex;
+		gap: var(--space-2);
+		margin-block: var(--space-5) var(--space-3);
+	}
+
+	.search input {
+		flex: 1;
+		min-width: 0;
+		min-height: var(--control-height-l);
+		font-size: var(--text-l);
+	}
+
+	/* El único botón grande de la web: junto a un campo a --text-l, a --text-s se perdía. */
+	.search .button {
+		min-height: var(--control-height-l);
+		font-size: var(--text-m);
+	}
+
+	.links {
+		font-size: var(--text-s);
+	}
+
+	.totals {
+		margin-bottom: var(--space-7);
+		font-size: var(--text-s);
+	}
+
+	.totals span {
+		white-space: nowrap;
+	}
+
+	/* min(100%, …): con la letra del navegador al 150 %, 18rem pasaban del ancho del móvil. */
+	.latest {
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(min(100%, 18rem), 1fr));
+		gap: var(--space-4);
+		margin: 0;
+		padding: 0;
+		list-style: none;
+	}
+
+	/* Las tarjetas de una fila miden lo mismo: las líneas, arriba, sin repartirse el alto. */
+	.latest li {
+		display: grid;
+		align-content: start;
+		gap: var(--space-1);
+		font-size: var(--text-s);
+	}
+
+	.latest a {
+		font-size: var(--text-m);
+		font-weight: var(--weight-strong);
+	}
+</style>

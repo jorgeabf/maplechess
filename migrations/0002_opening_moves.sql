@@ -1,0 +1,14 @@
+-- Primeras jugadas de cada partida, para el repertorio de la ficha del jugador.
+--
+-- opening_moves guarda las OPENING_MOVES_PLIES (40) primeras medias jugadas de
+-- la línea principal en UCI estándar, separadas por espacios ("e2e4 c7c5 …").
+-- El repertorio las repite con chessops para buscar una posición en vez de
+-- parsear el PGN entero en cada visita. Es NULL si la partida no tiene jugadas
+-- o empieza desde una posición distinta de la inicial (cabecera FEN).
+--
+-- Se rellena en la ingesta. Para las partidas que ya había, el Workflow
+-- games-reprocess la calcula a partir del PGN guardado.
+--
+-- No va en ningún índice: D1 factura las entradas de índice recorridas, no la
+-- lectura de la fila, así que un índice cubriente no ahorraría filas leídas.
+ALTER TABLE games ADD COLUMN opening_moves TEXT;

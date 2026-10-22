@@ -1,0 +1,21 @@
+---
+// Cabecera de las páginas que cuelgan de la ficha de un jugador (repertorio,
+// dossier): enlace de vuelta a la ficha, título y, en el hueco, un resumen.
+
+interface Props {
+	fideId: number
+	/** Nombre del jugador para el enlace de vuelta. */
+	name: string
+	title: string
+	/** Tu propia página (cookie yo; ver isOwn): vuelve a «Mi ficha». */
+	own?: boolean
+}
+
+const { fideId, name, title, own = false } = Astro.props
+---
+
+<header class="page-head">
+	<p class="back"><a href={`/jugadores/${fideId}`}>{own ? '← Mi ficha' : `← Ficha de ${name}`}</a></p>
+	<h1>{title}</h1>
+	<p class="page-meta"><slot /></p>
+</header>

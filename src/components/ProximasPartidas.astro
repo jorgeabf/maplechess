@@ -1,0 +1,104 @@
+---
+// Próximas partidas emparejadas de un jugador: torneo, ronda, hora, color y
+// rival, con el enlace para prepararlas. La usan la ficha y, si se sabe quién
+// eres (cookie yo), la portada, bajo su h1. Sin partidas emparejadas no pinta
+// nada. El margen exterior lo pone la página con `class`.
+//
+// A quién se prepara: en tu ficha y en la portada, a tu rival; en la ficha de
+// otro, a él, como los demás botones de su ficha. Allí lo más probable es que
+// lo mire su rival, y «Preparar» llevaba al dossier de quien mira.
+import type { UpcomingGame } from '../lib/db/pairings'
+import { COLOR_NAME, formatRoundTime } from '../lib/format'
+import { dossierHref } from '../lib/params'
+import PlayerName from './PlayerName.astro'
+
+interface Props {
+	games: UpcomingGame[]
+	/** En tu ficha y en la portada habla de ti: «Tu próxima partida», «Juegas». */
+	you?: boolean
+	/** Dueño de la ficha: sin `you`, el enlace prepara contra él, si tiene partidas. */
+	owner?: { fideId: number; name: string; hasGames: boolean }
+	/** Título sólo para lectores de pantalla: en la portada ya pregunta el h1. */
+	hideHeading?: boolean
+	class?: string
+}
+
+const { games, you = false, owner, hideHeading = false, class: className, ...rest } = Astro.props
+const heading = games.length === 1 ? 'próxima partida' : 'próximas partidas'
+const title = you ? `${games.length === 1 ? 'Tu' : 'Tus'} ${heading}` : heading[0].toUpperCase() + heading.slice(1)
+const rival = (color: 'white' | 'black') => (color === 'white' ? 'black' : 'white')
+// El color del dossier es el de quien se prepara: tu rival o el dueño de la ficha.
+function prepareLink(game: UpcomingGame) {
+	if (you) {
+		return game.opponent.fideId && game.opponent.hasGames === 1
+			? { href: dossierHref(game.opponent.fideId, rival(game.color)), label: 'Preparar la partida' }
+			: null
+	}
+	return owner?.hasGames ? { href: dossierHref(owner.fideId, game.color), label: `Preparar contra ${owner.name}` } : null
+}
+const cards = games.map((game) => ({ game, prepare: prepareLink(game) }))
+---
+
+{
+	games.length > 0 && (
+		<section class:list={['upcoming', className]} aria-labelledby="proximas-partidas" {...rest}>
+			<h2 id="proximas-partidas" class:list={{ 'visually-hidden': hideHeading }}>{title}</h2>
+			{cards.map(({ game, prepare }) => (
+				<div class="card game">
+					<div>
+						<p class="muted when">
+							Ronda {game.round} del <a href={`/torneos/${game.tournamentId}`}>{game.tournamentName}</a> ·{' '}
+							{formatRoundTime(game.startsAt)} · mesa {game.board}
+						</p>
+						<p class="match">
+							{you ? 'Juegas' : 'Juega'} con {COLOR_NAME[game.color]} contra{' '}
+							<PlayerName
+								name={game.opponent.name}
+								title={game.opponent.title}
+								fideId={game.opponent.fideId}
+								elo={game.opponent.rating}
+							/>
+						</p>
+					</div>
+					{prepare && (
+						<a class="button" href={prepare.href} rel="nofollow">
+							{prepare.label}
+						</a>
+					)}
+				</div>
+			))}
+		</section>
+	)
+}
+
+<style>
+	.upcoming {
+		display: grid;
+		gap: var(--space-3);
+	}
+
+	h2 {
+		margin: 0;
+	}
+
+	.game {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		justify-content: space-between;
+		gap: var(--space-3);
+	}
+
+	p {
+		margin: 0;
+	}
+
+	.when {
+		font-size: var(--text-s);
+	}
+
+	.match {
+		margin-top: var(--space-1);
+		font-weight: var(--weight-strong);
+	}
+</style>

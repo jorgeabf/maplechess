@@ -1,0 +1,126 @@
+---
+// Gráfico de la evaluación anotada en el PGN (%eval), jugada a jugada de la
+// línea principal: arriba ganan blancas, abajo negras (la misma curva que la
+// barra del motor). Se genera en el servidor. Cada jugada es una franja con
+// data-node: con JavaScript, el visor la usa para ir a esa jugada, como con
+// los botones de la lista.
+import { areaPath, linePath, linearScale, type Point } from '../../lib/charts'
+import { mainline, type GameTree } from '../../lib/chess/movetree'
+import { annotatedScore, formatScore, winningChances } from '../../lib/chess/uci'
+import { formatMove } from '../../lib/format'
+
+interface Props {
+	tree: GameTree
+}
+
+/** Jugadas anotadas mínimas para que el gráfico diga algo. */
+const MIN_EVALS = 10
+const HEIGHT = 100
+
+const nodes = mainline(Astro.props.tree)
+const evaluated = nodes.filter((n) => n.eval)
+const x = (ply: number) => ply - 0.5
+const y = linearScale(-1, 1, HEIGHT, 0)
+const points: Point[] = evaluated.map((n) => ({ x: x(n.ply), y: y(winningChances(annotatedScore(n.eval!))) }))
+---
+
+{
+	evaluated.length >= MIN_EVALS && (
+		<figure class="eval-chart">
+			<svg
+				viewBox={`0 0 ${nodes.length} ${HEIGHT}`}
+				preserveAspectRatio="none"
+				role="img"
+				aria-label="Evaluación anotada en la partida, jugada a jugada"
+			>
+				<rect class="black-area" width={nodes.length} height={HEIGHT} />
+				<path class="white-area" d={areaPath(points, HEIGHT)} />
+				<path class="curve" d={linePath(points)} />
+				<line class="middle" x1="0" x2={nodes.length} y1={HEIGHT / 2} y2={HEIGHT / 2} />
+				<line class="cursor" x1="0" x2="0" y1="0" y2={HEIGHT} />
+				{nodes.map((n) => (
+					<rect class="hit" data-node={n.id} x={n.ply - 1} width="1" height={HEIGHT}>
+						<title>
+							{formatMove(n.ply, n.san)}
+							{n.eval && `: ${formatScore(annotatedScore(n.eval))}`}
+						</title>
+					</rect>
+				))}
+			</svg>
+			<figcaption class="muted">
+				Evaluación anotada en la fuente<span class="eval-note"></span>
+			</figcaption>
+		</figure>
+	)
+}
+
+<style>
+	.eval-chart {
+		margin: 0;
+	}
+
+	svg {
+		display: block;
+		inline-size: 100%;
+		block-size: 5rem;
+		border: 1px solid var(--border-strong);
+		border-radius: var(--radius-m);
+	}
+
+	.black-area {
+		fill: var(--eval-black);
+	}
+
+	.white-area {
+		fill: var(--eval-white);
+	}
+
+	/* Las líneas no se deforman con preserveAspectRatio="none". */
+	.curve,
+	.middle,
+	.cursor {
+		fill: none;
+		vector-effect: non-scaling-stroke;
+	}
+
+	.curve {
+		stroke: var(--text-muted);
+		stroke-width: 1;
+	}
+
+	.middle {
+		stroke: var(--border-strong);
+		stroke-width: 1;
+	}
+
+	/* La coloca el visor en la jugada actual. */
+	.cursor {
+		visibility: hidden;
+		stroke: var(--accent);
+		stroke-width: 2;
+	}
+
+	.cursor[data-visible] {
+		visibility: visible;
+	}
+
+	.hit {
+		fill: transparent;
+	}
+
+	@media (scripting: enabled) {
+		.hit {
+			cursor: pointer;
+		}
+
+		.hit:hover {
+			fill: var(--accent);
+			fill-opacity: 0.2;
+		}
+	}
+
+	figcaption {
+		margin-top: var(--space-1);
+		font-size: var(--text-xs);
+	}
+</style>

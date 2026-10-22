@@ -1,0 +1,528 @@
+---
+// Visor de partida. El servidor pinta la lista de jugadas (se lee sin JS);
+// el custom element <visor-partida> añade tablero, navegación y motor.
+import '@lichess-org/chessground/assets/chessground.base.css'
+import './board.css'
+import { moveList } from '../../lib/chess/movelist'
+import { toViewerNodes, type GameTree } from '../../lib/chess/movetree'
+import { formatResult } from '../../lib/format'
+import Icon from '../Icon.astro'
+import PlayerName from '../PlayerName.astro'
+import EvalChart from './EvalChart.astro'
+import MoveLine from './MoveLine.astro'
+import PanelMotor from './PanelMotor.astro'
+
+interface Side {
+	name: string
+	fideId: number | null
+	elo: number | null
+	title?: string | null
+}
+
+/**
+ * Lo que va dentro (la barra de acciones de la página) se pinta debajo, a
+ * todo el ancho, y dentro del elemento: así sus botones de copiar llegan al
+ * mismo manejador que los del tablero y saben la jugada y el lado.
+ */
+interface Props {
+	tree: GameTree
+	/** PGN de la partida, para copiarlo (el mismo que se descarga). */
+	pgn: string
+	white: Side
+	black: Side
+	result: string
+	/** Lado que queda abajo al abrir la partida. */
+	orientation: 'white' | 'black'
+}
+
+const { tree, pgn, white, black, result, orientation } = Astro.props
+const items = moveList(tree)
+// "<" escapado: el JSON va dentro de un <script> y no puede cerrarlo. El PGN
+// va aquí y no se pide al copiar: tras esperar a la red, Safari ya no deja
+// escribir en el portapapeles.
+const data = JSON.stringify({ nodes: toViewerNodes(tree), pgn: pgn.trim() }).replace(/</g, '\\u003c')
+const lastPly = tree.nodes.reduce((max, n) => Math.max(max, n.ply), 0)
+// Los atajos de las variantes (Mayús+← y Mayús+→), sólo donde las hay.
+const hasVariations = tree.nodes.some((n) => n.children.length > 1)
+---
+
+<visor-partida class="visor" data-orientation={orientation}>
+	<div class="board-col">
+		<div class="player bar-black">
+			<span class="dot black" aria-hidden="true"></span>
+			<PlayerName name={black.name} fideId={black.fideId} elo={black.elo} title={black.title} />
+			<span class="clock" data-clock="black"></span>
+		</div>
+		{/* El tablero, fuera del árbol de accesibilidad: chessground pinta las
+		    coordenadas como texto («8 7 6 … a b c»), y la posición ya la dicen la
+		    lista y la jugada actual. Dentro no hay nada que enfocar. */}
+		<div class="board-row">
+			<div class="eval" aria-hidden="true"><div class="eval-fill"></div></div>
+			<div class="board-box" aria-hidden="true"><div class="board"></div></div>
+		</div>
+		<div class="player bar-white">
+			<span class="dot white" aria-hidden="true"></span>
+			<PlayerName name={white.name} fideId={white.fideId} elo={white.elo} title={white.title} />
+			<span class="clock" data-clock="white"></span>
+		</div>
+		{/* group y no toolbar: una barra de herramientas promete moverse entre sus
+		    botones con las flechas, y aquí las flechas cambian de jugada. */}
+		<div class="controls" role="group" aria-label="Navegación por la partida">
+			<button type="button" class="button secondary square" data-action="first" title="Inicio (↑)" aria-label="Ir al inicio">
+				<Icon name="first" />
+			</button>
+			<button
+				type="button"
+				class="button secondary square"
+				data-action="prev"
+				title={hasVariations ? 'Anterior (←). Mayús+←: salir de la variante' : 'Anterior (←)'}
+				aria-label="Jugada anterior"
+			>
+				<Icon name="prev" />
+			</button>
+			{/* La jugada actual: con la lista debajo del tablero, no se veía cuál era. */}
+			<output class="current num" aria-live="polite" data-current></output>
+			<button
+				type="button"
+				class="button secondary square"
+				data-action="next"
+				title={hasVariations ? 'Siguiente (→). Mayús+→: entrar en la variante' : 'Siguiente (→)'}
+				aria-label="Jugada siguiente"
+			>
+				<Icon name="next" />
+			</button>
+			<button type="button" class="button secondary square" data-action="last" title="Final (↓)" aria-label="Ir al final">
+				<Icon name="last" />
+			</button>
+			<button type="button" class="button secondary square" data-action="flip" title="Girar el tablero (F)" aria-label="Girar el tablero">
+				<Icon name="flip" />
+			</button>
+			<span class="copy">
+				<button type="button" class="button secondary square" data-action="copy-fen" title="Copiar la posición en FEN">FEN</button>
+				<span class="copied" role="status"></span>
+			</span>
+		</div>
+	</div>
+
+	<div class="side">
+		<PanelMotor />
+
+		{/* El gráfico y la lista son la misma partida jugada a jugada (pulsar en el
+		    gráfico va a esa jugada): un solo recuadro. */}
+		<div class="analysis panel">
+			<EvalChart tree={tree} />
+			{/* section y no div: con nombre es una región, y un div ignora aria-label. */}
+			<section class="moves" aria-label="Jugadas">
+				{tree.comments.map((text) => <p class="comment intro">{text}</p>)}
+				<MoveLine items={items} />
+				<span class="final-result result">{formatResult(result)}</span>
+			</section>
+		</div>
+		{
+			tree.illegalPly !== undefined && (
+				<p class="note">
+					La partida de la fuente tiene una jugada ilegal en la jugada {Math.ceil(tree.illegalPly / 2)}; se muestra
+					hasta ahí.
+				</p>
+			)
+		}
+		{lastPly === 0 && <p class="muted">La fuente no incluye las jugadas de esta partida.</p>}
+	</div>
+
+	{
+		Astro.slots.has('default') && (
+			<div class="below">
+				<slot />
+			</div>
+		)
+	}
+
+	<script type="application/json" data-game set:html={data} />
+</visor-partida>
+
+{/* Con src y no con import: así el código de navegador queda fuera del
+    programa de TypeScript del servidor (ver src/client/tsconfig.json). */}
+<script src="../../client/visor/visor-partida.ts"></script>
+
+<style>
+	/*
+	 * La columna del tablero (barras, tablero y botones) cabe a lo alto de la
+	 * pantalla: si no, los botones quedaban bajo el pliegue (a 750×742 el
+	 * tablero medía 710 px). Con la cabecera de la web en una fila, los nombres
+	 * en una línea y los datos del torneo en dos (el torneo y la apertura suelen
+	 * ser largos), el tablero empieza a unos 223 px y debajo lleva 77 px de
+	 * barra y botones; mide 8 px menos que la columna (el hueco de la barra del
+	 * motor). 19rem deja los botones a la vista al cargar, con algo de margen.
+	 * En el móvil la cabecera y el título ocupan más: manda el ancho, y el visor
+	 * entero cabe tras desplazar un poco. --board-min como mínimo, como el
+	 * explorador del repertorio.
+	 *
+	 * El lateral (motor, gráfico y jugadas) no baja de 20rem: el tablero cede lo
+	 * que falte. Con 16rem, en una ventana estrecha y alta (900×900) el tablero
+	 * se quedaba en su máximo y el lateral en 256 px, y cada variante del motor
+	 * sólo enseñaba tres medias jugadas.
+	 *
+	 * Dos columnas desde 54rem y, en horizontal, desde 40rem, lo que piden el
+	 * tablero mínimo (16rem), el hueco y el lateral (20rem) con el margen de
+	 * la página. Sólo por el ancho, un móvil en horizontal (844×390) iba en una
+	 * columna: el motor y la lista quedaban 300 px por debajo del tablero, con
+	 * medio ancho vacío. Las cuatro consultas de 54rem de este archivo llevan
+	 * la misma condición (o su complemento exacto, para una columna).
+	 */
+	.visor {
+		--board-room: max(var(--board-min), 100svh - 19rem);
+		display: grid;
+		grid-template-columns: minmax(0, min(var(--board-room), var(--board-max))) minmax(20rem, 1fr);
+		gap: var(--space-5);
+		align-items: start;
+	}
+
+	/* En una columna, sin pasar del ancho y centrada. */
+	@media (width < 40rem), (width < 54rem) and (orientation: portrait) {
+		.visor {
+			grid-template-columns: minmax(0, 1fr);
+		}
+
+		.board-col {
+			inline-size: min(var(--board-room), 100%);
+			justify-self: center;
+		}
+	}
+
+	.board-col {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-2);
+	}
+
+	/*
+	 * Sin JavaScript sólo queda la lista de jugadas, a todo el ancho. Con
+	 * JavaScript el hueco del tablero está desde el primer pintado (no esperando
+	 * a que se defina el elemento), para que al montarse no empuje la lista
+	 * hacia abajo. Detrás de .board-col, que con la misma especificidad ganaría.
+	 */
+	@media (scripting: none) {
+		.visor {
+			grid-template-columns: minmax(0, 1fr);
+		}
+
+		.board-col {
+			display: none;
+		}
+	}
+
+	.bar-black {
+		order: 1;
+	}
+
+	.board-row {
+		order: 2;
+	}
+
+	.bar-white {
+		order: 3;
+	}
+
+	.controls {
+		order: 4;
+	}
+
+	/* Con el tablero girado, las blancas arriba. */
+	visor-partida[data-orientation='black'] .bar-white {
+		order: 1;
+	}
+
+	visor-partida[data-orientation='black'] .bar-black {
+		order: 3;
+	}
+
+	.player {
+		display: flex;
+		align-items: center;
+		gap: var(--space-2);
+		font-size: var(--text-s);
+	}
+
+	/* El color dice el bando: en alto contraste se queda (si no, los dos
+	   puntos serían iguales). */
+	.dot {
+		inline-size: 0.75rem;
+		block-size: 0.75rem;
+		border-radius: var(--radius-round);
+		border: 1px solid var(--border-strong);
+		forced-color-adjust: none;
+	}
+
+	.dot.white {
+		background: var(--eval-white);
+	}
+
+	.dot.black {
+		background: var(--eval-black);
+	}
+
+	.clock {
+		margin-inline-start: auto;
+		padding: 0 var(--space-2);
+		border-radius: var(--radius-s);
+		background: var(--surface-muted);
+		font-family: var(--font-mono);
+	}
+
+	.clock:empty {
+		display: none;
+	}
+
+	.board-row {
+		display: grid;
+		grid-template-columns: auto minmax(0, 1fr);
+		gap: var(--space-2);
+	}
+
+	/* Columnas explícitas: con el motor apagado la barra no se muestra y, si
+	   se colocasen solos, el tablero caería en la columna auto (ancho 0). */
+	.eval {
+		grid-column: 1;
+	}
+
+	/*
+	 * Deslizar sobre el tablero cambia de jugada (visor-partida.ts). El
+	 * navegador se queda con el desplazamiento vertical y el zoom; un gesto
+	 * horizontal ya no es suyo y llega entero como eventos de puntero, sin
+	 * pointercancel. Chessground no escucha el tacto: el tablero es viewOnly.
+	 */
+	.board-box {
+		grid-column: 2;
+		touch-action: pan-y pinch-zoom;
+	}
+
+	/*
+	 * El blanco de la barra es casi el color de la página: sin borde, la parte
+	 * blanca no se distingue. Borde y no sombra interior: la sombra quedaría
+	 * debajo de .eval-fill y la taparía. Sus colores son la evaluación: en
+	 * alto contraste se quedan.
+	 */
+	.eval {
+		display: none;
+		position: relative;
+		inline-size: 0.875rem;
+		border: 1px solid var(--border-strong);
+		border-radius: var(--radius-s);
+		background: var(--eval-black);
+		overflow: hidden;
+		forced-color-adjust: none;
+	}
+
+	/* Marca del 50 %: igualdad. Va después de .eval-fill y se pinta encima. */
+	.eval::after {
+		content: '';
+		position: absolute;
+		inset-inline: 0;
+		inset-block-start: 50%;
+		block-size: 2px;
+		translate: 0 -50%;
+		background: var(--border-strong);
+	}
+
+	visor-partida[data-engine='on'] .eval {
+		display: block;
+	}
+
+	visor-partida[data-orientation='black'] .eval {
+		transform: rotate(180deg);
+	}
+
+	.eval-fill {
+		position: absolute;
+		inset-inline: 0;
+		inset-block-end: 0;
+		block-size: calc(50% + 50% * var(--eval, 0));
+		background: var(--eval-white);
+	}
+
+	@media (prefers-reduced-motion: no-preference) {
+		.eval-fill {
+			transition: block-size 0.3s ease-out;
+		}
+	}
+
+	/*
+	 * Botones cuadrados de 40 px (.button.square): con la jugada entre ellos, la
+	 * fila cabe a 375 px. Con el tablero mínimo, girar y FEN bajan a otra línea.
+	 */
+	.controls {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: var(--space-1);
+		font-size: var(--text-s);
+	}
+
+	/*
+	 * Ancho que no depende del texto, para que ▶ y ⏭ no se muevan al cambiar
+	 * de jugada: lo que deje la fila, entre 4.75rem (caben «45.exf8=Q+» y
+	 * «112…Qxe8+») y 8rem. Es una región viva: con un lector de pantalla, ← y
+	 * → dicen la jugada (aria-live explícito: no todos anuncian un <output>).
+	 */
+	.current {
+		flex: 1 0 4.75rem;
+		max-inline-size: 8rem;
+		overflow: hidden;
+		font-weight: var(--weight-strong);
+		text-align: center;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	/*
+	 * Girar y FEN, a la derecha de la navegación. El aviso de «FEN copiado»
+	 * (.copied, global) tapa la barra del jugador de abajo, no el tablero.
+	 */
+	[data-action='flip'] {
+		margin-inline-start: auto;
+	}
+
+	/* Flex y no grid: en dos columnas, la lista se queda con lo que sobre. */
+	.side {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-4);
+		min-inline-size: 0;
+	}
+
+	.analysis {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-3);
+	}
+
+	/* El relleno deja sitio al anillo de foco de las jugadas que empiezan línea,
+	   que la lista, con su scroll, recortaba por la izquierda. */
+	.moves {
+		max-block-size: min(70vh, 36rem);
+		padding-inline: var(--space-1);
+		overflow-y: auto;
+		line-height: 2;
+	}
+
+	/*
+	 * En una columna la lista va en mitad de la página: al llegar a su final,
+	 * el gesto sigue desplazando la página hacia las acciones de debajo. En
+	 * dos columnas no: la página ya está entera a la vista.
+	 */
+	@media (width < 40rem), (width < 54rem) and (orientation: portrait) {
+		.moves {
+			max-block-size: 45vh;
+		}
+	}
+
+	@media (width >= 54rem), (width >= 40rem) and (orientation: landscape) {
+		.moves {
+			overscroll-behavior: contain;
+		}
+	}
+
+	/*
+	 * En dos columnas la lista acaba donde el tablero: si no, bajaba más que él
+	 * y la jugada actual (al cargar, la última) quedaba bajo el pliegue. Con
+	 * block-size: 0 ni el recuadro ni la lista aportan su alto a la fila, que
+	 * mide lo que la columna del tablero o, si es más, el motor, el gráfico y
+	 * 12rem de lista (el mínimo automático del recuadro, que no recorta). La
+	 * columna lateral se estira hasta ahí y la lista llena lo que quede. Al
+	 * encender el motor, su panel crece y la lista encoge lo mismo. Sin
+	 * JavaScript no hay tablero y queda la de arriba.
+	 */
+	@media (width >= 54rem) and (scripting: enabled), (width >= 40rem) and (orientation: landscape) and (scripting: enabled) {
+		.side {
+			align-self: stretch;
+		}
+
+		.analysis {
+			flex-grow: 1;
+			block-size: 0;
+		}
+
+		.moves {
+			flex-grow: 1;
+			block-size: 0;
+			min-block-size: 12rem;
+			max-block-size: none;
+		}
+	}
+
+	.moves :global(.num-label) {
+		margin-inline: var(--space-1) 0;
+		color: var(--text-muted);
+		font-variant-numeric: tabular-nums;
+	}
+
+	/*
+	 * Zona táctil de 24 px de ancho como mínimo (WCAG 2.5.8): «f3» medía 22 y
+	 * va pegada a la siguiente. En rem, para que las variantes, más pequeñas,
+	 * también lleguen. Alto ya tienen: el de la línea.
+	 */
+	.moves :global(.move) {
+		min-inline-size: 1.5rem;
+		padding: 0 var(--space-1);
+		border: 0;
+		border-radius: var(--radius-s);
+		background: none;
+		color: var(--text);
+		font-weight: var(--weight-strong);
+		cursor: pointer;
+	}
+
+	.moves :global(.move:hover) {
+		background: var(--surface-hover);
+	}
+
+	.moves :global(.move[aria-current='true']) {
+		background: var(--accent);
+		color: var(--text-inverse);
+	}
+
+
+	/* En alto contraste el fondo de acento desaparece: los colores de selección
+	   del sistema, sin ajuste (como en Segmented.astro). */
+	@media (forced-colors: active) {
+		.moves :global(.move[aria-current='true']) {
+			forced-color-adjust: none;
+			background: Highlight;
+			color: HighlightText;
+		}
+	}
+
+	.moves :global(.comment) {
+		margin-inline: var(--space-1);
+		color: var(--text-muted);
+		font-style: italic;
+	}
+
+	.moves :global(.comment.intro) {
+		display: block;
+		margin: 0 0 var(--space-2);
+	}
+
+	.moves :global(.variation) {
+		display: block;
+		margin-block: var(--space-1);
+		margin-inline-start: var(--space-3);
+		padding-inline-start: var(--space-2);
+		border-inline-start: 2px solid var(--border);
+		font-size: var(--text-s);
+		line-height: 1.8;
+	}
+
+	.moves :global(.variation .move) {
+		font-weight: normal;
+	}
+
+	.final-result {
+		margin-inline-start: var(--space-2);
+	}
+
+	/* La barra de acciones de la página, debajo del tablero y la lista. */
+	.below {
+		grid-column: 1 / -1;
+	}
+</style>

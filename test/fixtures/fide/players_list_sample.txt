@@ -1,0 +1,21 @@
+ID Number      Name                                                         Fed Sex Tit  WTit OTit           FOA SRtng SGm SK RRtng RGm Rk BRtng BGm BK B-day Flag
+97857671       A A M Fegalu, Gokebihes                                      BAN M                                0     0   0  0     0   0  0     0   0  1977      
+90447830       A Pavip Okagad, Ziza                                         EGY F                                0     0   0  0     0   0  0     0   0  2010  w   
+938893667      A Erupadoz                                                   IND M                                0     0   0  0     0   0  0     0   0  2016      
+958095016      A Etikobe Jifes                                              IND M                                0     0   0  0     0   0  0     0   0  2016      
+99016344       A Gitu                                                       IND M                                0     0   0  0     0   0  0     0   0  1997      
+925760781      A Punu                                                       IND M                                0     0   0  0     0   0  0     0   0  2016      
+9960119        Nevunenaman Lefop, Uzeba                                     ESP M                                1800  0   20 0     0   0  0     0   0  1936  i   
+9963768        Vobifuk, Ejomohalu                                           ESP M                                2021  0   40 0     0   0  0     0   0  1933  i   
+962168737      Jes Erucec, Fiso                                             ESP M                                1800  0   40 1743  0   40 1765  0   20 2002      
+90700077       Muro Sedali, Nutusa Puvofof                                  ESP F                                1763  8   40 1630  0   40 1645  0   40 2015  w   
+93336925       Muro Galidaf, Buko                                           ESP M                                0     0   0  0     0   0  1659  0   40 2012      
+99358162       Muro Agigedu, Rimuvi                                         ESP F                                1447  0   40 1594  0   20 0     0   0  1975  wi  
+97182693       Muro Ihokovud, Bofeda                                        ESP M                                1577  0   40 0     0   0  0     0   0  2005  i   
+949371928      Muro Otigiz, Dudarom                                         ESP F                                0     0   0  1459  0   40 0     0   0  2017  w   
+94904259       Muro Zapoge, Lidono                                          ESP M                                1756  0   20 1761  4   20 1663  0   20 1986      
+92289713       Muro Ikefar, Samat Otahec                                    ESP M                                1531  0   40 0     0   0  0     0   0  1968  i   
+97937734       Muro Bupugoc, Vuratoz                                        ESP M             NA                 1804  2   20 1756  0   20 1690  0   20 1980      
+92734453       Muro Nehahovu, Sociv                                         ESP M                                1473  0   20 0     0   0  0     0   0  1949  i   
+9261099        Muro Zizapavu, Omuvac                                        ESP M                                1847  0   20 1779  0   20 1913  0   20 1989      
+96435462       Muro Datolo-Suladol, Enar                                    ESP M                                1609  0   20 0     0   0  0     0   0  1951  i   

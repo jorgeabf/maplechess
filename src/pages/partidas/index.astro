@@ -1,0 +1,177 @@
+---
+import { env } from 'cloudflare:workers'
+import Emparejamientos from '../../components/Emparejamientos.astro'
+import GamesTable from '../../components/GamesTable.astro'
+import Icon from '../../components/Icon.astro'
+import Pagination from '../../components/Pagination.astro'
+import RitmoSelect from '../../components/RitmoSelect.astro'
+import Base from '../../layouts/Base.astro'
+import { addDays, madridDate } from '../../lib/dates'
+import { exportLimit, getTopRecentGames, searchGames } from '../../lib/db/games'
+import { getTopUpcomingPairings } from '../../lib/db/pairings'
+import { formatDate, formatNumber } from '../../lib/format'
+import { gameFilters, gameSearchKind } from '../../lib/params'
+
+const params = Astro.url.searchParams
+const { page, ...filters } = gameFilters(params)
+const kind = gameSearchKind(filters)
+
+// Sin búsqueda: las mesas de más nivel de las próximas rondas y las partidas
+// de más nivel de los últimos 7 días, hoy incluido.
+const empty = kind === 'empty'
+const weekFrom = addDays(madridDate(new Date()), -6)
+const [result, upcoming, week] = await Promise.all([
+	kind === 'search' ? searchGames(env.DB, filters, page) : null,
+	empty ? getTopUpcomingPairings(env.DB) : [],
+	empty ? getTopRecentGames(env.DB, weekFrom) : null
+])
+// Un grupo por torneo, en el orden de su mejor mesa; dentro, por número de mesa.
+const upcomingGroups = [...Map.groupBy(upcoming, (m) => m.tournamentId).values()].map((pairings) => {
+	const [{ tournamentId: id, tournamentName: name, round, startsAt }] = pairings
+	return { tournament: { id, name, round, startsAt }, pairings: pairings.sort((a, b) => a.board - b.board) }
+})
+
+const pgnQuery = new URLSearchParams(params)
+pgnQuery.delete('p')
+// La descarga lleva las mismas que la búsqueda: con «más de 1.000», las 1.000 primeras.
+const pgnLimit = exportLimit(filters)
+const advancedOpen = Boolean(filters.eco || filters.from || filters.to || filters.result || filters.timeClass)
+---
+
+<Base title="Partidas" section="partidas" noindex={kind !== 'empty'}>
+	<h1>Partidas</h1>
+	<form method="get" role="search" class="filters form-row">
+		<label class="grow">
+			Jugador
+			<input name="jugador" type="search" value={filters.player} placeholder="Apellidos o nombre" autocomplete="off" />
+		</label>
+		<label>
+			Con
+			<select name="color">
+				<option value="any">Cualquier color</option>
+				<option value="white" selected={filters.color === 'white'}>Blancas</option>
+				<option value="black" selected={filters.color === 'black'}>Negras</option>
+			</select>
+		</label>
+		<label class="grow">
+			Rival
+			<input name="rival" type="search" value={filters.opponent} placeholder="Opcional" autocomplete="off" />
+		</label>
+		<button class="button" type="submit">Buscar</button>
+		<details open={advancedOpen}>
+			<summary>Más filtros</summary>
+			<div class="form-row">
+				<label>
+					Resultado
+					<select name="resultado">
+						<option value="">Cualquiera</option>
+						<option value="1-0" selected={filters.result === '1-0'}>1-0</option>
+						<option value="1/2-1/2" selected={filters.result === '1/2-1/2'}>½-½</option>
+						<option value="0-1" selected={filters.result === '0-1'}>0-1</option>
+					</select>
+				</label>
+				<RitmoSelect value={filters.timeClass} />
+				<label>
+					ECO
+					<input name="eco" value={filters.eco} placeholder="B90, C…" size="6" maxlength="3" pattern="[A-Ea-e][0-9]{0,2}" />
+				</label>
+				<label>
+					Desde
+					<input name="desde" type="date" value={filters.from} />
+				</label>
+				<label>
+					Hasta
+					<input name="hasta" type="date" value={filters.to} />
+				</label>
+			</div>
+		</details>
+		{filters.tournamentId && <input type="hidden" name="torneo" value={filters.tournamentId} />}
+	</form>
+
+	{
+		empty && (
+			<p class="muted intro">
+				Busca por jugador (y si quieres por rival y color), apertura o fechas. Por ejemplo,{' '}
+				<a href="/partidas?jugador=anton+guijarro&rival=santos+latasa">las partidas entre Antón Guijarro y Santos Latasa</a>,
+				o <a href="/partidas?eco=B9">toda la Najdorf</a> con «B9» en ECO, que abarca de B90 a B99. Para ver todas las
+				partidas de alguien identificado por su FIDE ID, entra en su ficha desde <a href="/jugadores">Jugadores</a>.
+			</p>
+		)
+	}
+	{
+		upcomingGroups.length > 0 && (
+			<section aria-labelledby="pronto">
+				<h2 id="pronto">Se juegan pronto</h2>
+				<p class="muted">
+					Las mesas de más nivel de las próximas rondas emparejadas, como mucho dos por torneo. «Preparar» abre el
+					dossier del jugador con el color que lleva.
+				</p>
+				<Emparejamientos groups={upcomingGroups} />
+			</section>
+		)
+	}
+	{
+		week && week.games.length > 0 && (
+			<section aria-labelledby="semana">
+				<div class="section-head">
+					<h2 id="semana">Partidas de la semana</h2>
+					<a class="button secondary" href={`/partidas?desde=${weekFrom}`}>
+						Ver todas ({formatNumber(week.total)})
+					</a>
+				</div>
+				<p class="muted">Las de ELO medio más alto desde el {formatDate(weekFrom)}, como mucho dos por torneo.</p>
+				<GamesTable games={week.games} />
+			</section>
+		)
+	}
+	{
+		kind === 'refine' && (
+			<p class="note">
+				El color, el ritmo y el resultado sólo afinan una búsqueda: indica también un jugador, un rival, una apertura (ECO)
+				o unas fechas.
+			</p>
+		)
+	}
+
+	{
+		result && (
+			<>
+				<div class="result-head">
+					<Pagination page={result.page} pages={result.pages} total={result.total} capped={result.capped} noun={['partida', 'partidas']} />
+					{result.total > 0 && (
+						<a class="button secondary" href={`/partidas.pgn?${pgnQuery}`} download>
+							<Icon name="download" />
+							<span>
+								Descargar PGN
+								{(result.capped || result.total > pgnLimit) && (
+									<span class="muted"> · primeras {formatNumber(pgnLimit)}</span>
+								)}
+							</span>
+						</a>
+					)}
+				</div>
+				{result.rows.length > 0 ? <GamesTable games={result.rows} /> : <p>No hay partidas con esos filtros.</p>}
+				<Pagination page={result.page} pages={result.pages} total={result.total} capped={result.capped} noun={['partida', 'partidas']} />
+			</>
+		)
+	}
+</Base>
+
+<style>
+	.filters {
+		margin-bottom: var(--space-5);
+	}
+
+	.intro {
+		max-inline-size: var(--reading-width);
+		margin-bottom: var(--space-6);
+	}
+
+	.result-head {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		justify-content: space-between;
+		gap: var(--space-3);
+	}
+</style>

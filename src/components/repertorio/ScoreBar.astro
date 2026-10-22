@@ -1,0 +1,94 @@
+---
+// Ganadas, tablas y perdidas (desde el punto de vista del jugador) como barra,
+// y su puntuación. Los anchos salen de propiedades CSS: no hace falta JS.
+import { score, type Stats } from '../../lib/chess/repertoire'
+import { formatCount, formatNumber, formatPercent } from '../../lib/format'
+
+interface Props {
+	stats: Stats
+}
+
+const { stats } = Astro.props
+const points = score(stats)
+// "Tablas" no tiene singular: "1 tablas".
+const label = `${formatCount(stats.wins, 'ganada', 'ganadas')}, ${formatNumber(stats.draws)} tablas, ${formatCount(stats.losses, 'perdida', 'perdidas')}`
+---
+
+<span class="score-bar">
+	<span
+		class="bar"
+		title={label}
+		aria-hidden="true"
+		style={{ '--wins': stats.wins, '--draws': stats.draws, '--losses': stats.losses }}
+	>
+		{/* Sólo los tramos con partidas: uno vacío dejaría un hueco doble. */}
+		{stats.wins > 0 && <span class="win" />}
+		{stats.draws > 0 && <span class="draw" />}
+		{stats.losses > 0 && <span class="loss" />}
+	</span>
+	<span class="points num">{points === null ? '—' : formatPercent(points)}</span>
+	<span class="visually-hidden">{label}</span>
+</span>
+
+<style>
+	/*
+	 * Rejilla y no flex: la pista de la barra aporta 3rem al min-content y 7rem
+	 * al max-content, así que en una tabla estrecha encoge en vez de forzar el
+	 * scroll, y con sitio mide 7rem.
+	 */
+	.score-bar {
+		display: inline-grid;
+		grid-template-columns: minmax(3rem, 7rem) auto;
+		align-items: center;
+		gap: var(--space-2);
+	}
+
+	/*
+	 * Los colores son el reparto: en alto contraste el sistema los quitaría.
+	 * Ganadas y perdidas tienen la misma luminosidad y con daltonismo se
+	 * confunden; las tablas van atenuadas (--result-draw-soft), así que se
+	 * distinguen de las dos aunque falte un tramo. El hueco entre tramos (el
+	 * fondo de la barra) marca dónde acaba cada uno, y el orden es siempre
+	 * ganadas, tablas, perdidas.
+	 */
+	.bar {
+		display: flex;
+		gap: 2px;
+		block-size: 0.75rem;
+		border-radius: var(--radius-s);
+		background: var(--surface-muted);
+		overflow: hidden;
+		forced-color-adjust: none;
+	}
+
+	.bar > span {
+		flex-basis: 0;
+	}
+
+	.win {
+		flex-grow: var(--wins);
+		background: var(--result-win);
+	}
+
+	.draw {
+		flex-grow: var(--draws);
+		background: var(--result-draw-soft);
+	}
+
+	.loss {
+		flex-grow: var(--losses);
+		background: var(--result-loss);
+	}
+
+	.points {
+		min-inline-size: 3rem;
+		text-align: end;
+	}
+
+	/* Los navegadores no imprimen fondos salvo que se pida: la barra es fondo. */
+	@media print {
+		.bar {
+			print-color-adjust: exact;
+		}
+	}
+</style>

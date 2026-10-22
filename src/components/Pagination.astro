@@ -1,0 +1,80 @@
+---
+import { formatCount, formatNumber } from '../lib/format'
+import { withParams } from '../lib/params'
+import Icon from './Icon.astro'
+
+interface Props {
+	page: number
+	pages: number
+	total: number
+	/** Nombre del recuento en singular y plural: ['partida', 'partidas']. */
+	noun: readonly [singular: string, plural: string]
+	/** Id de la sección de la lista: los enlaces vuelven a ella y no al principio de la página. */
+	anchor?: string
+	/** El recuento llegó al tope (Page.capped): hay más de `total`, y las páginas acaban ahí. */
+	capped?: boolean
+}
+
+const { page, pages, total, noun, anchor, capped = false } = Astro.props
+const url = Astro.url
+const link = (p: number) => `${withParams(url, { p: p === 1 ? null : p })}${anchor ? `#${anchor}` : ''}`
+---
+
+<nav class="pagination" aria-label="Paginación">
+	<p class="count muted">{capped ? `Más de ${formatNumber(total)} ${noun[1]}` : formatCount(total, ...noun)}</p>
+	{
+		pages > 1 && (
+			<div class="pages">
+				{/*
+					Los chevrones del visor, con «Página 1 de 250» entre ellos. En la
+					primera y en la última, el que no lleva a ninguna parte se queda
+					inactivo en su sitio: si no, el texto cambiaba de posición.
+				*/}
+				{page > 1 ? (
+					<a class="button secondary square" href={link(page - 1)} rel="prev" aria-label="Página anterior" title="Página anterior">
+						<Icon name="prev" />
+					</a>
+				) : (
+					<span class="button secondary square" aria-disabled="true" aria-hidden="true">
+						<Icon name="prev" />
+					</span>
+				)}
+				<span class="muted num">
+					Página {page} de {formatNumber(pages)}
+				</span>
+				{page < pages ? (
+					<a class="button secondary square" href={link(page + 1)} rel="next" aria-label="Página siguiente" title="Página siguiente">
+						<Icon name="next" />
+					</a>
+				) : (
+					<span class="button secondary square" aria-disabled="true" aria-hidden="true">
+						<Icon name="next" />
+					</span>
+				)}
+			</div>
+		)
+	}
+</nav>
+
+<style>
+	.pagination {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		justify-content: space-between;
+		gap: var(--space-3);
+		margin-block: var(--space-4);
+	}
+
+	.count {
+		margin: 0;
+		font-size: var(--text-s);
+	}
+
+	.pages {
+		display: flex;
+		align-items: center;
+		gap: var(--space-3);
+		font-size: var(--text-s);
+	}
+</style>

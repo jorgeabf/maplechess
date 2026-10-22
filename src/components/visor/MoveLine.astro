@@ -1,0 +1,36 @@
+---
+// Una línea de jugadas; se llama a sí misma para las variantes. Las jugadas
+// salen fuera del tabulador: el visor deja en él sólo la actual
+// (markCurrent en visor-partida.ts). Sin JavaScript no hacen nada.
+import type { MoveItem } from '../../lib/chess/movelist'
+
+interface Props {
+	items: MoveItem[]
+}
+
+const { items } = Astro.props
+---
+
+{
+	items.map((item) => {
+		switch (item.kind) {
+			case 'number':
+				return <span class="num-label">{item.text}</span>
+			case 'move':
+				return (
+					<button type="button" class="move" data-node={item.id} tabindex="-1">
+						{item.san}
+						{item.glyphs && <span class="glyph">{item.glyphs}</span>}
+					</button>
+				)
+			case 'comment':
+				return <span class="comment">{item.text}</span>
+			case 'variation':
+				return (
+					<span class="variation">
+						<Astro.self items={item.items} />
+					</span>
+				)
+		}
+	})
+}

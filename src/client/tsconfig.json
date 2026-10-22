@@ -1,0 +1,11 @@
+{
+	// Código que se ejecuta en el navegador. Programa de TypeScript aparte del
+	// resto del proyecto: allí están los tipos globales del runtime de Workers
+	// (su Element de HTMLRewriter choca con el del DOM); aquí sólo DOM.
+	"extends": "astro/tsconfigs/strict",
+	"compilerOptions": {
+		"lib": ["ESNext", "DOM", "DOM.Iterable"],
+		"types": []
+	},
+	"include": ["./**/*.ts"]
+}

@@ -1,0 +1,943 @@
+// Escrituras de la ingesta en D1.
+//
+// D1 admite 100 parámetros por sentencia, así que las filas se mandan como un
+// único parámetro JSON y se insertan con INSERT … SELECT … FROM json_each(?).
+// Cada parámetro puede ocupar hasta 2 MB: los lotes se cortan por tamaño.
+import { normalizeName } from '../lib/chess/names'
+import { madridYear } from '../lib/dates'
+import type { FidePlayer } from './fide/parse'
+import type { DerivedColumns, GameRow, Participant, TournamentContext } from './games'
+import type { Pairing, PairedPlayer, TournamentPlayer, TournamentType } from './info64/parse'
+import { anonymizePgn, isRetired, publicName, RETIRED_NAME, retiredKey, type Retired } from './nombres'
+
+const MAX_JSON_BYTES = 1_000_000
+
+/**
+ * Personas que han pedido que se las retire (tabla retiradas). Es pequeña: se
+ * lee entera en cada escritura que la necesita.
+ */
+export async function loadRetired(db: D1Database): Promise<Retired> {
+	const { results } = await db.prepare('SELECT fide_id AS fideId, nombre FROM retiradas').all<{ fideId: number; nombre: string }>()
+	return { ids: new Set(results.map((r) => r.fideId)), names: new Set(results.map((r) => retiredKey(r.nombre))) }
+}
+
+/** Parte las filas en lotes cuyo JSON no pase de maxBytes. */
+export function chunkByJsonSize<T>(rows: T[], maxBytes = MAX_JSON_BYTES): string[] {
+	return [...jsonChunks(rows, maxBytes)]
+}
+
+/** Los lotes de chunkByJsonSize de uno en uno, para no tenerlos todos en memoria a la vez. */
+export function* jsonChunks<T>(rows: Iterable<T>, maxBytes = MAX_JSON_BYTES): Generator<string> {
+	const encoder = new TextEncoder()
+	let current: string[] = []
+	let size = 2
+	for (const row of rows) {
+		const json = JSON.stringify(row)
+		const bytes = encoder.encode(json).length + 1
+		if (current.length > 0 && size + bytes > maxBytes) {
+			yield `[${current.join(',')}]`
+			current = []
+			size = 2
+		}
+		current.push(json)
+		size += bytes
+	}
+	if (current.length > 0) yield `[${current.join(',')}]`
+}
+
+export interface TournamentInput {
+	source: string
+	key: string
+	type: TournamentType
+	name: string
+	city: string | null
+	startDate: string | null
+	endDate: string | null
+	timeControl: string | null
+	url: string
+	syncedAt: string
+}
+
+/**
+ * Guarda el torneo y devuelve su id. Una lectura que no trae la ciudad, las
+ * fechas o el ritmo (la página cambió o vino a medias) no borra los guardados.
+ */
+export async function upsertTournament(db: D1Database, t: TournamentInput): Promise<number> {
+	const row = await db
+		.prepare(
+			`INSERT INTO tournaments (source, source_key, type, name, city, start_date, end_date, time_control, url, synced_at)
+			VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
+			ON CONFLICT (source, source_key) DO UPDATE SET
+				type = excluded.type,
+				name = excluded.name,
+				city = coalesce(excluded.city, tournaments.city),
+				start_date = coalesce(excluded.start_date, tournaments.start_date),
+				end_date = coalesce(excluded.end_date, tournaments.end_date),
+				time_control = coalesce(excluded.time_control, tournaments.time_control),
+				url = excluded.url,
+				synced_at = excluded.synced_at
+			RETURNING id`
+		)
+		.bind(t.source, t.key, t.type, t.name, t.city, t.startDate, t.endDate, t.timeControl, t.url, t.syncedAt)
+		.first<{ id: number }>()
+	if (!row) throw new Error(`No se pudo guardar el torneo ${t.source}/${t.key}`)
+	return row.id
+}
+
+/**
+ * Sustituye los participantes del torneo (el ranking inicial puede cambiar
+ * entre lecturas). Los nombres, sin el año de los menores, y los retirados,
+ * anonimizados (nombres.ts). Una lista vacía no borra la guardada: es una
+ * página que cambió o vino a medias (un torneo aún sin inscritos no tiene nada
+ * guardado). Devuelve false si se ha conservado una lista guardada, para avisar.
+ */
+export async function replaceParticipations(
+	db: D1Database,
+	tournamentId: number,
+	players: TournamentPlayer[]
+): Promise<boolean> {
+	if (players.length === 0) {
+		const stored = await db.prepare('SELECT 1 FROM participations WHERE tournament_id = ?1 LIMIT 1').bind(tournamentId).first()
+		return stored === null
+	}
+	const year = madridYear(new Date())
+	const retired = await loadRetired(db)
+	const rows = players.map((p) => {
+		if (isRetired(retired, p.fideId, p.name)) {
+			return { ...p, name: RETIRED_NAME, nameNorm: normalizeName(RETIRED_NAME), fideId: null, title: null }
+		}
+		const name = publicName(p.name, year)
+		return { ...p, name, nameNorm: normalizeName(name) }
+	})
+	await db.batch([
+		db.prepare('DELETE FROM participations WHERE tournament_id = ?1').bind(tournamentId),
+		...chunkByJsonSize(rows).map((json) =>
+			db
+				.prepare(
+					`INSERT INTO participations (tournament_id, team, start_rank, name, name_norm, fide_id, title, fed, rating)
+					SELECT ?1,
+						coalesce(json_extract(value, '$.team'), ''),
+						json_extract(value, '$.startRank'),
+						json_extract(value, '$.name'),
+						json_extract(value, '$.nameNorm'),
+						json_extract(value, '$.fideId'),
+						json_extract(value, '$.title'),
+						json_extract(value, '$.fed'),
+						json_extract(value, '$.rating')
+					FROM json_each(?2)
+					WHERE true
+					ON CONFLICT DO NOTHING`
+				)
+				.bind(tournamentId, json)
+		)
+	])
+	return true
+}
+
+export async function loadParticipants(db: D1Database, tournamentId: number): Promise<Participant[]> {
+	const { results } = await db
+		.prepare(
+			`SELECT name, fide_id AS fideId, rating, title
+			FROM participations WHERE tournament_id = ?1 ORDER BY start_rank`
+		)
+		.bind(tournamentId)
+		.all<Participant>()
+	return results
+}
+
+/** De dónde salen las partidas de un torneo. */
+export interface GamesSource {
+	/** 'info64', 'lichess'… */
+	name: string
+	/** Página de origen cuando no es la del propio torneo (p. ej. la retransmisión). */
+	url: string | null
+}
+
+/**
+ * Guarda las partidas del torneo en una sola transacción: upsert por
+ * (ronda, tablero, seq) para conservar los id, borrado de las que la fuente
+ * ya no publica y actualización del contador y la fuente del torneo.
+ *
+ * Una lectura sin partidas, o con menos de la mitad de las guardadas, no se
+ * guarda: es más probable una página vacía, cortada o con otra forma que un
+ * organizador que retira medio torneo. Las guardadas se quedan, el torneo pasa
+ * por revisado y devuelve false para avisar. Con `replace`, se guarda igual.
+ *
+ * Los jugadores retirados se anonimizan aquí, después de cruzar: el cruce
+ * necesita su FIDE ID y su nombre para saber que son ellos.
+ */
+export async function saveGames(
+	db: D1Database,
+	tournamentId: number,
+	rows: GameRow[],
+	checkedAt: string,
+	source: GamesSource,
+	{ replace = false }: { replace?: boolean } = {}
+): Promise<boolean> {
+	if (!replace) {
+		const stored = await db
+			.prepare('SELECT games_count AS n FROM tournaments WHERE id = ?1')
+			.bind(tournamentId)
+			.first<{ n: number }>()
+		if (stored && stored.n > 0 && rows.length < stored.n / 2) {
+			await markGamesChecked(db, tournamentId, checkedAt)
+			return false
+		}
+	}
+	const retired = await loadRetired(db)
+	const saved = rows.map((row) => withoutRetired(row, retired))
+	// Sin partidas no hay fuente que mostrar.
+	const sourceName = rows.length > 0 ? source.name : null
+	const sourceUrl = rows.length > 0 ? source.url : null
+	await db.batch([
+		...chunkByJsonSize(saved).map((json) =>
+			db
+				.prepare(
+					`INSERT INTO games (tournament_id, round, board, seq, date, white_name, black_name,
+						white_fide_id, black_fide_id, white_elo, black_elo, result, eco, opening, ply_count, opening_moves,
+						time_class, clocks, pgn, seen_at)
+					SELECT ?1,
+						json_extract(value, '$.round'),
+						json_extract(value, '$.board'),
+						json_extract(value, '$.seq'),
+						json_extract(value, '$.date'),
+						json_extract(value, '$.whiteName'),
+						json_extract(value, '$.blackName'),
+						json_extract(value, '$.whiteFideId'),
+						json_extract(value, '$.blackFideId'),
+						json_extract(value, '$.whiteElo'),
+						json_extract(value, '$.blackElo'),
+						json_extract(value, '$.result'),
+						json_extract(value, '$.eco'),
+						json_extract(value, '$.opening'),
+						json_extract(value, '$.plyCount'),
+						json_extract(value, '$.openingMoves'),
+						json_extract(value, '$.timeClass'),
+						json_extract(value, '$.clocks'),
+						json_extract(value, '$.pgn'),
+						?2
+					FROM json_each(?3)
+					WHERE true
+					ON CONFLICT (tournament_id, round, board, seq) DO UPDATE SET
+						date = excluded.date,
+						white_name = excluded.white_name,
+						black_name = excluded.black_name,
+						white_fide_id = excluded.white_fide_id,
+						black_fide_id = excluded.black_fide_id,
+						white_elo = excluded.white_elo,
+						black_elo = excluded.black_elo,
+						result = excluded.result,
+						eco = excluded.eco,
+						opening = excluded.opening,
+						ply_count = excluded.ply_count,
+						opening_moves = excluded.opening_moves,
+						time_class = excluded.time_class,
+						clocks = excluded.clocks,
+						pgn = excluded.pgn,
+						seen_at = excluded.seen_at`
+				)
+				.bind(tournamentId, checkedAt, json)
+		),
+		db.prepare('DELETE FROM games WHERE tournament_id = ?1 AND seen_at <> ?2').bind(tournamentId, checkedAt),
+		db
+			.prepare(
+				`UPDATE tournaments SET
+					games_count = (SELECT count(*) FROM games WHERE tournament_id = ?1),
+					games_checked_at = ?2,
+					games_source = ?3,
+					games_source_url = ?4
+				WHERE id = ?1`
+			)
+			.bind(tournamentId, checkedAt, sourceName, sourceUrl)
+	])
+	return true
+}
+
+/** Jugadores de una partida, en columnas y en el PGN. */
+interface GamePlayers {
+	whiteName: string
+	blackName: string
+	whiteFideId: number | null
+	blackFideId: number | null
+	pgn: string
+}
+
+/** La partida con los jugadores retirados anonimizados; la misma si no hay ninguno. */
+export function withoutRetired<T extends GamePlayers>(game: T, retired: Retired): T {
+	let result = game
+	if (isRetired(retired, game.whiteFideId, game.whiteName)) {
+		result = { ...result, whiteName: RETIRED_NAME, whiteFideId: null, pgn: anonymizePgn(result.pgn, 'White') }
+	}
+	if (isRetired(retired, game.blackFideId, game.blackName)) {
+		result = { ...result, blackName: RETIRED_NAME, blackFideId: null, pgn: anonymizePgn(result.pgn, 'Black') }
+	}
+	return result
+}
+
+/** Da por revisadas las partidas del torneo sin tocarlas (la fuente no respondió, o la lectura no se guardó). */
+export async function markGamesChecked(db: D1Database, tournamentId: number, checkedAt: string): Promise<void> {
+	await db.prepare('UPDATE tournaments SET games_checked_at = ?2 WHERE id = ?1').bind(tournamentId, checkedAt).run()
+}
+
+export interface StoredGame {
+	id: number
+	whiteName: string
+	blackName: string
+	pgn: string
+	/** Ritmo del torneo, del que se deriva el de la partida. */
+	timeControl: string | null
+}
+
+/** Partidas con id mayor que `after`, en orden de id (lotes del reprocesado). */
+export async function loadGamesForReprocess(db: D1Database, after: number, limit: number): Promise<StoredGame[]> {
+	const { results } = await db
+		.prepare(
+			`SELECT g.id, g.white_name AS whiteName, g.black_name AS blackName, g.pgn, t.time_control AS timeControl
+			FROM games g JOIN tournaments t ON t.id = g.tournament_id
+			WHERE g.id > ?1 ORDER BY g.id LIMIT ?2`
+		)
+		.bind(after, limit)
+		.all<StoredGame>()
+	return results
+}
+
+/**
+ * Cambia los nombres de las partidas indicadas, en las columnas y en el PGN.
+ * El índice FTS sigue a las columnas por su trigger (games_au). Sin recuento:
+ * meta.changes suma también las escrituras del trigger.
+ */
+export async function renameGames(
+	db: D1Database,
+	rows: { id: number; whiteName: string; blackName: string; pgn: string }[]
+): Promise<void> {
+	if (rows.length === 0) return
+	await db.batch(
+		chunkByJsonSize(rows).map((json) =>
+			db
+				.prepare(
+					`UPDATE games SET
+						white_name = json_extract(j.value, '$.whiteName'),
+						black_name = json_extract(j.value, '$.blackName'),
+						pgn = json_extract(j.value, '$.pgn')
+					FROM json_each(?1) AS j
+					WHERE games.id = json_extract(j.value, '$.id')
+						AND (games.white_name IS NOT json_extract(j.value, '$.whiteName')
+							OR games.black_name IS NOT json_extract(j.value, '$.blackName')
+							OR games.pgn IS NOT json_extract(j.value, '$.pgn'))`
+				)
+				.bind(json)
+		)
+	)
+}
+
+/** Nombre de un participante, con la clave de su fila. */
+export interface StoredParticipation {
+	tournamentId: number
+	team: string
+	startRank: number
+	name: string
+}
+
+/**
+ * Participantes cuyo nombre lleva un año de homónimo («…, Nombre 2009», «…,
+ * Nombre 2009 I»). Recorre la tabla entera: sólo lo usa el reprocesado.
+ */
+export async function loadHomonymParticipations(db: D1Database): Promise<StoredParticipation[]> {
+	const { results } = await db
+		.prepare(
+			`SELECT tournament_id AS tournamentId, team, start_rank AS startRank, name FROM participations
+			WHERE name GLOB '*,* [0-9][0-9][0-9][0-9]' OR name GLOB '*,* [0-9][0-9][0-9][0-9] *'`
+		)
+		.all<StoredParticipation>()
+	return results
+}
+
+/** Cambia el nombre de esos participantes (y su forma canónica). */
+export async function renameParticipations(db: D1Database, rows: StoredParticipation[]): Promise<void> {
+	if (rows.length === 0) return
+	const withNorm = rows.map((r) => ({ ...r, nameNorm: normalizeName(r.name) }))
+	await db.batch(
+		chunkByJsonSize(withNorm).map((json) =>
+			db
+				.prepare(
+					`UPDATE participations SET
+						name = json_extract(j.value, '$.name'),
+						name_norm = json_extract(j.value, '$.nameNorm')
+					FROM json_each(?1) AS j
+					WHERE participations.tournament_id = json_extract(j.value, '$.tournamentId')
+						AND participations.team = json_extract(j.value, '$.team')
+						AND participations.start_rank = json_extract(j.value, '$.startRank')
+						AND participations.name IS NOT json_extract(j.value, '$.name')`
+				)
+				.bind(json)
+		)
+	)
+}
+
+/** Nombres de un emparejamiento, con la clave de su fila. */
+export interface StoredPairing {
+	tournamentId: number
+	board: number
+	whiteName: string
+	blackName: string
+}
+
+/** Todos los emparejamientos guardados: son los de la próxima ronda, unos cientos. */
+export async function loadPairingNames(db: D1Database): Promise<StoredPairing[]> {
+	const { results } = await db
+		.prepare(
+			`SELECT tournament_id AS tournamentId, board, white_name AS whiteName, black_name AS blackName FROM pairings`
+		)
+		.all<StoredPairing>()
+	return results
+}
+
+/** Cambia los nombres de esos emparejamientos. */
+export async function renamePairings(db: D1Database, rows: StoredPairing[]): Promise<void> {
+	if (rows.length === 0) return
+	await db.batch(
+		chunkByJsonSize(rows).map((json) =>
+			db
+				.prepare(
+					`UPDATE pairings SET
+						white_name = json_extract(j.value, '$.whiteName'),
+						black_name = json_extract(j.value, '$.blackName')
+					FROM json_each(?1) AS j
+					WHERE pairings.tournament_id = json_extract(j.value, '$.tournamentId')
+						AND pairings.board = json_extract(j.value, '$.board')
+						AND (pairings.white_name IS NOT json_extract(j.value, '$.whiteName')
+							OR pairings.black_name IS NOT json_extract(j.value, '$.blackName'))`
+				)
+				.bind(json)
+		)
+	)
+}
+
+// --- Retirada de datos: lo ya guardado (lo aplica reprocess.ts) ---
+
+/** Borra de players a los retirados: sin fila no tienen ficha. Devuelve cuántos había. */
+export async function deleteRetiredPlayers(db: D1Database): Promise<number> {
+	// Sin recuento por meta.changes: suma también las escrituras del trigger del FTS.
+	const { results } = await db.prepare('SELECT fide_id FROM players WHERE fide_id IN (SELECT fide_id FROM retiradas)').all()
+	if (results.length > 0) await db.prepare('DELETE FROM players WHERE fide_id IN (SELECT fide_id FROM retiradas)').run()
+	return results.length
+}
+
+/**
+ * Anonimiza a los retirados en los participantes guardados: por FIDE ID y,
+ * sin él, por `nameNorms` (las formas canónicas de sus nombres). Lo segundo
+ * recorre la tabla entera: sólo lo usa el reprocesado. Devuelve cuántos cambian.
+ */
+export async function anonymizeRetiredParticipations(db: D1Database, nameNorms: string[]): Promise<number> {
+	const [byId, byName] = await db.batch([
+		db
+			.prepare(
+				`UPDATE participations SET name = ?1, name_norm = ?2, fide_id = NULL, title = NULL
+				WHERE fide_id IN (SELECT fide_id FROM retiradas)`
+			)
+			.bind(RETIRED_NAME, normalizeName(RETIRED_NAME)),
+		db
+			.prepare(
+				`UPDATE participations SET name = ?1, name_norm = ?2, title = NULL
+				WHERE fide_id IS NULL AND name_norm IN (SELECT value FROM json_each(?3))`
+			)
+			.bind(RETIRED_NAME, normalizeName(RETIRED_NAME), JSON.stringify(nameNorms))
+	])
+	return byId.meta.changes + byName.meta.changes
+}
+
+/** Jugadores de una partida guardada, con su id. */
+export interface StoredGamePlayers {
+	id: number
+	whiteName: string
+	blackName: string
+	whiteFideId: number | null
+	blackFideId: number | null
+	pgn: string
+}
+
+const GAME_PLAYERS = `id, white_name AS whiteName, black_name AS blackName,
+	white_fide_id AS whiteFideId, black_fide_id AS blackFideId, pgn`
+
+/**
+ * Partidas en las que puede jugar un retirado: por su FIDE ID (índices
+ * games_white y games_black) y, sin él, por las palabras de su nombre en el FTS
+ * (`matches`, una consulta MATCH por retirado). Quién lo es de verdad lo decide
+ * isRetired; aquí sólo se buscan candidatas, sin repetir.
+ */
+export async function loadRetiredGameCandidates(db: D1Database, matches: string[]): Promise<StoredGamePlayers[]> {
+	const results = await db.batch<StoredGamePlayers>([
+		db.prepare(
+			`SELECT ${GAME_PLAYERS} FROM games WHERE white_fide_id IN (SELECT fide_id FROM retiradas)
+			UNION SELECT ${GAME_PLAYERS} FROM games WHERE black_fide_id IN (SELECT fide_id FROM retiradas)`
+		),
+		...matches.map((match) =>
+			db
+				.prepare(
+					`SELECT ${GAME_PLAYERS} FROM games
+					WHERE id IN (SELECT rowid FROM games_fts WHERE games_fts MATCH ?1)
+						AND (white_fide_id IS NULL OR black_fide_id IS NULL)`
+				)
+				.bind(match)
+		)
+	])
+	const byId = new Map(results.flatMap((r) => r.results).map((g) => [g.id, g]))
+	return [...byId.values()]
+}
+
+/**
+ * Cambia los jugadores de las partidas indicadas: nombres, FIDE ID y PGN. El
+ * índice FTS sigue a los nombres por su trigger (games_au).
+ */
+export async function updateGamePlayers(db: D1Database, rows: StoredGamePlayers[]): Promise<void> {
+	if (rows.length === 0) return
+	await db.batch(
+		chunkByJsonSize(rows).map((json) =>
+			db
+				.prepare(
+					`UPDATE games SET
+						white_name = json_extract(j.value, '$.whiteName'),
+						black_name = json_extract(j.value, '$.blackName'),
+						white_fide_id = json_extract(j.value, '$.whiteFideId'),
+						black_fide_id = json_extract(j.value, '$.blackFideId'),
+						pgn = json_extract(j.value, '$.pgn')
+					FROM json_each(?1) AS j
+					WHERE games.id = json_extract(j.value, '$.id')`
+				)
+				.bind(json)
+		)
+	)
+}
+
+/** Jugadores de un emparejamiento guardado, con la clave de su fila. */
+export interface StoredPairingPlayers {
+	tournamentId: number
+	board: number
+	whiteName: string
+	blackName: string
+	whiteFideId: number | null
+	blackFideId: number | null
+	whiteTitle: string | null
+	blackTitle: string | null
+}
+
+/** Todos los emparejamientos guardados, con sus jugadores: son unos cientos. */
+export async function loadPairingPlayers(db: D1Database): Promise<StoredPairingPlayers[]> {
+	const { results } = await db
+		.prepare(
+			`SELECT tournament_id AS tournamentId, board, white_name AS whiteName, black_name AS blackName,
+				white_fide_id AS whiteFideId, black_fide_id AS blackFideId, white_title AS whiteTitle, black_title AS blackTitle
+			FROM pairings`
+		)
+		.all<StoredPairingPlayers>()
+	return results
+}
+
+/** Cambia los jugadores de esos emparejamientos: nombres, FIDE ID y títulos. */
+export async function updatePairingPlayers(db: D1Database, rows: StoredPairingPlayers[]): Promise<void> {
+	if (rows.length === 0) return
+	await db.batch(
+		chunkByJsonSize(rows).map((json) =>
+			db
+				.prepare(
+					`UPDATE pairings SET
+						white_name = json_extract(j.value, '$.whiteName'),
+						black_name = json_extract(j.value, '$.blackName'),
+						white_fide_id = json_extract(j.value, '$.whiteFideId'),
+						black_fide_id = json_extract(j.value, '$.blackFideId'),
+						white_title = json_extract(j.value, '$.whiteTitle'),
+						black_title = json_extract(j.value, '$.blackTitle')
+					FROM json_each(?1) AS j
+					WHERE pairings.tournament_id = json_extract(j.value, '$.tournamentId')
+						AND pairings.board = json_extract(j.value, '$.board')`
+				)
+				.bind(json)
+		)
+	)
+}
+
+/**
+ * Guarda las columnas derivadas de las partidas indicadas. Las que no cambian
+ * no se reescriben (ni se facturan como filas escritas); devuelve cuántas cambian.
+ */
+export async function updateDerivedColumns(db: D1Database, rows: ({ id: number } & DerivedColumns)[]): Promise<number> {
+	const results = await db.batch(
+		chunkByJsonSize(rows).map((json) =>
+			db
+				.prepare(
+					`UPDATE games SET
+						opening_moves = json_extract(j.value, '$.openingMoves'),
+						time_class = json_extract(j.value, '$.timeClass'),
+						clocks = json_extract(j.value, '$.clocks')
+					FROM json_each(?1) AS j
+					WHERE games.id = json_extract(j.value, '$.id')
+						AND (games.opening_moves IS NOT json_extract(j.value, '$.openingMoves')
+							OR games.time_class IS NOT json_extract(j.value, '$.timeClass')
+							OR games.clocks IS NOT json_extract(j.value, '$.clocks'))`
+				)
+				.bind(json)
+		)
+	)
+	return results.reduce((n, r) => n + r.meta.changes, 0)
+}
+
+/** Las filas de upsertFidePlayers en el año `year`, de una en una, sin los retirados. */
+function* fideRows(players: FidePlayer[], year: number, retired: Retired) {
+	for (const p of players) {
+		if (retired.ids.has(p.fideId)) continue
+		yield { ...p, name: publicName(p.name, year), inactive: p.inactive ? 1 : 0 }
+	}
+}
+
+/**
+ * Guarda los jugadores de la lista FIDE del mes `period` ('YYYY-MM'). Si su
+ * ELO venía de la lista de otro mes, el que tenían pasa a rating_std_prev; si
+ * ya venía de ésta (un reintento, un force en el mismo mes), se conserva.
+ * Los SET leen la fila de antes del UPDATE. A los homónimos que pueden ser
+ * menores se les quita el año del nombre (publicName); lo recuperan en la
+ * primera lista del año en que dejan de serlo. Los retirados no se guardan:
+ * sin fila en players no tienen ficha, y la importación borra la que tuvieran.
+ */
+export async function upsertFidePlayers(
+	db: D1Database,
+	players: FidePlayer[],
+	period: string,
+	seenAt: string
+): Promise<void> {
+	const retired = await loadRetired(db)
+	// Sentencias sueltas y no un batch: un batch entero tiene 30 s como máximo.
+	// Fila a fila y lote a lote: la lista entera en JSON pasa de 16 MB.
+	for (const json of jsonChunks(fideRows(players, Number(period.slice(0, 4)), retired))) {
+		await db
+			.prepare(
+				`INSERT INTO players (fide_id, name, sex, title, birth_year, rating_std, rating_rapid, rating_blitz, inactive, seen_at, rating_list)
+				SELECT json_extract(value, '$.fideId'),
+					json_extract(value, '$.name'),
+					json_extract(value, '$.sex'),
+					json_extract(value, '$.title'),
+					json_extract(value, '$.birthYear'),
+					json_extract(value, '$.ratingStd'),
+					json_extract(value, '$.ratingRapid'),
+					json_extract(value, '$.ratingBlitz'),
+					json_extract(value, '$.inactive'),
+					?1,
+					?2
+				FROM json_each(?3)
+				WHERE true
+				ON CONFLICT (fide_id) DO UPDATE SET
+					name = excluded.name,
+					sex = excluded.sex,
+					title = excluded.title,
+					birth_year = excluded.birth_year,
+					rating_std_prev = CASE WHEN players.rating_list IS NOT excluded.rating_list
+						THEN players.rating_std ELSE players.rating_std_prev END,
+					rating_std = excluded.rating_std,
+					rating_rapid = excluded.rating_rapid,
+					rating_blitz = excluded.rating_blitz,
+					inactive = excluded.inactive,
+					seen_at = excluded.seen_at,
+					rating_list = excluded.rating_list`
+			)
+			.bind(seenAt, period, json)
+			.run()
+	}
+}
+
+/**
+ * Recalcula los totales de la portada. Recorre las tablas enteras, así que se
+ * hace una vez al final de cada sincronización y no en cada visita.
+ */
+export async function refreshTotals(db: D1Database): Promise<void> {
+	await db
+		.prepare(
+			`INSERT INTO site_totals (id, players, games, tournaments, updated_at)
+			VALUES (1,
+				(SELECT count(*) FROM players),
+				(SELECT count(*) FROM games),
+				(SELECT count(*) FROM tournaments),
+				?1)
+			ON CONFLICT (id) DO UPDATE SET
+				players = excluded.players,
+				games = excluded.games,
+				tournaments = excluded.tournaments,
+				updated_at = excluded.updated_at`
+		)
+		.bind(new Date().toISOString())
+		.run()
+}
+
+/**
+ * Sustituye los emparejamientos guardados del torneo por los de esta ronda.
+ * Nombre, título, FIDE ID y ELO salen del participante con ese número del
+ * ranking inicial; si no lo hay, se queda lo que trae la página de la ronda,
+ * con el nombre sin el año de los menores. Si la ronda aún no está emparejada
+ * (sin filas), se borran los de otras rondas y se conservan los de ésta: una
+ * página que vuelve vacía no los quita.
+ */
+export async function replacePairings(
+	db: D1Database,
+	tournamentId: number,
+	round: number,
+	startsAt: string | null,
+	pairings: Pairing[]
+): Promise<void> {
+	if (pairings.length === 0) {
+		await db.prepare('DELETE FROM pairings WHERE tournament_id = ?1 AND round <> ?2').bind(tournamentId, round).run()
+		return
+	}
+	const year = madridYear(new Date())
+	const retired = await loadRetired(db)
+	// El nombre de la página sólo se usa si no hay participante con ese número;
+	// el del participante ya está anonimizado si es un retirado.
+	const side = (p: PairedPlayer): PairedPlayer => ({
+		...p,
+		name: isRetired(retired, null, p.name) ? RETIRED_NAME : publicName(p.name, year)
+	})
+	const rows = pairings.map((p) => ({ ...p, white: side(p.white), black: side(p.black) }))
+	await db.batch([
+		db.prepare('DELETE FROM pairings WHERE tournament_id = ?1').bind(tournamentId),
+		...chunkByJsonSize(rows).map((json) =>
+			db
+				.prepare(
+					`INSERT INTO pairings (tournament_id, round, board, starts_at,
+						white_rank, white_name, white_title, white_fide_id, white_rating,
+						black_rank, black_name, black_title, black_fide_id, black_rating)
+					SELECT ?1, ?2, json_extract(j.value, '$.board'), ?3,
+						json_extract(j.value, '$.white.startRank'),
+						coalesce(w.name, json_extract(j.value, '$.white.name')),
+						w.title, w.fide_id,
+						coalesce(w.rating, json_extract(j.value, '$.white.rating')),
+						json_extract(j.value, '$.black.startRank'),
+						coalesce(b.name, json_extract(j.value, '$.black.name')),
+						b.title, b.fide_id,
+						coalesce(b.rating, json_extract(j.value, '$.black.rating'))
+					FROM json_each(?4) AS j
+					LEFT JOIN participations w ON w.tournament_id = ?1 AND w.team = ''
+						AND w.start_rank = json_extract(j.value, '$.white.startRank')
+					LEFT JOIN participations b ON b.tournament_id = ?1 AND b.team = ''
+						AND b.start_rank = json_extract(j.value, '$.black.startRank')
+					WHERE true
+					ON CONFLICT DO NOTHING`
+				)
+				.bind(tournamentId, round, startsAt, json)
+		)
+	])
+}
+
+/** Borra los emparejamientos de las rondas que ya han empezado (`now` en hora local). */
+export async function deletePastPairings(db: D1Database, now: string): Promise<void> {
+	await db.prepare('DELETE FROM pairings WHERE starts_at IS NULL OR starts_at <= ?1').bind(now).run()
+}
+
+/** id de los torneos indicados que ya están guardados. */
+export async function loadTournamentIds(db: D1Database, source: string, keys: string[]): Promise<Record<string, number>> {
+	if (keys.length === 0) return {}
+	const { results } = await db
+		.prepare(
+			`SELECT source_key AS key, id FROM tournaments
+			WHERE source = ?1 AND source_key IN (SELECT value FROM json_each(?2))`
+		)
+		.bind(source, JSON.stringify(keys))
+		.all<{ key: string; id: number }>()
+	return Object.fromEntries(results.map((r) => [r.key, r.id]))
+}
+
+export interface CheckedTournament {
+	key: string
+	endDate: string | null
+	gamesCheckedAt: string | null
+}
+
+/** Estado de sincronización de los torneos indicados (los que no existen no aparecen). */
+export async function loadCheckedTournaments(
+	db: D1Database,
+	source: string,
+	keys: string[]
+): Promise<CheckedTournament[]> {
+	if (keys.length === 0) return []
+	const { results } = await db
+		.prepare(
+			`SELECT source_key AS key, end_date AS endDate, games_checked_at AS gamesCheckedAt
+			FROM tournaments
+			WHERE source = ?1 AND source_key IN (SELECT value FROM json_each(?2))`
+		)
+		.bind(source, JSON.stringify(keys))
+		.all<CheckedTournament>()
+	return results
+}
+
+export async function loadSyncState(db: D1Database, key: string): Promise<string | null> {
+	const row = await db.prepare('SELECT value FROM sync_state WHERE key = ?1').bind(key).first<{ value: string }>()
+	return row?.value ?? null
+}
+
+export async function saveSyncState(db: D1Database, key: string, value: string): Promise<void> {
+	await db
+		.prepare(
+			`INSERT INTO sync_state (key, value, updated_at) VALUES (?1, ?2, ?3)
+			ON CONFLICT (key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`
+		)
+		.bind(key, value, new Date().toISOString())
+		.run()
+}
+
+// --- Retransmisiones de lichess (lichess/sync.ts) ---
+
+export type LichessTourStatus = 'sin_espanoles' | 'duplicado' | 'enlazado' | 'propio'
+
+/** Lo decidido de una retransmisión (tabla lichess_tours). */
+export interface LichessTour {
+	tourId: string
+	name: string
+	url: string | null
+	status: LichessTourStatus
+	tournamentId: number | null
+	espPlayers: number
+	finished: boolean
+}
+
+export async function loadLichessTours(db: D1Database, tourIds: string[]): Promise<LichessTour[]> {
+	if (tourIds.length === 0) return []
+	const { results } = await db
+		.prepare(
+			`SELECT tour_id AS tourId, name, url, status, tournament_id AS tournamentId, esp_players AS espPlayers, finished
+			FROM lichess_tours WHERE tour_id IN (SELECT value FROM json_each(?1))`
+		)
+		.bind(JSON.stringify(tourIds))
+		.all<Omit<LichessTour, 'finished'> & { finished: number }>()
+	return results.map((r) => ({ ...r, finished: r.finished === 1 }))
+}
+
+export async function saveLichessTour(db: D1Database, tour: LichessTour, checkedAt: string): Promise<void> {
+	await db
+		.prepare(
+			`INSERT INTO lichess_tours (tour_id, name, url, status, tournament_id, esp_players, finished, checked_at)
+			VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+			ON CONFLICT (tour_id) DO UPDATE SET
+				name = excluded.name,
+				url = excluded.url,
+				status = excluded.status,
+				tournament_id = excluded.tournament_id,
+				esp_players = excluded.esp_players,
+				finished = excluded.finished,
+				checked_at = excluded.checked_at`
+		)
+		.bind(
+			tour.tourId,
+			tour.name,
+			tour.url,
+			tour.status,
+			tour.tournamentId,
+			tour.espPlayers,
+			Number(tour.finished),
+			checkedAt
+		)
+		.run()
+}
+
+/** Retransmisiones de lichess que la sincronización de lichess ha enlazado a este torneo de info64. */
+export async function loadLinkedBroadcasts(db: D1Database, tournamentId: number): Promise<string[]> {
+	const { results } = await db
+		.prepare(`SELECT url FROM lichess_tours
+			WHERE tournament_id = ?1 AND status = 'enlazado' AND url IS NOT NULL ORDER BY tour_id`)
+		.bind(tournamentId)
+		.all<{ url: string }>()
+	return results.map((r) => r.url)
+}
+
+/** De esos FIDE ID, los de jugadores españoles (los de la tabla players). */
+export async function spanishFideIds(db: D1Database, fideIds: number[]): Promise<number[]> {
+	if (fideIds.length === 0) return []
+	const { results } = await db
+		.prepare('SELECT fide_id AS fideId FROM players WHERE fide_id IN (SELECT value FROM json_each(?1))')
+		.bind(JSON.stringify(fideIds))
+		.all<{ fideId: number }>()
+	return results.map((r) => r.fideId)
+}
+
+/** Torneo de info64 candidato a ser el de una retransmisión. */
+export interface Info64Match {
+	id: number
+	/** Cuántos de los jugadores buscados están entre sus participantes. */
+	overlap: number
+	gamesSource: string | null
+	gamesSourceUrl: string | null
+}
+
+/**
+ * Torneo de info64 que se juega entre esas fechas (YYYY-MM-DD) con más de
+ * esos jugadores entre sus participantes. Parte de las participaciones de esos
+ * jugadores (índice participations_fide_id) y busca cada torneo por su id: el
+ * CROSS JOIN fija ese orden, porque si no SQLite empieza por los doce mil
+ * torneos de info64 (índice de source).
+ */
+export async function findInfo64Tournament(
+	db: D1Database,
+	fideIds: number[],
+	from: string,
+	to: string
+): Promise<Info64Match | null> {
+	if (fideIds.length === 0) return null
+	return db
+		.prepare(
+			`SELECT t.id, m.overlap, t.games_source AS gamesSource, t.games_source_url AS gamesSourceUrl
+			FROM (
+				SELECT tournament_id, count(DISTINCT fide_id) AS overlap
+				FROM participations
+				WHERE fide_id IN (SELECT value FROM json_each(?1))
+				GROUP BY tournament_id
+			) AS m
+			CROSS JOIN tournaments t ON t.id = m.tournament_id
+			WHERE t.source = 'info64' AND t.start_date <= ?3 AND t.end_date >= ?2
+			ORDER BY m.overlap DESC, t.id
+			LIMIT 1`
+		)
+		.bind(JSON.stringify(fideIds), from, to)
+		.first<Info64Match>()
+}
+
+/** Partida que se quiere guardar, para buscarla en otros torneos. */
+export interface GameKey {
+	white: number
+	black: number
+	date: string
+}
+
+/**
+ * Índices (en `games`) de las partidas que ya están en otro torneo: los
+ * mismos FIDE ID con los mismos colores y fechas a 3 días o menos. Busca por
+ * el índice games_white.
+ */
+export async function gamesStoredElsewhere(
+	db: D1Database,
+	tournamentId: number | null,
+	games: GameKey[]
+): Promise<Set<number>> {
+	if (games.length === 0) return new Set()
+	const { results } = await db
+		.prepare(
+			`SELECT DISTINCT CAST(j.key AS INTEGER) AS i
+			FROM json_each(?2) AS j
+			JOIN games g ON g.white_fide_id = json_extract(j.value, '$.white')
+				AND g.black_fide_id = json_extract(j.value, '$.black')
+				AND g.date BETWEEN date(json_extract(j.value, '$.date'), '-3 days')
+					AND date(json_extract(j.value, '$.date'), '+3 days')
+			WHERE g.tournament_id IS NOT ?1`
+		)
+		.bind(tournamentId, JSON.stringify(games))
+		.all<{ i: number }>()
+	return new Set(results.map((r) => r.i))
+}
+
+/** Lo que buildGameRows necesita de un torneo guardado. */
+export async function loadTournamentContext(db: D1Database, id: number): Promise<TournamentContext | null> {
+	return db
+		.prepare('SELECT name, city, start_date AS startDate, time_control AS timeControl FROM tournaments WHERE id = ?1')
+		.bind(id)
+		.first<TournamentContext>()
+}
+
+/** Borra un torneo propio de lichess; sus partidas y participantes se van en cascada. */
+export async function deleteLichessTournament(db: D1Database, id: number): Promise<void> {
+	await db.prepare(`DELETE FROM tournaments WHERE id = ?1 AND source = 'lichess'`).bind(id).run()
+}

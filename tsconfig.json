@@ -1,0 +1,9 @@
+{
+	"extends": "astro/tsconfigs/strict",
+	"compilerOptions": {
+		"types": ["./worker-configuration.d.ts", "@cloudflare/vitest-plugin/types"]
+	},
+	"include": [".astro/types.d.ts", "worker-configuration.d.ts", "**/*"],
+	// src/client se comprueba con su propio tsconfig (tipos DOM, sin los de Workers).
+	"exclude": ["dist", "public", "src/client"]
+}

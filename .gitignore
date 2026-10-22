@@ -1,0 +1,27 @@
+node_modules/
+dist/
+.astro/
+.wrangler/
+.env*
+worker-configuration.d.ts
+
+# Secretos: .dev.vars y sus variantes (.dev.vars.production…) y la copia local
+# del ADMIN_TOKEN de producción (.admin-token.prod). La plantilla sí se versiona.
+.dev.vars*
+!.dev.vars.example
+.admin-token*
+
+# Lo copia scripts/copy-engine.mjs desde node_modules/stockfish en cada install.
+public/engine/
+
+# Entradas y salida de scripts/lichess-rondas.mjs (FIDE ID de la D1 remota y
+# volcados de lichess).
+jugadores.json
+rondas.json
+*.pgn.zst
+
+# Ajustes locales y worktrees de Claude Code; launch.json sí se versiona.
+.claude/settings.local.json
+.claude/worktrees/
+.playwright-mcp/
+*.log

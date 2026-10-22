@@ -1,0 +1,23 @@
+---
+// Nombre de jugador, enlazado a su ficha si tiene FIDE ID. El ELO va del
+// tamaño del nombre y en gris: es el dato con el que se comparan los rivales.
+//
+// En línea, como el texto: si el nombre parte línea, el ELO sigue a la última
+// palabra. Con inline-flex se quedaba arriba, junto a la primera línea, lejos
+// de su jugador. Espacios duros entre el título y el nombre y entre el nombre
+// y el ELO: ninguno de los dos se queda solo en una línea.
+interface Props {
+	name: string
+	fideId?: number | null
+	title?: string | null
+	elo?: number | null
+}
+
+const { name, fideId, title, elo } = Astro.props
+---
+
+<span class="player">
+	{title && <span class="tag">{title}</span>}{title && ' '}
+	{fideId ? <a href={`/jugadores/${fideId}`}>{name}</a> : <span>{name}</span>}{elo && ' '}
+	{elo && <span class="elo muted num">{elo}</span>}
+</span>

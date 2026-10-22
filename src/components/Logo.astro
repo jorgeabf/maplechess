@@ -1,0 +1,40 @@
+---
+// Marca "!?" (jugada interesante en notación de análisis), de arce claro
+// incrustado en nogal. Los colores salen de los tokens de marca, que son los
+// mismos en claro y en oscuro. public/favicon.svg es la misma figura con los
+// colores escritos (de ella salen favicon.ico y apple-touch-icon.png).
+interface Props {
+	size?: number
+}
+
+const { size = 32 } = Astro.props
+---
+
+<svg class="logo" width={size} height={size} viewBox="0 0 32 32" aria-hidden="true" focusable="false">
+	<rect class="tile" width="32" height="32" rx="7"></rect>
+	<g class="glyph" transform="translate(-0.6 0)" stroke-linecap="round">
+		<path d="M9 7.6V18.2" stroke-width="3.6" fill="none"></path>
+		<circle cx="9" cy="24.2" r="2.15" stroke="none"></circle>
+		<path d="M15.4 11.4A4.6 4.6 0 1 1 22.9 14.9C21.3 16.1 20.1 16.9 20.1 19.2" stroke-width="3.4" fill="none"></path>
+		<circle cx="20.1" cy="24.2" r="2.15" stroke="none"></circle>
+	</g>
+</svg>
+
+<style>
+	.logo {
+		flex: none;
+		display: block;
+	}
+
+	.tile {
+		fill: var(--brand);
+	}
+
+	.glyph {
+		stroke: var(--brand-ink);
+	}
+
+	.glyph circle {
+		fill: var(--brand-ink);
+	}
+</style>

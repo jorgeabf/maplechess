@@ -1,0 +1,64 @@
+---
+// Fila de filtros (.selectors) del dossier y del repertorio. En el móvil va
+// plegada en un <details> cuyo resumen dice lo elegido: los tres o cuatro
+// selectores, con su rótulo encima, ocupaban de 219 a 296 px de los 812 de la
+// pantalla antes del contenido, que además ya repite el color elegido.
+//
+// A partir de 40rem, siempre desplegada y sin el resumen. El contenido de un
+// <details> cerrado lo oculta el navegador con content-visibility: hidden en
+// ::details-content, y una regla de autor le gana. Sin ::details-content (lo
+// tienen Chrome 131, Safari 18.4 y Firefox 143 en adelante) también se pliega
+// a lo ancho: funciona, con un toque más. Sin JavaScript.
+interface Props {
+	/** Lo elegido en cada filtro, en minúsculas: «juegas con negras», «todas las fechas». */
+	summary: string[]
+}
+
+const { summary } = Astro.props
+---
+
+<details class="filters">
+	<summary>Filtros<span class="muted">: {summary.join(' · ')}</span></summary>
+	<div class="selectors">
+		<slot />
+	</div>
+</details>
+
+<style>
+	.filters {
+		margin-bottom: var(--space-5);
+	}
+
+	.selectors {
+		margin-bottom: 0;
+	}
+
+	/* Que la zona que se pulsa llegue a los 24 px. */
+	summary {
+		padding-block: var(--space-1);
+	}
+
+	@supports selector(::details-content) {
+		@media (width >= 40rem) {
+			.filters::details-content {
+				content-visibility: visible;
+			}
+
+			summary {
+				display: none;
+			}
+
+			/* Sin el hueco que deja global.css bajo un summary. */
+			.selectors {
+				margin-top: 0;
+			}
+		}
+	}
+
+	/* Son controles: en papel no sirven. */
+	@media print {
+		.filters {
+			display: none;
+		}
+	}
+</style>

@@ -1,0 +1,127 @@
+// <explorador-repertorio>: tablero del repertorio. La página funciona sin
+// JavaScript (cada jugada es un enlace); esto añade el tablero con la
+// posición, una flecha al pasar por una jugada de la tabla y la posibilidad
+// de mover piezas para ir a cualquier otra posición, también por transposición,
+// y el análisis de Stockfish de la posición.
+import { Chessground } from '@lichess-org/chessground'
+import type { Api } from '@lichess-org/chessground/api'
+import type { DrawShape } from '@lichess-org/chessground/draw'
+import type { Key } from '@lichess-org/chessground/types'
+import { Chess, normalizeMove } from 'chessops/chess'
+import { chessgroundDests } from 'chessops/compat'
+import { parseFen } from 'chessops/fen'
+import { parseSquare, parseUci } from 'chessops/util'
+import { standardUci } from '../../lib/chess/uci'
+import { EnginePanel } from '../visor/panel-motor'
+
+const squares = (uci: string): [Key, Key] => [uci.slice(0, 2) as Key, uci.slice(2, 4) as Key]
+
+function arrow(uci: string): { orig: Key; dest: Key } {
+	const [orig, dest] = squares(uci)
+	return { orig, dest }
+}
+
+class ExploradorRepertorio extends HTMLElement {
+	private cg?: Api
+	private panel?: EnginePanel
+	/** Flecha de la jugada de la tabla señalada y de la mejor del motor. */
+	private hoverShape: DrawShape | null = null
+	private engineShape: DrawShape | null = null
+	private abort = new AbortController()
+
+	connectedCallback(): void {
+		const fen = this.dataset.fen ?? ''
+		const setup = parseFen(fen)
+		if (setup.isErr) return
+		const created = Chess.fromSetup(setup.value)
+		if (created.isErr) return
+		const pos = created.value
+		const lastMove = this.dataset.lastMove
+		const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)')
+
+		this.cg = Chessground(this.querySelector<HTMLElement>('.board')!, {
+			fen,
+			animation: { enabled: !reducedMotion.matches },
+			orientation: this.dataset.orientation === 'black' ? 'black' : 'white',
+			turnColor: pos.turn,
+			check: pos.isCheck(),
+			lastMove: lastMove ? squares(lastMove) : undefined,
+			coordinates: true,
+			movable: {
+				free: false,
+				color: this.dataset.movable === 'false' ? undefined : pos.turn,
+				dests: chessgroundDests(pos),
+				showDests: true,
+				events: { after: (orig, dest) => this.play(pos, orig, dest) }
+			},
+			premovable: { enabled: false },
+			drawable: { enabled: false, visible: true }
+		})
+
+		const signal = this.abort.signal
+		reducedMotion.addEventListener('change', () => this.cg?.set({ animation: { enabled: !reducedMotion.matches } }), {
+			signal
+		})
+		this.addEventListener('pointerover', (event) => this.showArrow(event), { signal })
+		this.addEventListener('focusin', (event) => this.showArrow(event), { signal })
+		this.addEventListener('pointerleave', () => this.setHover(null), { signal })
+		this.addEventListener('focusout', () => this.setHover(null), { signal })
+
+		this.panel = new EnginePanel(
+			this.querySelector<HTMLElement>('.engine')!,
+			{
+				// La mejor jugada, en el azul del visor; el verde es el de «ganada».
+				onAnalysis: (view) => {
+					this.engineShape = view?.best ? { ...arrow(view.best), brush: 'paleBlue' } : null
+					this.drawShapes()
+				}
+			},
+			signal
+		)
+		this.panel.show(fen)
+		this.panel.restore()
+	}
+
+	disconnectedCallback(): void {
+		this.abort.abort()
+		this.panel?.destroy()
+		this.cg?.destroy()
+	}
+
+	/** Flecha de la jugada de la tabla sobre la que está el puntero o el foco. */
+	private showArrow(event: Event): void {
+		const row = event.target instanceof Element ? event.target.closest<HTMLElement>('[data-uci]') : null
+		this.setHover(row?.dataset.uci ?? null)
+	}
+
+	/** En gris, para no confundirla con la del motor. */
+	private setHover(uci: string | null): void {
+		this.hoverShape = uci ? { ...arrow(uci), brush: 'paleGrey' } : null
+		this.drawShapes()
+	}
+
+	private drawShapes(): void {
+		this.cg?.setAutoShapes([this.engineShape, this.hoverShape].filter((s): s is DrawShape => s !== null))
+	}
+
+	/** Jugada hecha en el tablero: se va a la página de la posición resultante. */
+	private play(pos: Chess, orig: Key, dest: Key): void {
+		// Un peón que llega a la última fila corona dama: para explorar basta.
+		const from = parseSquare(orig)
+		const promotes = from !== undefined && pos.board.getRole(from) === 'pawn' && /[18]$/.test(dest)
+		const parsed = parseUci(`${orig}${dest}${promotes ? 'q' : ''}`)
+		if (!parsed) return
+		const move = normalizeMove(pos, parsed)
+		if (!pos.isLegal(move)) return
+
+		const url = new URL(location.href)
+		const moves = this.dataset.moves ? this.dataset.moves.split(' ') : []
+		url.searchParams.set('jugadas', [...moves, standardUci(pos, move)].join(' '))
+		url.searchParams.delete('p')
+		// Como los enlaces de la tabla: la página nueva se abre con el explorador en el mismo sitio.
+		url.hash = this.id
+		location.assign(url)
+	}
+}
+
+customElements.define('explorador-repertorio', ExploradorRepertorio)

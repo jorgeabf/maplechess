@@ -1,0 +1,20 @@
+---
+import Base from '../layouts/Base.astro'
+
+// Astro la renderiza con la petición que ha fallado, así que Astro.url es la
+// página que se quería ver. El error le llega en la prop `error`, pero no se
+// enseña: queda en el registro de Workers. Base no consulta D1, así que la
+// página sale aunque el fallo sea de la base de datos.
+Astro.response.status = 500
+
+const retryHref = Astro.url.pathname + Astro.url.search
+---
+
+<Base title="Error" noindex>
+	<h1>Algo ha fallado</h1>
+	<p>No hemos podido cargar esta página. Vuelve a intentarlo en unos segundos.</p>
+	<p class="page-actions">
+		<a class="button" href={retryHref}>Volver a intentarlo</a>
+		<a class="button secondary" href="/">Ir a la portada</a>
+	</p>
+</Base>

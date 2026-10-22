@@ -1,0 +1,4 @@
+# LF en todas las plataformas: los fixtures de test (HTML, PGN, lista FIDE)
+# y los scripts se comportan igual en Windows, Linux y CI.
+* text=auto eol=lf
+*.wasm binary
