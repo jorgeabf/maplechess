@@ -6,3 +6,5 @@ Disallow: /jugadores/*/preparar
 Disallow: /partidas?
 Disallow: /jugadores?
 Disallow: /torneos?
+
+Sitemap: https://maplechess.es/sitemap.xml

@@ -52,12 +52,14 @@ export const RATE_LIMIT_PERIOD = 60
 /**
  * Rutas que leen de cientos a decenas de miles de filas de D1 en cada
  * petición: las búsquedas de /partidas y /jugadores (no sus portadas), las
- * descargas PGN, el dossier y el repertorio. Las fichas, las partidas, los
- * torneos y /api/* no se limitan.
+ * descargas PGN, el dossier, el repertorio y los trozos del sitemap que salen
+ * de D1 (no su índice). Las fichas, las partidas, los torneos y /api/* no se
+ * limitan.
  */
 export function isExpensive(url: URL): boolean {
 	const path = url.pathname
 	if (path.endsWith('.pgn') || /^\/jugadores\/\d+\/(preparar|repertorio)$/.test(path)) return true
+	if (/^\/sitemap\/(jugadores|torneos|partidas)-\d+\.xml$/.test(path)) return true
 	if (path === '/partidas') {
 		const { page: _page, ...filters } = gameFilters(url.searchParams)
 		return gameSearchKind(filters) === 'search'

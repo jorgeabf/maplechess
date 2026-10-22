@@ -393,12 +393,14 @@ export interface GameDetail extends GameListRow {
 	tournamentSource: string
 	/** Fuente de las partidas del torneo ('info64', 'lichess'). */
 	gamesSource: string | null
+	/** Medias jugadas; sin ninguna, la página no se indexa ni entra en el sitemap. */
+	plyCount: number
 }
 
 export async function getGame(db: D1Database, id: number): Promise<GameDetail | null> {
 	return db
 		.prepare(
-			`SELECT ${LIST_COLUMNS}, g.pgn, t.url AS tournamentUrl, t.source AS tournamentSource,
+			`SELECT ${LIST_COLUMNS}, g.pgn, g.ply_count AS plyCount, t.url AS tournamentUrl, t.source AS tournamentSource,
 				t.games_source AS gamesSource
 			FROM games g JOIN tournaments t ON t.id = g.tournament_id WHERE g.id = ?1`
 		)

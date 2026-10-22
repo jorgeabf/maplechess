@@ -71,7 +71,8 @@ const backLabel = back && `← Volver ${(ownBack && OWN_BACK_LABELS[back.kind]) 
 	title={title}
 	section="partidas"
 	description={`${title}, ${formatResult(game.result)}. ${game.tournamentName}, ronda ${game.round}.`}
-	noindex={requested !== null}
+	canonical={`/partidas/${game.id}`}
+	noindex={game.plyCount === 0}
 >
 	<header class="game-head page-head">
 		{
