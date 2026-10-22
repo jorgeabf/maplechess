@@ -64,6 +64,7 @@ def main() -> None:
         f'\t<path d="{path.getCommands()}"/>\n'
         "</svg>\n",
         encoding="utf-8",
+        newline="\n",
     )
     em = font["head"].unitsPerEm
     print(f"{OUT.relative_to(ROOT)}: {width} x {height} unidades (em = {em}), avance {x}")
