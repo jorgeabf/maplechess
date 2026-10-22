@@ -16,6 +16,12 @@ updates:
       # Las menores y los parches, en un solo PR; cada versión mayor, en el suyo.
       menores:
         update-types: [minor, patch]
+    ignore:
+      # Los tipos de Node van con la versión que se usa (24, en la CI y en el
+      # README): los de una mayor nueva dejarían pasar funciones que Node 24 no
+      # tiene. Se quita al cambiar de versión de Node.
+      - dependency-name: '@types/node'
+        update-types: ['version-update:semver-major']
 
   - package-ecosystem: github-actions
     directory: /
