@@ -4,7 +4,12 @@
 // iconos de 192 y 512 px; no hace falta service worker, y no lo hay: sin datos
 // no tiene sentido funcionar sin conexión, y un HTML guardado apuntaría, tras
 // un despliegue, a CSS y JS con hash que ya no existen.
-import { THEME_COLOR } from './theme-color'
+
+/**
+ * El --walnut de global.css, la losa del logo. Un manifest no lee variables
+ * CSS: test/manifest.test.ts comprueba que sigue siendo el del token.
+ */
+export const WALNUT = '#806a52'
 
 export const MANIFEST = {
 	id: '/',
@@ -19,14 +24,17 @@ export const MANIFEST = {
 	// enlace de una ficha). Quien no lo admite, como Safari, lee display.
 	display: 'standalone',
 	display_override: ['minimal-ui'],
-	// Sólo el fondo de la pantalla de arranque, en claro: un manifest no admite
-	// claro y oscuro (Chrome no lee colores oscuros del manifest). Sin
-	// theme_color a propósito: con él, Chrome pinta la barra del sistema de
-	// abajo con ese único color, y en oscuro salía clara
-	// (WebappIntentDataProvider.getNavigationBarColor). Sin él, queda la del
-	// sistema. La barra de arriba la da la meta theme-color de cada tema, que en
-	// una app instalada Chrome usa también en oscuro.
-	background_color: THEME_COLOR.light,
+	// En la app instalada, background_color es el fondo de la pantalla de
+	// arranque y el que asoma bajo la barra de gestos. Un manifest no distingue
+	// claro y oscuro (Chrome no lee colores oscuros del manifest), y sin él
+	// Chrome pone #F8F9FA en los dos: con el --bg claro, en modo oscuro quedaba
+	// una franja crema. El nogal de la marca no se funde con la página en
+	// ningún modo, pero tampoco desentona en ninguno.
+	// Sin theme_color: Chrome puede pintar con él la barra de abajo
+	// (WebappIntentDataProvider.getNavigationBarColor), con el mismo problema
+	// de un solo color. La barra de arriba la da la meta theme-color de cada
+	// tema, que en una app instalada Chrome usa también en oscuro.
+	background_color: WALNUT,
 	// Los genera scripts/iconos.mjs a partir de public/favicon.svg.
 	icons: [
 		{ src: '/icono-192.png', sizes: '192x192', type: 'image/png' },
