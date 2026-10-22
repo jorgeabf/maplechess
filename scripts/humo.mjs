@@ -8,8 +8,7 @@
 //
 // Sin búsquedas ni descargas grandes: cada una recorre miles de filas de D1.
 
-// Con el dominio definitivo, cambia aquí la URL.
-const PRODUCTION = 'https://buscador-partidas-ajedrez.aportuvas.workers.dev'
+const PRODUCTION = 'https://maplechess.es'
 const PAUSE_MS = 1000
 const TIMEOUT_MS = 20_000
 
@@ -59,15 +58,24 @@ const CHECKS = [
 	}
 ]
 
+// Contra producción, además: la URL de workers.dev y www llevan al dominio (src/middleware.ts).
+const REDIRECTS = [
+	['https://buscador-partidas-ajedrez.aportuvas.workers.dev/acerca', `${PRODUCTION}/acerca`],
+	['https://www.maplechess.es/', `${PRODUCTION}/`]
+]
+
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
-/** Problemas de una URL; vacío si está bien. */
-async function check({ path, status, warnStatus, type, text, headers }) {
-	const response = await fetch(base + path, {
+const get = (url) =>
+	fetch(url, {
 		redirect: 'manual',
 		headers: { 'User-Agent': 'maplechess-humo' },
 		signal: AbortSignal.timeout(TIMEOUT_MS)
 	})
+
+/** Problemas de una URL; vacío si está bien. */
+async function check({ path, status, warnStatus, type, text, headers }) {
+	const response = await get(base + path)
 	const body = await response.text()
 	const problems = []
 	if (response.status === warnStatus) {
@@ -85,21 +93,35 @@ async function check({ path, status, warnStatus, type, text, headers }) {
 	return problems
 }
 
+/** Problemas de una redirección; vacío si está bien. */
+async function checkRedirect([from, to]) {
+	const response = await get(from)
+	await response.body?.cancel()
+	const location = response.headers.get('Location')
+	if (response.status === 301 && location === to) return []
+	return [`${response.status} hacia «${location ?? '(sin Location)'}», se esperaba 301 hacia ${to}`]
+}
+
+const tasks = [
+	...CHECKS.map((item) => ({ label: item.path, run: () => check(item) })),
+	...(base === PRODUCTION ? REDIRECTS.map((pair) => ({ label: pair[0], run: () => checkRedirect(pair) })) : [])
+]
+
 console.log(`Humo contra ${base}`)
 let failed = 0
-for (const [i, item] of CHECKS.entries()) {
+for (const [i, { label, run }] of tasks.entries()) {
 	if (i > 0) await sleep(PAUSE_MS)
-	const problems = await check(item).catch((error) => [String(error)])
+	const problems = await run().catch((error) => [String(error)])
 	if (problems.length === 0) {
-		console.log(`ok    ${item.path}`)
+		console.log(`ok    ${label}`)
 	} else {
 		failed++
-		console.error(`FALLA ${item.path}: ${problems.join('; ')}`)
+		console.error(`FALLA ${label}: ${problems.join('; ')}`)
 	}
 }
 
 if (failed > 0) {
-	console.error(`El humo falla en ${failed} de ${CHECKS.length} URL.`)
+	console.error(`El humo falla en ${failed} de ${tasks.length} URL.`)
 	process.exit(1)
 }
-console.log(`Humo en verde: ${CHECKS.length} URL.`)
+console.log(`Humo en verde: ${tasks.length} URL.`)

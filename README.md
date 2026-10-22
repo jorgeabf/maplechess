@@ -10,8 +10,8 @@
 </p>
 
 <p align="center">
-  <a href="https://buscador-partidas-ajedrez.aportuvas.workers.dev"><strong>Abrir la web</strong></a> ·
-  <a href="https://buscador-partidas-ajedrez.aportuvas.workers.dev/acerca">Acerca de</a> ·
+  <a href="https://maplechess.es"><strong>Abrir la web</strong></a> ·
+  <a href="https://maplechess.es/acerca">Acerca de</a> ·
   <a href="#cómo-funciona">Cómo funciona</a> ·
   <a href="#licencia">Licencia</a>
 </p>
@@ -281,7 +281,7 @@ Necesita una cuenta de Cloudflare con **Workers Paid**. La importación de la li
    pnpm run deploy
    ```
 
-   Sólo despliega `origin/main`, con el árbol limpio y fuera de las horas de los crons. Antes copia el motor y apunta el marcador de Time Travel de D1 en `despliegues.log`; después pasa la prueba de humo de `scripts/humo.mjs`, que pide jugadores, partidas y torneos de MapleChess: en una instalación nueva, cambia su URL y sus rutas. Cambia también la URL de `.github/workflows/vigilancia.yml`, que dos veces al día pide `/api/estado` y avisa por correo si alguna sincronización falla.
+   Sólo despliega `origin/main`, con el árbol limpio y fuera de las horas de los crons. Antes copia el motor y apunta el marcador de Time Travel de D1 en `despliegues.log`; después pasa la prueba de humo de `scripts/humo.mjs`, que pide jugadores, partidas y torneos de MapleChess: en una instalación nueva, cambia su URL y sus rutas, y el dominio (`routes` de `wrangler.jsonc`, `site` de `astro.config.mjs` y la URL de workers.dev que redirige `src/middleware.ts`). Cambia también la URL de `.github/workflows/vigilancia.yml`, que dos veces al día pide `/api/estado` y avisa por correo si alguna sincronización falla.
 
    El límite de ritmo de las búsquedas y las descargas viene apagado (`RATE_LIMIT` en `wrangler.jsonc`): va por IP y cortaría a los jugadores que comparten la wifi de una sala de juego. [CLAUDE.md](CLAUDE.md) explica cuándo encenderlo.
 
@@ -299,7 +299,7 @@ Después, cada migración se aplica con `pnpm db:migrate:remote` antes de desple
 ## Seguridad y datos personales
 
 - **Un fallo de seguridad** no se publica en una incidencia: avísalo en privado desde la pestaña [Security](https://github.com/jorgeabf/maplechess/security) del repositorio, con «Report a vulnerability».
-- **Para que se retiren tus datos** (o los de un menor a tu cargo), la página [/acerca](https://buscador-partidas-ajedrez.aportuvas.workers.dev/acerca) explica cómo pedirlo.
+- **Para que se retiren tus datos** (o los de un menor a tu cargo), la página [/acerca](https://maplechess.es/acerca) explica cómo pedirlo.
 - Los ficheros de prueba (`test/fixtures/`) no llevan datos de personas reales: tienen la estructura de las fuentes, con nombres y FIDE ID inventados.
 
 ## Licencia
@@ -307,7 +307,7 @@ Después, cada migración se aplica con `pnpm db:migrate:remote` antes de desple
 [GPL-3.0 o posterior](LICENSE), la misma que chessground, chessops y Stockfish.
 
 - **Aperturas:** nombres de dominio público (CC0).
-- **Datos de jugadores, torneos y partidas:** pertenecen a sus fuentes y se muestran tal como ellas los publican. La página [/acerca](https://buscador-partidas-ajedrez.aportuvas.workers.dev/acerca) explica cómo pedir que se retire alguno.
+- **Datos de jugadores, torneos y partidas:** pertenecen a sus fuentes y se muestran tal como ellas los publican. La página [/acerca](https://maplechess.es/acerca) explica cómo pedir que se retire alguno.
 - **Partidas de las retransmisiones de lichess:** licencia [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/deed.es); aquí se ofrecen con la misma licencia.
 - **Tipografía de los titulares:** Source Serif 4 de Adobe ([SIL Open Font License 1.1](public/fonts/OFL.txt)), modificada y renombrada «Titulares».
 - **Piezas del tablero** (`src/assets/pieces/mpchess/`): mpchess, de Maxime Chupin, con licencia GPL-3.0.

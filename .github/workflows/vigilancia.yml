@@ -23,8 +23,7 @@ permissions:
   contents: read
 
 env:
-  # Con el dominio definitivo, cambia aquí la URL.
-  ESTADO_URL: https://buscador-partidas-ajedrez.aportuvas.workers.dev/api/estado
+  ESTADO_URL: https://maplechess.es/api/estado
 
 jobs:
   estado:

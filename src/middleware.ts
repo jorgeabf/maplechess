@@ -1,6 +1,6 @@
 // Middleware de Astro: se ejecuta en todas las rutas dinámicas (los ficheros
 // estáticos los sirve Cloudflare sin pasar por aquí).
-import type { MiddlewareHandler } from 'astro'
+import type { APIContext, MiddlewareHandler, MiddlewareNext } from 'astro'
 import { env } from 'cloudflare:workers'
 import { gameFilters, gameSearchKind, isPlayerSearch, playerFilters } from './lib/params'
 
@@ -20,11 +20,30 @@ export const DEFAULT_CACHE_CONTROL = 'private, max-age=0, must-revalidate'
  * La Content-Security-Policy la pone Astro (astro.config.mjs). SAMEORIGIN y no
  * DENY: las medidas con iframes del mismo origen siguen funcionando. Sin
  * Referrer-Policy: el valor por defecto de los navegadores
- * (strict-origin-when-cross-origin) basta, y «← Volver» depende de él.
+ * (strict-origin-when-cross-origin) basta, y «← Volver» depende de él. HSTS
+ * de un año: en workers.dev ya obligaba a HTTPS la lista de precarga del .dev,
+ * pero el .es no está en ella.
  */
 export const SECURITY_HEADERS = {
 	'X-Content-Type-Options': 'nosniff',
-	'X-Frame-Options': 'SAMEORIGIN'
+	'X-Frame-Options': 'SAMEORIGIN',
+	'Strict-Transport-Security': 'max-age=31536000; includeSubDomains'
+}
+
+/** La URL de antes del dominio, que enlaza lo ya publicado (el aviso a la FEDA). */
+export const WORKERS_DEV_HOST = 'buscador-partidas-ajedrez.aportuvas.workers.dev'
+
+/**
+ * La misma dirección en el dominio (`site` en astro.config.mjs) si la petición
+ * llega por la URL de workers.dev o por www; si no, undefined. Por host exacto:
+ * las URL de vista previa de cada versión y el entorno local se sirven tal
+ * cual. Sólo GET y HEAD: tras una 301, un POST (/api/admin/sync) llegaría
+ * como GET.
+ */
+export function canonicalUrl(url: URL, method: string, site: URL | undefined): URL | undefined {
+	if (!site || (method !== 'GET' && method !== 'HEAD')) return undefined
+	if (url.host !== WORKERS_DEV_HOST && url.host !== `www.${site.host}`) return undefined
+	return new URL(url.pathname + url.search, site)
 }
 
 /** Periodo del límite de ritmo en segundos, el de `ratelimits` en wrangler.jsonc: el Retry-After del 429. */
@@ -60,11 +79,21 @@ async function withinRateLimit(request: Request): Promise<boolean> {
 	return (await env.RATE_LIMITER.limit({ key: ip })).success
 }
 
+/** La respuesta de la ruta o, pasado el límite de ritmo, la página 429, que no consulta D1. */
+async function render(context: APIContext, next: MiddlewareNext): Promise<Response> {
+	if (!isExpensive(context.url) || (await withinRateLimit(context.request))) return next()
+	const response = await next('/429')
+	response.headers.set('Retry-After', String(RATE_LIMIT_PERIOD))
+	return response
+}
+
 export const onRequest = (async (context, next) => {
-	const limited = isExpensive(context.url) && !(await withinRateLimit(context.request))
-	// Pasado el límite, la página 429, que no consulta D1.
-	const response = limited ? await next('/429') : await next()
-	if (limited) response.headers.set('Retry-After', String(RATE_LIMIT_PERIOD))
+	const canonical = canonicalUrl(context.url, context.request.method, context.site)
+	// La redirección también lleva la caché por defecto: si hubiera que volver a
+	// workers.dev, los navegadores no se quedarían con ella.
+	const response = canonical
+		? new Response(null, { status: 301, headers: { Location: canonical.href } })
+		: await render(context, next)
 	if (!response.headers.has('Cache-Control')) response.headers.set('Cache-Control', DEFAULT_CACHE_CONTROL)
 	for (const [name, value] of Object.entries(SECURITY_HEADERS)) response.headers.set(name, value)
 	return response

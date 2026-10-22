@@ -4,6 +4,8 @@ import { defineConfig } from 'astro/config'
 
 // https://astro.build/config
 export default defineConfig({
+	// El dominio: src/middleware.ts redirige a él la URL de workers.dev y www.
+	site: 'https://maplechess.es',
 	output: 'server',
 	adapter: cloudflare({
 		// No hay imágenes que transformar: no hace falta el binding de Cloudflare Images.
