@@ -23,15 +23,19 @@ describe('MANIFEST', () => {
 		for (const icon of MANIFEST.icons) expect(publicFiles, icon.src).toContain(icon.src)
 	})
 
-	it('los colores son los del theme-color', () => {
-		expect(MANIFEST.theme_color).toBe(THEME_COLOR.light)
+	it('sólo el fondo de arranque, en claro, y sin theme_color', () => {
 		expect(MANIFEST.background_color).toBe(THEME_COLOR.light)
+		// Con theme_color, Chrome pinta con él la barra de abajo de la app
+		// instalada también en modo oscuro.
+		expect(MANIFEST).not.toHaveProperty('theme_color')
 	})
 
-	it('se sirve como manifest y se puede guardar', async () => {
+	it('se sirve como manifest, sin caché propia', async () => {
 		const res = manifestResponse()
 		expect(res.headers.get('Content-Type')).toBe('application/manifest+json; charset=utf-8')
-		expect(res.headers.get('Cache-Control')).toBe('public, max-age=3600')
+		// La pone el middleware (revalidar siempre): con caché, al reinstalar
+		// tras un cambio Chrome usaba el manifest viejo.
+		expect(res.headers.get('Cache-Control')).toBeNull()
 		expect(await res.json()).toEqual(MANIFEST)
 	})
 })
