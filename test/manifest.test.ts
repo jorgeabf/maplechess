@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { MANIFEST, manifestResponse } from '../src/lib/manifest'
-import { THEME_COLOR } from '../src/lib/theme-color'
+import { MANIFEST, manifestResponse, WALNUT } from '../src/lib/manifest'
+import css from '../src/styles/global.css?raw'
 
 // Los PNG que hay en public/, sin cargarlos: sólo sus rutas.
 const publicFiles = Object.keys(import.meta.glob('../public/*.png')).map((path) => path.replace('../public', ''))
@@ -23,10 +23,12 @@ describe('MANIFEST', () => {
 		for (const icon of MANIFEST.icons) expect(publicFiles, icon.src).toContain(icon.src)
 	})
 
-	it('sólo el fondo de arranque, en claro, y sin theme_color', () => {
-		expect(MANIFEST.background_color).toBe(THEME_COLOR.light)
-		// Con theme_color, Chrome pinta con él la barra de abajo de la app
-		// instalada también en modo oscuro.
+	it('el fondo es el nogal de la marca, el --walnut de global.css', () => {
+		expect(WALNUT).toBe(/--walnut:\s*(#[0-9a-f]{6})/i.exec(css)?.[1])
+		expect(MANIFEST.background_color).toBe(WALNUT)
+	})
+
+	it('sin theme_color: un solo color para la barra de abajo no vale en claro y oscuro', () => {
 		expect(MANIFEST).not.toHaveProperty('theme_color')
 	})
 
