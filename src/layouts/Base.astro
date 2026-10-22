@@ -55,8 +55,8 @@ const nav = [
 		    horizontal, hasta los lados de la muesca. Lo que toca un borde deja su
 		    env(safe-area-inset-*): la cabecera, .page, el pie y el buscador. */}
 		<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-		{/* Barras del navegador del color de la cabecera (lib/theme-color.ts). Safari
-		    26 no lo usa: tiñe las suyas con el fondo de la página. */}
+		{/* Barras del navegador del color del fondo de la página, el que pone también
+		    Safari 26 (lib/theme-color.ts explica por qué no el de la cabecera). */}
 		<meta name="theme-color" media="(prefers-color-scheme: light)" content={THEME_COLOR.light} />
 		<meta name="theme-color" media="(prefers-color-scheme: dark)" content={THEME_COLOR.dark} />
 		<title>{fullTitle}</title>
