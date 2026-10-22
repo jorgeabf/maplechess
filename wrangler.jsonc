@@ -11,9 +11,10 @@
 	// .dev.vars (que no se versiona), así que la CI genera los mismos tipos.
 	"secrets": { "required": ["ADMIN_TOKEN"] },
 	// Límite de ritmo de las rutas caras (búsquedas, PGN, dossier y repertorio,
-	// ver src/middleware.ts): 30 peticiones por minuto y por IP. Apagado hasta
-	// confirmar el precio del binding; se enciende con "RATE_LIMIT": "on", y en
-	// local con RATE_LIMIT=on en .dev.vars. El namespace_id es único en la cuenta.
+	// ver src/middleware.ts): 30 peticiones por minuto y por IP. Apagado a
+	// propósito: por IP cortaría a quienes comparten la wifi de una sala de juego
+	// (ver «Límite de ritmo» en CLAUDE.md). Se enciende con "RATE_LIMIT": "on", y
+	// en local con RATE_LIMIT=on en .dev.vars. El namespace_id es único en la cuenta.
 	"vars": { "RATE_LIMIT": "off" },
 	"ratelimits": [
 		{
