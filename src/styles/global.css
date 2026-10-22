@@ -319,12 +319,15 @@
 		outline-offset: 2px;
 	}
 
-	/* Contenedor de página */
+	/* Contenedor de página. Con viewport-fit=cover (Base.astro), en horizontal
+	   el margen crece hasta dejar libre la muesca: los lados son físicos, como
+	   los de safe-area-inset. */
 	.page {
 		width: 100%;
 		max-width: var(--content-width);
 		margin-inline: auto;
-		padding-inline: var(--space-4);
+		padding-left: max(var(--space-4), env(safe-area-inset-left, 0px));
+		padding-right: max(var(--space-4), env(safe-area-inset-right, 0px));
 	}
 
 	/* Entre las secciones de una página: las de dentro de una rejilla (el dossier) llevan su hueco. */

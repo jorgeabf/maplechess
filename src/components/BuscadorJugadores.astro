@@ -48,9 +48,12 @@ const { autofocus = false, ...rest } = Astro.props
 	 * vale 0 y queda arriba; con los dos lados fijos, width: auto llena el
 	 * hueco hasta el ancho máximo y el margen auto de los lados lo centra. El
 	 * display sigue siendo cosa del navegador: oculto mientras está cerrado.
+	 * Cada lado, como .page, deja libre lo que tape la pantalla
+	 * (safe-area-inset, con viewport-fit=cover).
 	 */
 	form[popover] {
-		inset: var(--space-4) var(--space-4) auto;
+		inset: max(var(--space-4), env(safe-area-inset-top, 0px)) max(var(--space-4), env(safe-area-inset-right, 0px)) auto
+			max(var(--space-4), env(safe-area-inset-left, 0px));
 		width: auto;
 		max-inline-size: var(--reading-width);
 		margin: 0 auto;

@@ -5,6 +5,7 @@ import BuscadorJugadores from '../components/BuscadorJugadores.astro'
 import Icon from '../components/Icon.astro'
 import Logo from '../components/Logo.astro'
 import { CC_BY_SA, SOURCE_CODE } from '../lib/licenses'
+import { THEME_COLOR } from '../lib/theme-color'
 import { canonicalHref } from '../lib/urls'
 import '../styles/global.css'
 
@@ -49,7 +50,15 @@ const nav = [
 <html lang="es">
 	<head>
 		<meta charset="utf-8" />
-		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		{/* viewport-fit=cover: la página llega hasta el borde de abajo, también bajo
+		    la barra de gestos de Android (sin la barra de Chrome encima) y, en
+		    horizontal, hasta los lados de la muesca. Lo que toca un borde deja su
+		    env(safe-area-inset-*): la cabecera, .page, el pie y el buscador. */}
+		<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+		{/* Barras del navegador del color de la cabecera (lib/theme-color.ts). Safari
+		    26 no lo usa: tiñe las suyas con el fondo de la página. */}
+		<meta name="theme-color" media="(prefers-color-scheme: light)" content={THEME_COLOR.light} />
+		<meta name="theme-color" media="(prefers-color-scheme: dark)" content={THEME_COLOR.dark} />
 		<title>{fullTitle}</title>
 		<meta name="description" content={description} />
 		{noindex && <meta name="robots" content="noindex" />}
@@ -151,10 +160,13 @@ const nav = [
 		inset-block-start: var(--space-2);
 	}
 
+	/* Con viewport-fit=cover, el fondo llega al borde de arriba y el contenido
+	   queda por debajo de lo que lo tape (en el navegador, nada: vale 0). */
 	.site-header {
 		border-bottom: 1px solid var(--border);
 		background: var(--surface);
 		margin-bottom: var(--space-6);
+		padding-block-start: env(safe-area-inset-top, 0px);
 	}
 
 	/*
@@ -291,9 +303,10 @@ const nav = [
 		padding-bottom: var(--space-7);
 	}
 
+	/* Al final del scroll, el texto queda por encima de la barra de gestos. */
 	.site-footer {
 		border-top: 1px solid var(--border);
-		padding-block: var(--space-5);
+		padding-block: var(--space-5) calc(var(--space-5) + env(safe-area-inset-bottom, 0px));
 		font-size: var(--text-s);
 		color: var(--text-muted);
 	}
