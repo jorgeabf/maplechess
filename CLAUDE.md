@@ -103,7 +103,12 @@ MapleChess es un buscador de jugadores españoles (lista FIDE, federación ESP),
     - Chrome ofrece instalarla con nombre, `start_url`, `display` e iconos de 192 y 512 px. Un test lo comprueba, y también que cada icono exista en `public/`.
     - `display` es `standalone`, con `display_override: ["minimal-ui"]`: en Android deja atrás y el menú para copiar o compartir el enlace; Safari no lee `display_override` y se queda con `standalone`.
     - Sin service worker, a propósito: sin datos no sirve funcionar sin conexión, y un HTML guardado apuntaría, tras un despliegue, a CSS y JS con hash que ya no existen.
-    - Los colores son los de `THEME_COLOR`. Un manifest no distingue claro y oscuro, así que lleva el de claro; dentro de la app manda la meta `theme-color` de cada tema, que Chrome sí usa en oscuro en una app instalada.
+    - Un manifest no distingue claro y oscuro: Blink no lee colores oscuros del manifest, y `color_scheme_dark` sigue en propuesta. Por eso:
+      - sólo lleva `background_color`, el `--bg` claro de `THEME_COLOR`, para la pantalla de arranque;
+      - **no lleva `theme_color`, a propósito.** Con él, Chrome pinta con ese único color la barra del sistema de abajo de la app instalada (`WebappIntentDataProvider.getNavigationBarColor`), y en modo oscuro salía clara. Sin él, queda la del sistema. Un test lo comprueba;
+      - la barra de arriba la da la meta `theme-color` de cada tema, que Chrome sí usa en oscuro en una app instalada.
+    - Chrome guarda los colores del manifest al instalar y tarda días en actualizarlos: para probar un cambio, desinstalar y volver a instalar.
+    - El manifest no fija caché propia: va con la del middleware, que revalida siempre. Con una hora de caché, al reinstalar justo después de desplegar, Chrome seguía usando el manifest viejo.
     - Se comprueba con CDP: `Page.getAppManifest` y `Page.getInstallabilityErrors`.
     - Ni Chromium de escritorio ni Playwright los simulan solos: se comprueban con `Emulation.setSafeAreaInsetsOverride` de CDP, y en un móvil de verdad.
   - Todo menos los `@font-face` va en `@layer base`: cualquier regla de un componente le gana, tenga la especificidad que tenga. Sin la capa mandaba el orden de las hojas, que sigue al de los imports, y por el orden alfabético los componentes llegan antes que `Base.astro`. Si un componente no debe pisar una clase global (los colores de `.result.win`), que no declare esa propiedad. `board.css` y el CSS de chessground van sin capa: `board.css` pisa a chessground por orden.
