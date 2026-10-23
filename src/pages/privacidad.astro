@@ -1,6 +1,6 @@
 ---
 import Base from '../layouts/Base.astro'
-import { CONTACT, OWNER } from '../lib/legal'
+import { CONTACT, CONTROLLER } from '../lib/legal'
 
 const mail = `mailto:${CONTACT}`
 
@@ -34,7 +34,7 @@ const title = Object.fromEntries(sections.map((s) => [s.id, s.title])) as Record
 			<dl class="def-list">
 				<div>
 					<dt>Responsable</dt>
-					<dd>{OWNER}, <a href={mail}>{CONTACT}</a>.</dd>
+					<dd>{CONTROLLER}, <a href={mail}>{CONTACT}</a>.</dd>
 				</div>
 				<div>
 					<dt>Qué datos</dt>
@@ -86,8 +86,8 @@ const title = Object.fromEntries(sections.map((s) => [s.id, s.title])) as Record
 		<div class="prose">
 			<h2 id="responsable">{title.responsable}</h2>
 			<p>
-				MapleChess es un proyecto personal de {OWNER}, que es el responsable de los datos. Para cualquier asunto sobre
-				ellos, escribe a <a href={mail}>{CONTACT}</a>.
+				El responsable de los datos de MapleChess es {CONTROLLER}. Para cualquier asunto sobre ellos, escribe a{' '}
+				<a href={mail}>{CONTACT}</a>.
 			</p>
 
 			<h2 id="jugadores">{title.jugadores}</h2>
@@ -157,7 +157,7 @@ const title = Object.fromEntries(sections.map((s) => [s.id, s.title])) as Record
 					competición;
 				</li>
 				<li>el de todos, en la información deportiva;</li>
-				<li>el de {OWNER}, en ofrecer este servicio gratis.</li>
+				<li>el de {CONTROLLER}, en ofrecer este servicio gratis.</li>
 			</ul>
 			<p>
 				Son datos que la FIDE y la federación ya publican, y quien juega un torneo valorado sabe que se publican. Para que
