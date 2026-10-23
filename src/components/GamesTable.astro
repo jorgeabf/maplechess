@@ -240,7 +240,7 @@ const linkTo = (id: number | null) => (fideId && id === fideId ? null : id)
 	 * isolation deja ese z-index dentro de la fila.
 	 *
 	 * El ::after necesita que la fila sea su bloque contenedor, y una fila de
-	 * tabla no lo era en Safari hasta 2026 (WebKit 240961): la capa de cada
+	 * tabla no lo es en Safari hasta la 27 (WebKit 240961): la capa de cada
 	 * fila taparía la tabla entera. Por eso las filas son rejillas: en el
 	 * móvil, con sus áreas; a todo el ancho, con subgrid sobre las columnas de
 	 * la tabla, que pasa a ser la rejilla. Sin subgrid (Safari 15, Chrome 116)

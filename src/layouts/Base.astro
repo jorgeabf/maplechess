@@ -55,6 +55,9 @@ const nav = [
 		    horizontal, hasta los lados de la muesca. Lo que toca un borde deja su
 		    env(safe-area-inset-*): la cabecera, .page, el pie y el buscador. */}
 		<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+		{/* Safari en iOS hace enlaces tel: de las cifras que parecen un teléfono: los
+		    FIDE ID sueltos de las plantillas («551040654») tienen las nueve de uno español. */}
+		<meta name="format-detection" content="telephone=no" />
 		{/* Barras del navegador del color del fondo de la página, el que pone también
 		    Safari 26 (lib/theme-color.ts explica por qué no el de la cabecera). */}
 		<meta name="theme-color" media="(prefers-color-scheme: light)" content={THEME_COLOR.light} />
@@ -326,6 +329,20 @@ const nav = [
 	.search-toggle:hover {
 		border-block-end-color: var(--border-strong);
 		color: var(--text);
+	}
+
+	/*
+	 * Sin la API popover (Safari 16.4–16.7) no está la regla del navegador que
+	 * oculta el panel cerrado: se pintaría siempre en la cabecera, y la lupa y
+	 * «Cerrar» no harían nada. Se quitan los dos; la búsqueda sigue en la
+	 * portada y en /jugadores. El form lleva el ámbito de Base (le llega con los
+	 * atributos que pasa a BuscadorJugadores).
+	 */
+	@supports not selector(:popover-open) {
+		.search-toggle,
+		form[popover] {
+			display: none;
+		}
 	}
 
 	/* En alto contraste el sistema pinta los bordes transparentes con el color

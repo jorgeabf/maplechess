@@ -31,8 +31,9 @@ function hashNode(): number | null {
 /**
  * La jugada se escribe en la URL cuando se deja de navegar, no en cada una:
  * Safari (y todo navegador en iOS) lanza una excepción tras 100 llamadas a
- * history.replaceState en 30 s, y Chrome deja de hacerlas en silencio. Con la
- * flecha pulsada se llegaba en unos segundos.
+ * history.replaceState en 10 s (en 30 s hasta Safari 16), y Chrome deja de
+ * hacerlas en silencio. Con la flecha pulsada se llegaba en unos segundos. Con
+ * 300 ms entre escritura y escritura caben, como mucho, 34 en 10 s.
  */
 const URL_DELAY_MS = 300
 
