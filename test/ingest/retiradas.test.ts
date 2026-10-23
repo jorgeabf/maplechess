@@ -171,6 +171,26 @@ describe('retiradas en la ingesta', () => {
 		expect(await count('SELECT count(*) AS n FROM games WHERE white_name = ?1', RETIRED_NAME)).toBe(1)
 	})
 
+	it('sin FIDE ID, la fila va sin él: no toma el FIDE ID de otra persona', async () => {
+		await retire()
+		await db.prepare("INSERT INTO retiradas (nombre, creada) VALUES ('Sin Ficha, Alguien', '2026-10-24')").run()
+		// Con fide_id de clave primaria, SQLite le daba 930004: el FIDE ID de quien viniera detrás.
+		expect((await db.prepare('SELECT fide_id AS fideId FROM retiradas ORDER BY id').all()).results).toEqual([
+			{ fideId: RETIRED.fideId },
+			{ fideId: null }
+		])
+	})
+
+	it('el reprocesado retira por el nombre aunque nadie de la lista tenga FIDE ID', async () => {
+		const id = await upsertTournament(db, tournament)
+		const rows = buildGameRows(parseGames(game(1, 'Sin Ficha, Alguien', 'Rival Uno, Alguien')), [], tournament)
+		await saveGames(db, id, rows, '2026-10-01T00:00:00.000Z', { name: 'info64', url: null })
+		await db.prepare("INSERT INTO retiradas (nombre, creada) VALUES ('Sin Ficha, Alguien', '2026-10-24')").run()
+
+		expect(await applyRetired(db)).toEqual({ players: 0, participations: 0, games: 1, pairings: 0 })
+		expect(await count('SELECT count(*) AS n FROM games WHERE white_name = ?1', RETIRED_NAME)).toBe(1)
+	})
+
 	it('la lista FIDE no importa a los retirados: sin ficha', async () => {
 		await retire()
 		const fide = (fideId: number, name: string): FidePlayer => ({

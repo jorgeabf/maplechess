@@ -78,12 +78,13 @@ MapleChess es un buscador de jugadores españoles (lista FIDE, federación ESP),
     - **Del nombre de los homónimos** («Apellido Inventado, Nombre 2011»), `publicName` (`src/ingest/nombres.ts`). Se aplica a todo nombre que se guarda, venga de donde venga: la lista FIDE, y los participantes, las plantillas, los emparejamientos y las partidas de info64 y de lichess, que copian el nombre FIDE con su año. En las partidas, también en la cabecera `White`/`Black` del PGN.
     - **Se sanea al escribir, no al leer:** las partidas se cruzan con los participantes por el nombre completo (la salida del paso del torneo, `SyncedTournament.participants`, no lo guardado). Sin el año, dos homónimos del mismo torneo serían el mismo nombre y ninguno recibiría su FIDE ID.
     - El año del nombre es el de nacimiento, así que no hace falta el FIDE ID. Los adultos lo conservan.
-  - **Retirada de datos** (tabla `retiradas`, migración 0010; `/privacidad` explica cómo pedirla):
+  - **Retirada de datos** (tabla `retiradas`, migraciones 0010 y 0013; `/privacidad` explica cómo pedirla):
     - Quien está en la tabla no tiene ficha: la lista FIDE no lo importa (`upsertFidePlayers`) y la importación borra la fila que tuviera.
     - En participantes, partidas y emparejamientos, su nombre pasa a «Jugador retirado» (`RETIRED_NAME`), sin FIDE ID ni título. En el PGN, también sus cabeceras.
     - Las partidas de sus rivales se conservan.
     - Se anonimiza al escribir (`replaceParticipations`, `saveGames`, `replacePairings` en `repo.ts`), después de cruzar: el cruce necesita su nombre y su ID para saber que es él.
     - Con FIDE ID se reconoce sólo por él. Sin él, por el nombre (`isRetired`), así que un homónimo sin ID también se anonimiza: en la duda, se protege a quien lo pidió.
+    - Quien no tiene FIDE ID va con `fide_id` NULL. Hasta la 0013 era la clave primaria, y con NULL SQLite le daba el mayor de la tabla más uno: el FIDE ID de otra persona, que se quedaba sin ficha.
     - Una petición se aplica a lo guardado con el reprocesado (`{"retiradas":true}`, `applyRetired`), sin recorrer todas las partidas. Cómo atenderla en producción está en la guía de operación (ver «Producción»).
     - Quedan copias en Time Travel (30 días) y en los registros (7 días), que caducan solas.
 - `src/lib/me.ts`: «tú» en el dossier: el FIDE ID propio llega como `?yo=` (desde el dossier o con «Soy yo» en tu ficha) y se recuerda en la cookie funcional `yo` (un año, `HttpOnly`); `?yo=` vacío la borra. Guardada o borrada, la ficha y el dossier redirigen (303) a la misma URL sin `yo`, para que un enlace compartido no cambie quién es «tú» para quien lo abre; el dossier no lo hace con un ID que no existe o es el del rival, para poder decirlo (`dropMeParam`). Con ella, tu ficha, tu dossier y tu repertorio te hablan a ti (`isOwn`: «Mi dossier», «Tus líneas principales»). Es la única cookie (ver `/privacidad`).
