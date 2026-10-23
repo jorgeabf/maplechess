@@ -7,9 +7,17 @@
 // enfoca los botones al pulsarlos, así que al tocar «Buscar» el campo pierde el
 // foco sin decir adónde va, y cerrar ahí impediría enviar el formulario. Pulsar
 // fuera del panel ya lo cierra el propio popover.
+//
+// También se cierra al salir de la página (pagehide), que es al buscar: el
+// navegador la guarda tal cual en bfcache y, al volver con Atrás, el panel
+// seguía abierto, con la búsqueda, tapando la página. Cerrado en pagehide no se
+// ve cerrarse al volver, como pasaría en pageshow.
 for (const panel of document.querySelectorAll<HTMLElement>('form[popover]')) {
 	panel.addEventListener('focusout', (event) => {
 		const next = event.relatedTarget
 		if (next instanceof Node && !panel.contains(next) && panel.matches(':popover-open')) panel.hidePopover()
+	})
+	addEventListener('pagehide', () => {
+		if (panel.matches(':popover-open')) panel.hidePopover()
 	})
 }
