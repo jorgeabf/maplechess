@@ -52,10 +52,7 @@ MapleChess es un buscador de jugadores españoles (lista FIDE, federación ESP),
     - Las partidas de sus rivales se conservan.
     - Se anonimiza al escribir (`replaceParticipations`, `saveGames`, `replacePairings` en `repo.ts`), después de cruzar: el cruce necesita su nombre y su ID para saber que es él.
     - Con FIDE ID se reconoce sólo por él. Sin él, por el nombre (`isRetired`), así que un homónimo sin ID también se anonimiza: en la duda, se protege a quien lo pidió.
-    - **Atender una petición:**
-      1. `pnpm exec wrangler d1 execute DB --remote --command "INSERT INTO retiradas (fide_id, nombre, creada) VALUES (<FIDE ID>, '<Apellidos, Nombre>', '<YYYY-MM-DD>')"`, con el nombre como en la lista FIDE.
-      2. `pnpm exec wrangler workflows trigger games-reprocess '{"retiradas":true}' --id retirada-<FIDE ID>`: aplica la lista a lo guardado (`applyRetired`) sin recorrer todas las partidas. Lo de participantes sin ID recorre la tabla entera (unas 700.000 filas).
-      3. Comprobar que la ficha da 404 y que buscar su apellido en `/partidas` no lo encuentra; después, contestar.
+    - Una petición se aplica a lo guardado con el reprocesado (`{"retiradas":true}`, `applyRetired`), sin recorrer todas las partidas. Cómo atenderla en producción está en la guía de operación (ver «Producción»).
     - Quedan copias en Time Travel (30 días) y en los registros (7 días), que caducan solas.
 - `src/lib/me.ts`: «tú» en el dossier: el FIDE ID propio llega como `?yo=` (desde el dossier o con «Soy yo» en tu ficha) y se recuerda en la cookie funcional `yo` (un año, `HttpOnly`); `?yo=` vacío la borra. Guardada o borrada, la ficha y el dossier redirigen (303) a la misma URL sin `yo`, para que un enlace compartido no cambie quién es «tú» para quien lo abre; el dossier no lo hace con un ID que no existe o es el del rival, para poder decirlo (`dropMeParam`). Con ella, tu ficha, tu dossier y tu repertorio te hablan a ti (`isOwn`: «Mi dossier», «Tus líneas principales»). Es la única cookie (ver `/acerca`).
   - En el dossier, `yo` puede traer tu nombre en vez del ID (`meName`). La tarjeta «Tú contra…» lista los 8 primeros que casan (`findPlayersByName` en `db/players.ts`, sin el rival) y cada uno enlaza a `?yo=ID#tu`. No hay parámetro de vuelta desde la ficha: sería una redirección abierta.
@@ -157,7 +154,7 @@ curl -X POST localhost:4321/api/admin/sync -H "Authorization: Bearer $TOKEN" \
   -d '{"workflow":"info64","params":{"from":"","to":"","keys":["ce-individual-absoluto-2025"]}}'
 ```
 
-`GET /api/admin/sync?workflow=info64&id=<instancia>` devuelve el estado. Sólo emparejamientos: `{"from":"","to":"","pairings":"only"}` (con `keys`, sólo esos torneos). Para guardar una lectura con muchas menos partidas que las guardadas (el organizador las ha retirado): `"replace": true` junto a `keys`. Para FIDE: `{"workflow":"fide","params":{"force":true}}`. Para el reprocesado de partidas: `{"workflow":"reprocess"}`. Para lichess: `{"workflow":"lichess"}` (pasada diaria), `{"workflow":"lichess","params":{"tours":["zK5CoVvF"]}}` o `{"rounds":[…]}`; `since` (YYYY-MM-DD) mira las terminadas desde ese día y `force` relee las ya decididas.
+`GET /api/admin/sync?workflow=info64&id=<instancia>` devuelve el estado. Un periodo largo, en ventanas encadenadas: `{"from":"2014-01-01","to":"2014-01-31","chain":{"until":"2026-10-17","months":1}}`. Sólo emparejamientos: `{"from":"","to":"","pairings":"only"}` (con `keys`, sólo esos torneos). Para guardar una lectura con muchas menos partidas que las guardadas (el organizador las ha retirado): `"replace": true` junto a `keys`. Para FIDE: `{"workflow":"fide","params":{"force":true}}`. Para el reprocesado de partidas: `{"workflow":"reprocess"}`. Para lichess: `{"workflow":"lichess"}` (pasada diaria), `{"workflow":"lichess","params":{"tours":["zK5CoVvF"]}}` o `{"rounds":[…]}`; `since` (YYYY-MM-DD) mira las terminadas desde ese día y `force` relee las ya decididas.
 
 ## Colaboración
 
@@ -166,8 +163,8 @@ curl -X POST localhost:4321/api/admin/sync -H "Authorization: Bearer $TOKEN" \
 - **`main` es lo desplegado y está protegido:** sólo entra por PR, con la CI en verde (`.github/workflows/ci.yml`: lint, `astro check` más `tsc` del cliente, y tests) y la revisión de la otra persona.
   - Las acciones de la CI van fijadas por SHA, con la etiqueta en un comentario, porque una etiqueta se puede mover. Las actualiza Dependabot (`.github/dependabot.yml`): cada semana, con 7 días de espera desde que sale una versión, y sus PR pasan por la CI y la revisión como los demás.
 - **Ramas cortas desde `main` actualizado:** `feature/…` o `fix/…`. El PR explica qué cambia y cómo se ha probado; si toca páginas, también en `pnpm dev`. Antes de abrirlo: `pnpm test`, `pnpm lint` y `pnpm check` (con `pnpm dev` parado).
-- **Producción sólo la opera quien despliega (Jorge):**
-  - `pnpm run deploy`, que sólo despliega `origin/main` (ver «Despliegue»);
+- **Producción sólo la opera quien despliega (Jorge), con su guía privada (ver «Producción»):**
+  - `pnpm run deploy`, que sólo despliega `origin/main`;
   - `pnpm db:migrate:remote`;
   - los secretos y su rotación;
   - los Workflows (`/api/admin/sync`, `wrangler workflows trigger`).
@@ -233,59 +230,23 @@ curl -X POST localhost:4321/api/admin/sync -H "Authorization: Bearer $TOKEN" \
   - **Descargas PGN** en dos fases: los id por índice (`exportGameIds`) y los PGN de 500 en 500 (`gamesPgn`), enviados en trozos (`pgnResponse`). La de una búsqueda lleva las mismas que enseña, como mucho 1.000 (`exportLimit`); la de un jugador, un torneo o el repertorio, hasta 5.000. La segunda fase suma dos filas por partida, a cambio de la memoria constante. Medido: la de `?desde=1000-01-01` (5.000) leía unas 400.000 filas y juntaba 20,7 MB en memoria, y ahora (1.000) unas 4.200; la de «garcia», de 62.300 a unas 43.500.
   - **Sitemap** (22-oct-2026, en remoto): el índice lee 3 filas (`max(id)` por la clave primaria y `site_totals`). Los trozos de partidas leen una fila por id del rango (48.601, 49.113 y 34.726) y el de torneos, 12.528. Los de jugadores leen las filas que salta `OFFSET` más una por ficha que entra: 69.829 y 119.968. Un `EXISTS` que no encuentra nada no suma. El recorrido completo son unas 335.000 filas: leído a diario, el 0,04 % de lo incluido al mes. `max` y `min` en la misma consulta recorren la tabla: van por separado.
   - **Límite de ritmo** (`src/middleware.ts`, binding `RATE_LIMITER`): 30 peticiones caras por minuto y por IP (búsquedas, PGN, dossier, repertorio y los trozos del sitemap que salen de D1; nunca fichas, partidas, torneos ni `/api`), con la página 429 y `Retry-After`. En local, `RATE_LIMIT=on` en `.dev.vars`. `robots.txt` aparta además `/partidas?`, `/jugadores?` y `/torneos?`.
-    - **Apagado en producción a propósito** (`"RATE_LIMIT": "off"` en `wrangler.jsonc`; decidido el 22-oct-2026). Va por IP, y la documentación de Cloudflare lo desaconseja porque muchos usuarios comparten la suya: la wifi de una sala de juego o de un club, los datos del móvil. Con 30 por minuto, una sala con muchos jugadores preparando la ronda se bloquearía, y el repertorio hace una petición por jugada. El coste ya lo acotan los topes de las búsquedas.
-    - El aviso de abuso es una alerta de gasto de la cuenta (Billing → Billable Usage → «Create budget alert», 10 USD). Si salta, o las métricas de D1 muestran algo raro: comprobar en el panel que ningún otro Worker de la cuenta usa el `namespace_id` 26102201 (compartirían contador) y encenderlo con más margen, unas 120 por minuto. La documentación no dice si el binding cobra: mirar «Billable Usage» unos días después.
+    - **Apagado en producción a propósito** (`"RATE_LIMIT": "off"` en `wrangler.jsonc`; decidido el 22-oct-2026). Va por IP, y la documentación de Cloudflare lo desaconseja porque muchos usuarios comparten la suya: la wifi de una sala de juego o de un club, los datos del móvil. Con 30 por minuto, una sala con muchos jugadores preparando la ronda se bloquearía, y el repertorio hace una petición por jugada. El coste ya lo acotan los topes de las búsquedas. Cuándo encenderlo está en la guía de operación.
 - **Migraciones:** la D1 de producción ya tiene datos, así que cualquier cambio de esquema va en una migración nueva (`migrations/NNNN_…`, con el siguiente número libre), aplicada con `pnpm db:migrate:remote` antes de desplegar. Para regenerar la D1 local hay que parar el servidor (en Windows mantiene abierto el SQLite), borrar `.wrangler/state/v3/d1` y ejecutar `pnpm db:migrate:local`.
 - **D1 local frente a remota:** wrangler identifica la base local por `preview_database_id` (`"DB"`), no por `database_id`. Si se quita, la local aparece vacía. Las órdenes `--remote` dicen «preview database», pero usan el `database_id` de producción.
 - **Bloqueos de LaLiga:** en horario de partido, las operadoras españolas bloquean IP de Cloudflare, incluidas las de `workers.dev` (188.114.96.0/23); el dominio también va por Cloudflare. Si la web no carga desde España, mira hayahora.futbol antes de depurar. La API de Cloudflare (wrangler) sigue funcionando.
 - **Cabeceras HTTP sólo en ASCII** (el User-Agent de `src/ingest/http.ts`).
 - **Horas de ronda en hora local:** info64 publica la hora local de España sin zona. `pairings.starts_at` se guarda así (`'YYYY-MM-DD HH:MM'`) y se compara con `madridDateTime()`; en Canarias hay una hora de desfase.
-- **Sincronizaciones a mano y crons:** son automáticas las de info64 a las 05:00 UTC y a las 15:00 y las 22:00 de Madrid (13:00 y 20:00 UTC en verano, 14:00 y 21:00 en invierno) y la de lichess a las 06:30 UTC. No lances otra a esas horas: serían dos a la vez (la de info64 también pide a lichess).
 
-## Despliegue (Cloudflare Workers Paid)
+## Producción
 
-En producción desde el 17-oct-2026: https://maplechess.es
+https://maplechess.es, en un Worker de Cloudflare (Workers Paid), con la D1 en la UE. La opera Jorge (ver «Colaboración»).
 
-- **Dominio:**
-  - `maplechess.es`, registrado en DonDominio con renovación automática. Cloudflare no vende `.es`.
-  - La zona está en esta cuenta de Cloudflare: plan Free, con DNSSEC (el DS va en DonDominio).
-  - El Worker la sirve con Custom Domains (`routes` en `wrangler.jsonc`) para `maplechess.es` y `www`, que crea `wrangler deploy`. La zona no lleva registros propios A, AAAA ni CNAME para esos dos nombres: el Custom Domain no se crea sobre uno que ya exista.
-  - La URL de antes, https://buscador-partidas-ajedrez.aportuvas.workers.dev, sigue activa y redirige al dominio (ver `src/middleware.ts`). Necesita `"workers_dev": true`: con `routes`, wrangler la apaga por defecto. La enlaza lo publicado antes del dominio, como el aviso a la FEDA.
-  - Correo: Email Routing reenvía `contacto@maplechess.es` (el de `/acerca`) al correo de Jorge. Sólo recibe: las respuestas salen de su correo.
-- D1 `ajedrez` en jurisdicción `eu`.
-- El secreto `ADMIN_TOKEN` tiene su copia local en `.admin-token.prod`, ignorado por git.
-- **Desplegar: `pnpm run deploy`** (`scripts/desplegar.mjs`). En orden:
-  1. Se niega si el árbol tiene cambios, si `HEAD` no es `origin/main` tras un `git fetch` o si es la media hora que sigue a un cron de `wrangler.jsonc`: 05:00 y 06:30 UTC, las cuatro horas de emparejamientos (13, 14, 20 y 21 UTC) y el día 3 a las 06:00. `pnpm run deploy --comprobar` sólo hace estas comprobaciones; con `--comprobar=<fecha ISO>`, la del cron como si fuera esa hora.
-  2. `copy-engine`: `git pull` no ejecuta el postinstall, y sin él un cambio de versión del motor deja producción sin Stockfish.
-  3. Apunta en `despliegues.log` (ignorado, como todos los `.log`) la hora, el commit y el marcador de Time Travel de D1.
-  4. `pnpm build` y `wrangler deploy`.
-  5. `scripts/humo.mjs`: 10 URL a una petición por segundo, con su estado, un texto de la página y sus cabeceras; sin búsquedas. También a mano: `node scripts/humo.mjs [URL base]`. Un 503 de `/api/estado` es un aviso, no un fallo: falla la ingesta, no el despliegue. Contra producción comprueba además que workers.dev y `www` redirigen al dominio.
-  - No mira si corre alguna instancia: antes, la primera fila de `wrangler workflows instances list` de cada Workflow debe estar Completed.
-  - Si otra sesión trabaja en el checkout, despliega desde un worktree de `main` (`git worktree add --detach`), que también es `origin/main`.
-- **Volver atrás:**
-  - El Worker: `wrangler deployments list` y `wrangler rollback <versión>`. Es inmediato y no toca D1.
-  - D1: `wrangler d1 time-travel restore ajedrez --bookmark=<marcador>`, con el de `despliegues.log`, o `--timestamp=<ISO>` (Time Travel guarda 30 días). Sustituye la base entera en el sitio: se pierde todo lo escrito después, también lo de las sincronizaciones. Sólo si el problema está en los datos, como una migración o una ingesta que los rompió. Al acabar, dice el marcador anterior, para deshacerlo. Sin ensayar todavía.
-  - Por eso las migraciones sólo añaden (tablas, columnas, índices): el Worker anterior funciona con el esquema nuevo, y volver atrás el Worker no obliga a restaurar D1.
-- **Rotar credenciales:**
-  - `ADMIN_TOKEN`: genera uno nuevo (p. ej. `openssl rand -hex 32`), súbelo con `wrangler secret put ADMIN_TOKEN` y guárdalo en `.admin-token.prod`. El secreto nuevo vale en cuanto se sube.
-  - El token OAuth de wrangler: `wrangler logout`, que lo revoca, y `wrangler login`.
+- **Desplegar:** `pnpm run deploy` (`scripts/desplegar.mjs`) sólo despliega `origin/main`, con el árbol limpio y fuera de la media hora que sigue a cada cron. Copia el motor, apunta el marcador de Time Travel de D1, construye, despliega y pasa `scripts/humo.mjs`.
+- Las migraciones sólo añaden (tablas, columnas, índices): así el Worker anterior funciona con el esquema nuevo, y volver atrás el Worker no obliga a restaurar D1.
 - **Vigilancia de la ingesta** (`src/lib/salud.ts`):
-  - Al terminar, cada pasada guarda en `sync_state` la clave `salud.<pasada>` (`info64`, `emparejamientos`, `lichess` y `fide`) con un JSON `{fin, ok, fallos, avisos}`: torneos bien, torneos fallidos y avisos de las guardas. Se escribe con `saveHealth`. Las escriben sólo las pasadas programadas: la diaria de info64 (también `emparejamientos`), las de emparejamientos, la diaria de lichess y la FIDE (también sin cambios en la lista, y con un fallo si la importación falla). Una pasada a mano (`keys`, `chain`, `tours`, `rounds`) no, para no tapar que falle la programada. Para verlas: `wrangler d1 execute DB --remote --command "SELECT key, value FROM sync_state WHERE key GLOB 'salud.*'"`.
+  - Al terminar, cada pasada guarda en `sync_state` la clave `salud.<pasada>` (`info64`, `emparejamientos`, `lichess` y `fide`) con un JSON `{fin, ok, fallos, avisos}`: torneos bien, torneos fallidos y avisos de las guardas. Se escribe con `saveHealth`. Las escriben sólo las pasadas programadas: la diaria de info64 (también `emparejamientos`), las de emparejamientos, la diaria de lichess y la FIDE (también sin cambios en la lista, y con un fallo si la importación falla). Una pasada a mano (`keys`, `chain`, `tours`, `rounds`) no, para no tapar que falle la programada.
   - `GET /api/estado` es público y sin caché. Da 503 si alguna pasada está caducada (más de 26 h la diaria de info64 y la de lichess, 14 h la de emparejamientos y 35 días la FIDE) o con más del 20 % de torneos fallidos. Si no, 200. Sólo dice el estado de cada pasada, sin recuentos ni fechas. Una pasada que aún no ha escrito su clave sale «sin datos», con 200.
-  - `.github/workflows/vigilancia.yml` lo pide a las 07:30 y a las 23:30 UTC, y a mano con «Run workflow». Si falla, GitHub manda un correo, y el registro del paso dice qué pasada falla. En un repositorio público, GitHub desactiva los `schedule` tras 60 días sin actividad; se reactivan en la pestaña Actions.
-- Lanzar sincronizaciones, de una de estas dos formas:
-  - Por `/api/admin/sync` con `-H "Authorization: Bearer $(cat .admin-token.prod)"`.
-  - Por la API de Cloudflare: `wrangler workflows trigger <info64-sync|lichess-sync|fide-sync> '<params>'`. Para ventanas de info64, pasa `--id info64-<from>-<to>`, como hace el endpoint, para que relanzar no duplique.
-- Seguir las instancias: panel de Cloudflare → Workers → Workflows, o `wrangler workflows instances list info64-sync` y `wrangler workflows instances describe info64-sync <id>` (línea `Status:`).
-- Resincronizar torneos concretos (p. ej. tras arreglar un parser): `{"from":"","to":"","keys":[…]}`. Con `keys` se releen aunque estén cerrados. Las claves se sacan de la D1 remota (`tournaments.source_key`). Para cientos de torneos, mejor en tandas de unos 100 lanzadas una tras otra: cada instancia se sigue y se relanza mejor, y **nunca dos a la vez** (1 petición/s). El límite no es el de pasos: Workers Paid admite 10.000 por instancia, `step.sleep` no cuenta y un torneo usa de 2 a 4.
-- Con una migración, el marcador va antes de migrar: el que apunta `pnpm run deploy` ya sería posterior. Primero `pnpm run deploy --comprobar` y `wrangler d1 time-travel info ajedrez`, y se apunta el marcador en `despliegues.log`. Después:
-  - si la migración sólo añade tablas (como `0004_pairings`): `pnpm db:migrate:remote` y luego `pnpm run deploy`;
-  - si añade columnas derivadas: `pnpm db:migrate:remote`, `pnpm run deploy` y `wrangler workflows trigger games-reprocess '{}' --id <nombre>`.
-- Carga inicial (17 y 18-oct-2026, terminada sin errores; no hay que repetirla):
-  - FIDE: `{"force":true}`.
-  - info64, de 2014-01-01 a 2026-10-17, en ventanas mensuales encadenadas: `{"from":"2014-01-01","to":"2014-01-31","chain":{"until":"2026-10-17","months":1}}`. Tardó unas 11 h a 1 petición/s.
-- Carga inicial de lichess, de una vez:
-  1. `scripts/lichess-rondas.mjs` saca una ronda por torneo con españoles de los volcados mensuales. Hace falta la lista de FIDE ID españoles de la D1 remota.
-  2. El Workflow las recibe en `{"rounds":[…]}`, en tandas de unos 150 lanzadas una tras otra, nunca dos a la vez ni a la hora de un cron.
-  3. Al final, una pasada con `{"since":"<día siguiente al último volcado>"}` cubre el mes en curso, que aún no tiene volcado. La API sólo da unas tres semanas de terminadas.
-- **Campeonatos históricos (1902–2013): pendientes.** No lances su cadena mientras corra otra de info64, porque dos a la vez pasan de 1 petición/s: `{"from":"1902-01-01","to":"1902-12-31","chain":{"until":"2013-12-31","months":12}}` con id `info64-1902-01-01-1902-12-31`.
+  - `.github/workflows/vigilancia.yml` lo pide a las 07:30 y a las 23:30 UTC, y a mano con «Run workflow».
+- **Guía de operación:** el dominio, el despliegue paso a paso, volver atrás, las credenciales, las sincronizaciones y cargas en producción, la retirada de datos y qué hacer ante un abuso. Es privada: está en un repositorio aparte y la importa la línea siguiente, que en otro equipo no carga nada.
+
+@~/.claude/maplechess-operacion/OPERACION.md
