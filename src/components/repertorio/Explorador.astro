@@ -159,9 +159,9 @@ const positionHref = (moves: string[]) => `${lineHref(moves)}#${ANCHOR}`
 	 *
 	 * En dos columnas el motor va bajo el tablero y, como en el visor, el
 	 * tablero cabe a lo alto con lo que lleva debajo: si no, el interruptor del
-	 * motor quedaba bajo el pliegue (a 1280×900 el tablero empieza a 285 px y
-	 * debajo van 61 de hueco y panel del motor). 23rem lo deja a la vista al
-	 * cargar, con algo de margen.
+	 * motor quedaba bajo el pliegue (a 1280×900, con la cabecera de 64 px, el
+	 * tablero empieza a 302 px y debajo van 62 de hueco y panel del motor).
+	 * 23rem lo deja a la vista al cargar, con algo de margen.
 	 */
 	.explorer {
 		--board-room: max(var(--board-min), 100svh - 23rem);

@@ -148,11 +148,12 @@ const hasVariations = tree.nodes.some((n) => n.children.length > 1)
 	/*
 	 * La columna del tablero (barras, tablero y botones) cabe a lo alto de la
 	 * pantalla: si no, los botones quedaban bajo el pliegue (a 750×742 el
-	 * tablero medía 710 px). Con la cabecera de la web en una fila, los nombres
-	 * en una línea y los datos del torneo en dos (el torneo y la apertura suelen
-	 * ser largos), el tablero empieza a unos 223 px y debajo lleva 77 px de
-	 * barra y botones; mide 8 px menos que la columna (el hueco de la barra del
-	 * motor). 19rem deja los botones a la vista al cargar, con algo de margen.
+	 * tablero medía 710 px). Con la cabecera de la web en una fila (64 px), los
+	 * nombres en una línea y los datos del torneo en dos (el torneo y la
+	 * apertura suelen ser largos), el tablero empieza a unos 239 px y debajo
+	 * lleva 77 px de barra y botones; mide 8 px menos que la columna (el hueco
+	 * de la barra del motor). 20rem deja los botones a la vista al cargar, con
+	 * algo de margen. Si la cabecera crece, este margen también.
 	 * En el móvil la cabecera y el título ocupan más: manda el ancho, y el visor
 	 * entero cabe tras desplazar un poco. --board-min como mínimo, como el
 	 * explorador del repertorio.
@@ -170,7 +171,7 @@ const hasVariations = tree.nodes.some((n) => n.children.length > 1)
 	 * la misma condición (o su complemento exacto, para una columna).
 	 */
 	.visor {
-		--board-room: max(var(--board-min), 100svh - 19rem);
+		--board-room: max(var(--board-min), 100svh - 20rem);
 		display: grid;
 		grid-template-columns: minmax(0, min(var(--board-room), var(--board-max))) minmax(20rem, 1fr);
 		gap: var(--space-5);

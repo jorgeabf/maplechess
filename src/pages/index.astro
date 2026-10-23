@@ -104,12 +104,55 @@ const available = [
 
 <style>
 	/*
-	 * Sin margen arriba: el h1 queda a la altura del de las demás páginas.
-	 * Los totales, cerca: dicen qué hay para buscar.
+	 * Ocupa todo el ancho, para el tablero, y lo que lleva dentro se queda en
+	 * el de lectura. En el móvil el h1 queda a la altura del de las demás
+	 * páginas; desde 40rem, con más aire bajo la cabecera. Los totales, cerca:
+	 * dicen qué hay para buscar.
 	 */
 	.hero {
-		max-inline-size: var(--reading-width);
+		position: relative;
+		isolation: isolate;
 		margin-block: 0 var(--space-5);
+	}
+
+	.hero > :global(*) {
+		max-inline-size: var(--reading-width);
+	}
+
+	@media (width >= 40rem) {
+		.hero {
+			padding-block-start: var(--space-5);
+		}
+	}
+
+	/*
+	 * Un tablero de fondo, para que se vea a la primera que la web es de
+	 * ajedrez: ocho columnas de la madera de la marca (como el tablero, h8
+	 * oscura) en la esquina de arriba a la derecha, desde el borde de la
+	 * cabecera (su margen es --space-6), que se desvanecen hacia el texto. En
+	 * escritorio queda en el hueco junto al buscador; en el móvil, detrás del
+	 * h1. Como mucho al 12 %: sobre una casilla de nogal el gris queda a 4,9:1
+	 * en claro (5,7 sobre el fondo) y a 7:1 en oscuro. Fuera al imprimir y con
+	 * más contraste.
+	 */
+	.hero::before {
+		--casilla: 3rem;
+		content: '';
+		position: absolute;
+		z-index: -1;
+		inset-block: calc(-1 * var(--space-6)) 0;
+		inset-inline-end: 0;
+		inline-size: min(100%, 8 * var(--casilla));
+		background: repeating-conic-gradient(var(--board-dark) 0 25%, var(--board-light) 0 50%);
+		background-position: right top;
+		background-size: calc(2 * var(--casilla)) calc(2 * var(--casilla));
+		mask-image: radial-gradient(farthest-side at 100% 0, rgb(0 0 0 / 0.12), transparent);
+	}
+
+	@media print, (forced-colors: active), (prefers-contrast: more) {
+		.hero::before {
+			display: none;
+		}
 	}
 
 	.hero h1 {
