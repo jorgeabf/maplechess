@@ -18,10 +18,12 @@ import {
 	loadLinkedBroadcasts,
 	loadParticipants,
 	loadTournamentIds,
+	loadTournamentsStarting,
 	markGamesChecked,
 	refreshTotals,
 	replacePairings,
 	replaceParticipations,
+	replaceStandings,
 	saveGames,
 	upsertTournament,
 	type CheckedTournament,
@@ -31,12 +33,14 @@ import {
 	parseEvents,
 	parseGamesPage,
 	parseRoundPage,
+	parseStandingsPage,
 	parseTeamListing,
 	parseTournamentPage,
 	parseUpcomingRounds,
 	PageFormatError,
 	type EventTournament,
 	type TournamentPlayer,
+	type TournamentType,
 	type UpcomingRound
 } from './parse'
 
@@ -69,6 +73,12 @@ export interface Info64SyncParams {
 	 * (ver saveGames): para cuando el organizador ha retirado partidas de verdad.
 	 */
 	replace?: boolean
+	/**
+	 * 'only': sólo la clasificación de los torneos ya guardados, los de keys o
+	 * los que empiezan en la ventana, sin pedir el calendario. Para cargar la de
+	 * los torneos que ya no se releen; encadenable con chain.
+	 */
+	standings?: 'only'
 }
 
 /** Torneo leído y guardado; es lo que pasa del paso "torneo" al de "partidas". */
@@ -126,18 +136,22 @@ export class Info64SyncWorkflow extends WorkflowEntrypoint<Env, Info64SyncParams
 	async run(event: WorkflowEvent<Info64SyncParams>, step: WorkflowStep): Promise<void> {
 		const params = event.payload
 		const db = this.env.DB
-		const tournaments = params.pairings === 'only' ? null : await this.syncWindow(params, step)
-		// Antes de encadenar la ventana siguiente: nunca dos instancias pidiendo a info64.
-		const upcoming = params.pairings ? await this.syncUpcomingRounds(params, step) : null
-		if ((tournaments?.pending ?? 0) + (upcoming?.added ?? 0) > 0) await step.do('totales', () => refreshTotals(db))
+		if (params.standings === 'only') {
+			await this.syncStoredStandings(params, step)
+		} else {
+			const tournaments = params.pairings === 'only' ? null : await this.syncWindow(params, step)
+			// Antes de encadenar la ventana siguiente: nunca dos instancias pidiendo a info64.
+			const upcoming = params.pairings ? await this.syncUpcomingRounds(params, step) : null
+			if ((tournaments?.pending ?? 0) + (upcoming?.added ?? 0) > 0) await step.do('totales', () => refreshTotals(db))
 
-		// La salud (lib/salud.ts) sólo la escriben las pasadas programadas
-		// (schedule.ts): una a mano no debe tapar que falle la diaria.
-		if (!params.keys && !params.chain) {
-			if (tournaments && params.pairings === 'also') {
-				await step.do('salud', () => saveHealth(db, 'info64', tournaments.health))
+			// La salud (lib/salud.ts) sólo la escriben las pasadas programadas
+			// (schedule.ts): una a mano no debe tapar que falle la diaria.
+			if (!params.keys && !params.chain) {
+				if (tournaments && params.pairings === 'also') {
+					await step.do('salud', () => saveHealth(db, 'info64', tournaments.health))
+				}
+				if (upcoming) await step.do('salud emparejamientos', () => saveHealth(db, 'emparejamientos', upcoming.health))
 			}
-			if (upcoming) await step.do('salud emparejamientos', () => saveHealth(db, 'emparejamientos', upcoming.health))
 		}
 
 		const chain = params.chain
@@ -145,7 +159,7 @@ export class Info64SyncWorkflow extends WorkflowEntrypoint<Env, Info64SyncParams
 			await step.do('siguiente ventana', async () => {
 				const from = addDays(params.to, 1)
 				const to = minDate(endOfMonth(from, chain.months), chain.until)
-				const id = windowInstanceId(from, to)
+				const id = windowInstanceId(from, to, params.standings)
 				// Idempotente: si el paso se reintenta tras crearla, no se duplica.
 				try {
 					await this.env.INFO64_SYNC.get(id)
@@ -153,16 +167,20 @@ export class Info64SyncWorkflow extends WorkflowEntrypoint<Env, Info64SyncParams
 				} catch {
 					// No existe todavía.
 				}
-				await this.env.INFO64_SYNC.create({ id, params: { from, to, chain, force: params.force } })
+				await this.env.INFO64_SYNC.create({
+					id,
+					params: { from, to, chain, force: params.force, standings: params.standings }
+				})
 				return id
 			})
 		}
 	}
 
 	/**
-	 * Torneos de la ventana (o de keys): participantes y partidas. Devuelve
-	 * cuántos tenía pendientes y la salud de la pasada: cuántos han ido bien,
-	 * cuántos han fallado y cuántos avisos han dejado las guardas.
+	 * Torneos de la ventana (o de keys): participantes, clasificación y
+	 * partidas. Devuelve cuántos tenía pendientes y la salud de la pasada:
+	 * cuántos han ido bien, cuántos han fallado y cuántos avisos han dejado las
+	 * guardas.
 	 */
 	private async syncWindow(
 		params: Info64SyncParams,
@@ -204,6 +222,8 @@ export class Info64SyncWorkflow extends WorkflowEntrypoint<Env, Info64SyncParams
 					health.avisos += roster.avisos ?? 0
 					await step.sleep(`pausa plantilla ${candidate.key}`, PAUSE)
 				}
+				// Después de los participantes: la de un torneo individual casa con ellos.
+				health.avisos += await this.standingsStep(step, candidate.key, candidate.type, tournament.id)
 				let summary = await step.do(`partidas ${candidate.key}`, FETCH_STEP, () =>
 					failFast(() => syncGames(this.env.DB, tournament, replace))
 				)
@@ -249,6 +269,7 @@ export class Info64SyncWorkflow extends WorkflowEntrypoint<Env, Info64SyncParams
 		let added = 0
 		const health = { ok: 0, fallos: 0, avisos: 0 }
 		for (const round of upcoming) {
+			let standings: number | null = null
 			// Un fallo en un torneo no para los demás.
 			try {
 				let id = ids[round.key]
@@ -269,14 +290,56 @@ export class Info64SyncWorkflow extends WorkflowEntrypoint<Env, Info64SyncParams
 				)
 				health.ok++
 				if (saved.pairings) console.log(`[info64] ${round.key}: ${JSON.stringify(saved)}`)
+				// La clasificación de antes de esta ronda, para prepararla. La diaria
+				// ('also') no la pide: ya la ha leído en la ventana, con el torneo en curso.
+				if (params.pairings === 'only' && round.round > 1 && ids[round.key] !== undefined) standings = tournamentId
 			} catch (error) {
 				health.fallos++
 				console.warn(`[info64] emparejamientos de ${round.key}: ${String(error)}`)
 			}
 			await step.sleep(`pausa emparejamientos ${round.key}`, PAUSE)
+			if (standings !== null) health.avisos += await this.standingsStep(step, round.key, 'individual', standings)
 		}
 		await step.do('emparejamientos pasados', () => deletePastPairings(this.env.DB, now))
 		return { added, health }
+	}
+
+	/** Sólo la clasificación (standings: 'only') de los torneos guardados: los de keys o los que empiezan en la ventana. */
+	private async syncStoredStandings(params: Info64SyncParams, step: WorkflowStep): Promise<void> {
+		const tournaments = await step.do('torneos guardados', async () => {
+			if (!params.keys) return loadTournamentsStarting(this.env.DB, SOURCE, params.from, params.to, isoDate(new Date()))
+			const candidates = params.keys.map(keyToCandidate)
+			const ids = await loadTournamentIds(
+				this.env.DB,
+				SOURCE,
+				candidates.map((c) => c.key)
+			)
+			return candidates.flatMap((c) => (ids[c.key] === undefined ? [] : [{ key: c.key, id: ids[c.key], type: c.type }]))
+		})
+		console.log(`[info64] ${params.from}…${params.to}: clasificación de ${tournaments.length} torneos`)
+		let avisos = 0
+		for (const t of tournaments) avisos += await this.standingsStep(step, t.key, t.type, t.id)
+		if (avisos > 0) console.warn(`[info64] ${params.from}…${params.to}: ${avisos} clasificaciones sin guardar`)
+	}
+
+	/**
+	 * Clasificación de un torneo, en su paso y con su pausa. Devuelve los avisos:
+	 * uno si falla tras sus reintentos o si una guarda no la deja guardar. Ni lo
+	 * uno ni lo otro impide leer las partidas.
+	 */
+	private async standingsStep(step: WorkflowStep, key: string, type: TournamentType, tournamentId: number): Promise<number> {
+		let avisos = 0
+		try {
+			const saved = await step.do(`clasificación ${key}`, FETCH_STEP, () =>
+				failFast(() => syncStandings(this.env.DB, tournamentId, key, type))
+			)
+			avisos = Number(!saved)
+		} catch (error) {
+			avisos = 1
+			console.warn(`[info64] clasificación de ${key}: ${String(error)}`)
+		}
+		await step.sleep(`pausa clasificación ${key}`, PAUSE)
+		return avisos
 	}
 }
 
@@ -285,8 +348,13 @@ export function dailyInstanceId(day: string): string {
 	return `info64-diario-${day}`
 }
 
-export function windowInstanceId(from: string, to: string): string {
-	return `info64-${from}-${to}`
+/**
+ * Instancia de una ventana. Las de sólo clasificación llevan otro nombre: las
+ * ventanas de la carga inicial ya existen con el suyo, y la cadena se pararía
+ * al encontrarlas.
+ */
+export function windowInstanceId(from: string, to: string, standings?: 'only'): string {
+	return standings === 'only' ? `info64-clasificacion-${from}-${to}` : `info64-${from}-${to}`
 }
 
 function minDate(a: string, b: string): string {
@@ -342,6 +410,26 @@ async function syncPairings(
 	if (!page) throw new PageFormatError(`info64: la página de la ronda ${upcoming.round} no tiene la forma esperada`)
 	await replacePairings(db, tournamentId, page.round, page.startsAt ?? upcoming.startsAt, page.pairings)
 	return { round: page.round, pairings: page.pairings.length }
+}
+
+/**
+ * Lee la clasificación (/standings) y la guarda. Sin esa página, sin
+ * clasificación. Devuelve false si una guarda de replaceStandings no la ha
+ * dejado guardar.
+ */
+async function syncStandings(db: D1Database, tournamentId: number, key: string, type: TournamentType): Promise<boolean> {
+	let html: string
+	try {
+		html = await fetchText(`${INFO64_URL}/${key}/standings`)
+	} catch (error) {
+		if (error instanceof HttpError && error.status === 404) return true
+		throw error
+	}
+	const page = await parseStandingsPage(html)
+	if (!page) throw new PageFormatError('info64: la página de la clasificación no tiene la tabla que se espera')
+	const saved = await replaceStandings(db, tournamentId, type, page)
+	if (!saved) console.warn(`[info64] ${key}: la clasificación no casa con los participantes o no trae puntos; se conserva`)
+	return saved
 }
 
 /**

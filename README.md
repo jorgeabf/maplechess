@@ -73,7 +73,7 @@ El **repertorio** es el árbol de aperturas del jugador con cada color. En cada 
 ### Partidas y torneos
 
 - **Partidas:** búsqueda por jugador, rival, color, resultado, ECO, ritmo, fechas y torneo. Antes de buscar, las partidas de más nivel de la semana.
-- **Torneos:** participantes, plantillas de los torneos por equipos, ritmo, partidas por ronda y emparejamientos de la próxima. También están los torneos con españoles que no están en info64 pero sí en las retransmisiones oficiales de lichess, en España y en el extranjero; de esos sólo se guardan las partidas de los jugadores españoles.
+- **Torneos:** clasificación con los desempates del torneo (la final o la de la última ronda jugada), participantes, plantillas de los torneos por equipos, ritmo, partidas por ronda y emparejamientos de la próxima. También están los torneos con españoles que no están en info64 pero sí en las retransmisiones oficiales de lichess, en España y en el extranjero; de esos sólo se guardan las partidas de los jugadores españoles.
 - **Visor:** tablero con variantes, comentarios y tiempos de reloj, que se maneja con el teclado y, en el móvil, deslizando sobre el tablero.
   - **Stockfish 19** funciona en el propio navegador: las 3 mejores líneas, la barra de evaluación y la mejor jugada como flecha. Analiza cada posición hasta 10 s o hasta la profundidad 22, para no agotar la batería del móvil; «Seguir analizando» continúa sin límite. Con la pestaña oculta se para y, al volver, sigue.
   - Si la fuente anota evaluaciones, un gráfico las muestra jugada a jugada.
@@ -124,7 +124,7 @@ flowchart LR
 
 | Fuente | Qué aporta | Cuándo se actualiza |
 | --- | --- | --- |
-| [info64.org](https://info64.org) (FEDA) | Torneos desde 2014, participantes con FIDE ID, plantillas de equipos, partidas y emparejamientos de la próxima ronda | Cada día a las 05:00 UTC (rondas de los últimos 60 días y emparejamientos de los próximos 8) y a las 15:00 y las 22:00, hora de Madrid (emparejamientos) |
+| [info64.org](https://info64.org) (FEDA) | Torneos desde 2014, participantes con FIDE ID, plantillas de equipos, clasificaciones, partidas y emparejamientos de la próxima ronda | Cada día a las 05:00 UTC (rondas de los últimos 60 días y emparejamientos de los próximos 8) y a las 15:00 y las 22:00, hora de Madrid (emparejamientos y clasificación de los torneos en curso) |
 | [Lista FIDE](https://ratings.fide.com/download_lists.phtml) | Jugadores de la federación española: título, ELO estándar, rápido y blitz, año de nacimiento (no se muestra el de los menores) y si está activo. También el ELO estándar de la lista anterior, para ver quién sube | El día 3 de cada mes |
 | [Retransmisiones de lichess](https://lichess.org/broadcast) (CC BY-SA 4.0) | Partidas de los torneos que info64 enlaza a una retransmisión y no publica en PGN, y de las retransmisiones oficiales con jugadores españoles, en España y en el extranjero | Con info64 y cada día a las 06:30 UTC |
 | [lichess-org/chess-openings](https://github.com/lichess-org/chess-openings) | Códigos ECO y nombres de las aperturas (CC0) | A mano (`pnpm openings`) |

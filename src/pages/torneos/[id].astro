@@ -7,11 +7,14 @@ import Pagination from '../../components/Pagination.astro'
 import PlayerName from '../../components/PlayerName.astro'
 import Segmented from '../../components/Segmented.astro'
 import Base from '../../layouts/Base.astro'
+import { tiebreakLabel } from '../../lib/chess/tiebreaks'
 import { TIME_CLASS_LABEL, timeClassOf } from '../../lib/chess/timecontrol'
+import { madridDate } from '../../lib/dates'
 import { getTournamentGames } from '../../lib/db/games'
 import { getUpcomingRound } from '../../lib/db/pairings'
+import { getTournamentStandings, standingsHeading } from '../../lib/db/standings'
 import { getTournament, getTournamentParticipants } from '../../lib/db/tournaments'
-import { formatCount, formatNumber, formatRange, formatRoundTime } from '../../lib/format'
+import { formatCount, formatNumber, formatPoints, formatRange, formatRoundTime } from '../../lib/format'
 import { CC_BY_SA } from '../../lib/licenses'
 import { ME_COOKIE, resolveMe } from '../../lib/me'
 import { dossierHref, pageParam, positiveInt, roundParam, withParams } from '../../lib/params'
@@ -23,8 +26,26 @@ if (id === null || !tournament) return Astro.rewrite('/404')
 
 const page = pageParam(Astro.url.searchParams.get('p'))
 const round = roundParam(Astro.url.searchParams)
-const [participants, { rounds, games }, upcoming] = await Promise.all([
-	getTournamentParticipants(env.DB, id),
+const isTeam = tournament.type === 'team'
+// Torneo que no está en info64, sacado de su retransmisión (ingest/lichess/sync.ts).
+const fromLichess = tournament.source === 'lichess'
+// En un torneo individual la clasificación sustituye a los participantes en
+// cuanto la hay; en uno por equipos va encima de las plantillas. Los propios
+// de lichess no tienen.
+const standingsAndParticipants = async () => {
+	if (fromLichess) return { standings: null, participants: await getTournamentParticipants(env.DB, id) }
+	if (isTeam) {
+		const [standings, participants] = await Promise.all([
+			getTournamentStandings(env.DB, id, 'team'),
+			getTournamentParticipants(env.DB, id)
+		])
+		return { standings, participants }
+	}
+	const standings = await getTournamentStandings(env.DB, id, 'individual')
+	return { standings, participants: standings ? [] : await getTournamentParticipants(env.DB, id) }
+}
+const [{ standings, participants }, { rounds, games }, upcoming] = await Promise.all([
+	standingsAndParticipants(),
 	getTournamentGames(env.DB, id, round, page),
 	getUpcomingRound(env.DB, id)
 ])
@@ -35,9 +56,6 @@ const roundOptions = [
 	...(rounds.some((r) => r.round === 0) ? [{ id: '0', label: 'Sin ronda' }] : [])
 ]
 const roundHref = (option: string) => `${withParams(Astro.url, { ronda: option, p: null })}#partidas`
-const isTeam = tournament.type === 'team'
-// Torneo que no está en info64, sacado de su retransmisión (ingest/lichess/sync.ts).
-const fromLichess = tournament.source === 'lichess'
 const timeClass = timeClassOf(tournament.timeControl)
 // Sin cookie yo, la próxima ronda explica cómo recibir el aviso de las tuyas.
 const me = resolveMe(null, Astro.cookies.get(ME_COOKIE)?.value).fideId
@@ -46,12 +64,23 @@ const teams = [...Map.groupBy(participants, (p) => p.team).entries()]
 // Las páginas del torneo y de su retransmisión, sólo si son de una fuente.
 const tournamentUrl = sourceUrl(tournament.url)
 const broadcastUrl = sourceUrl(tournament.gamesSourceUrl)
+const standingsTitle = standings && standingsHeading(standings, tournament.endDate, madridDate(new Date()))
+// «La publica info64, con los desempates del torneo por orden: BH (Buchholz), WON (partidas ganadas).»
+const standingsNote =
+	standings &&
+	[
+		`La publica ${tournament.source}`,
+		standings.tiebreaks.length > 0
+			? `, con los desempates del torneo por orden: ${standings.tiebreaks.map(tiebreakLabel).join(', ')}`
+			: '',
+		isTeam ? '.' : '. Nº es el número del ranking inicial.'
+	].join('')
 ---
 
 <Base
 	title={tournament.name}
 	section="torneos"
-	description={`${tournament.name}: participantes y partidas.`}
+	description={`${tournament.name}: ${standings ? 'clasificación' : 'participantes'} y partidas.`}
 	canonical={`/torneos/${id}`}
 >
 	<header class="page-head">
@@ -158,65 +187,137 @@ const broadcastUrl = sourceUrl(tournament.gamesSourceUrl)
 		}
 	</section>
 
-	<section id="participantes">
-		<h2>
-			{isTeam ? 'Plantillas' : fromLichess ? 'Jugadores' : 'Participantes'} (
-			{isTeam
-				? `${formatCount(participants.length, 'jugador', 'jugadores')}, ${formatCount(teams.length, 'equipo', 'equipos')}`
-				: formatNumber(participants.length)})
-		</h2>
-		{fromLichess && <p class="muted">Los de las partidas de arriba, numerados por ELO.</p>}
-		{
-			participants.length > 0 ? (
-				<div class="table-wrap participants">
+	{
+		standings && (
+			<section id="clasificacion">
+				<h2>{standingsTitle}</h2>
+				<p class="muted">{standingsNote}</p>
+				<div class="table-wrap compact standings">
 					<table class="data-table">
 						<thead>
 							<tr>
-								<th scope="col" class="end">{isTeam ? 'Tablero' : 'Nº'}</th>
-								<th scope="col">Jugador</th>
-								<th scope="col">Fed.</th>
-								<th scope="col" class="end">ELO</th>
-								<th scope="col" class="end">FIDE ID</th>
+								<th scope="col" class="end">Pos.</th>
+								<th scope="col">{isTeam ? 'Equipo' : 'Jugador'}</th>
+								<th scope="col" class="end">Pts.</th>
+								{standings.tiebreaks.map((code) => (
+									<th scope="col" class="end">
+										{code}
+									</th>
+								))}
+								<th scope="col" class="end">{isTeam ? 'ELO medio' : 'ELO'}</th>
+								{!isTeam && (
+									<>
+										<th scope="col">Fed.</th>
+										<th scope="col" class="end">Nº</th>
+									</>
+								)}
 							</tr>
 						</thead>
-						{teams.map(([team, players]) => (
-							<tbody>
-								{team && (
-									<tr class="group-row">
-										<th scope="colgroup" colspan="5">
-											{team}
-										</th>
-									</tr>
-								)}
-								{players.map((p) => (
-									<tr>
-										<td class="end num">{p.startRank}</td>
-										<td class="name">
-											<PlayerName name={p.name} title={p.title} fideId={p.fideId} />
-											{p.fideId && p.hasGames === 1 && (
-												<span class="prepare">
-													{' '}
-													·{' '}
-													<a href={dossierHref(p.fideId)} rel="nofollow">
-														preparar
-													</a>
-												</span>
-											)}
-										</td>
-										<td>{p.fed}</td>
-										<td class="end num">{p.rating}</td>
-										<td class="end num">{p.fideId}</td>
-									</tr>
-								))}
-							</tbody>
-						))}
+						<tbody>
+							{standings.rows.map((s) => (
+								<tr>
+									<td class="end num">{s.pos}</td>
+									<td class="name">
+										{isTeam || !s.name ? (
+											s.name
+										) : (
+											<>
+												<PlayerName name={s.name} title={s.title} fideId={s.fideId} />
+												{s.fideId && s.hasGames === 1 && (
+													<span class="prepare">
+														{' '}
+														·{' '}
+														<a href={dossierHref(s.fideId)} rel="nofollow">
+															preparar
+														</a>
+													</span>
+												)}
+											</>
+										)}
+									</td>
+									<td class="end num">{formatPoints(s.points)}</td>
+									{s.tiebreaks.map((value) => (
+										<td class="end num">{value === null ? '' : formatNumber(value)}</td>
+									))}
+									<td class="end num">{s.rating}</td>
+									{!isTeam && (
+										<>
+											<td>{s.fed}</td>
+											<td class="end num">{s.startRank}</td>
+										</>
+									)}
+								</tr>
+							))}
+						</tbody>
 					</table>
 				</div>
-			) : (
-				<p class="muted">La fuente no publica la lista de participantes.</p>
-			)
-		}
-	</section>
+			</section>
+		)
+	}
+
+	{
+		(!standings || isTeam) && (
+			<section id="participantes">
+				<h2>
+					{isTeam ? 'Plantillas' : fromLichess ? 'Jugadores' : 'Participantes'} (
+					{isTeam
+						? `${formatCount(participants.length, 'jugador', 'jugadores')}, ${formatCount(teams.length, 'equipo', 'equipos')}`
+						: formatNumber(participants.length)})
+				</h2>
+				{fromLichess && <p class="muted">Los de las partidas de arriba, numerados por ELO.</p>}
+				{
+					participants.length > 0 ? (
+						<div class="table-wrap compact">
+							<table class="data-table">
+								<thead>
+									<tr>
+										<th scope="col" class="end">{isTeam ? 'Tablero' : 'Nº'}</th>
+										<th scope="col">Jugador</th>
+										<th scope="col">Fed.</th>
+										<th scope="col" class="end">ELO</th>
+										<th scope="col" class="end">FIDE ID</th>
+									</tr>
+								</thead>
+								{teams.map(([team, players]) => (
+									<tbody>
+										{team && (
+											<tr class="group-row">
+												<th scope="colgroup" colspan="5">
+													{team}
+												</th>
+											</tr>
+										)}
+										{players.map((p) => (
+											<tr>
+												<td class="end num">{p.startRank}</td>
+												<td class="name">
+													<PlayerName name={p.name} title={p.title} fideId={p.fideId} />
+													{p.fideId && p.hasGames === 1 && (
+														<span class="prepare">
+															{' '}
+															·{' '}
+															<a href={dossierHref(p.fideId)} rel="nofollow">
+																preparar
+															</a>
+														</span>
+													)}
+												</td>
+												<td>{p.fed}</td>
+												<td class="end num">{p.rating}</td>
+												<td class="end num">{p.fideId}</td>
+											</tr>
+										))}
+									</tbody>
+								))}
+							</table>
+						</div>
+					) : (
+						<p class="muted">La fuente no publica la lista de participantes.</p>
+					)
+				}
+			</section>
+		)
+	}
 </Base>
 
 <style>
@@ -226,23 +327,38 @@ const broadcastUrl = sourceUrl(tournament.gamesSourceUrl)
 	}
 
 	/*
-	 * Participantes, como el ranking de /jugadores: el nombre parte línea (su
-	 * mínimo es la palabra más larga) y, en un hueco de menos de 26rem, el
-	 * relleno se estrecha. A 375 px la tabla pedía 544 px de 342 y el ELO
-	 * quedaba fuera; así se ven el número, el nombre, la federación y el ELO, y
-	 * sólo el FIDE ID puede quedar tras el scroll.
+	 * Clasificación y participantes, como el ranking de /jugadores: el nombre
+	 * parte línea (su mínimo es la palabra más larga) y, en un hueco de menos de
+	 * 26rem, el relleno se estrecha. A 375 px la de participantes pedía 544 px
+	 * de 342 y el ELO quedaba fuera; así se ven el número, el nombre, la
+	 * federación y el ELO, y sólo el FIDE ID puede quedar tras el scroll. En la
+	 * clasificación, el puesto, el nombre y los puntos; los desempates, detrás.
 	 */
-	.participants {
+	.compact {
 		container-type: inline-size;
 	}
 
-	.participants td.name {
+	.compact td.name {
 		white-space: normal;
 	}
 
 	@container (width < 26rem) {
-		.participants :is(th, td) {
+		.compact :is(th, td) {
 			padding-inline: var(--space-2);
+		}
+	}
+
+	/*
+	 * Con los desempates, la clasificación no cabe en el móvil: cada columna se
+	 * queda en su mínimo y el nombre, en su palabra más larga (unos 90 px, en
+	 * tres o cuatro líneas). Por debajo de 30rem, donde ya se desplazaba en las
+	 * medidas (CE 2025, Xàbia, Bizkaia y la División de Honor), el nombre se
+	 * lleva al menos 10rem o el 45 % del hueco. A 375 px pasa a 145 px, y los
+	 * puntos quedan a la vista; por encima no cambia nada.
+	 */
+	@container (width < 30rem) {
+		.standings td.name {
+			min-width: min(10rem, 45cqi);
 		}
 	}
 </style>

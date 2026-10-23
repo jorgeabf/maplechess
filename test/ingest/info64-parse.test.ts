@@ -4,6 +4,7 @@ import {
 	parseEvents,
 	parseGamesPage,
 	parseRoundPage,
+	parseStandingsPage,
 	parseTeamListing,
 	parseTournamentPage,
 	parseUpcomingRounds
@@ -14,8 +15,11 @@ import gamesHtml from '../fixtures/info64/games.html?raw'
 import noGamesHtml from '../fixtures/info64/no-games.html?raw'
 import roundUnpairedHtml from '../fixtures/info64/round-unpaired.html?raw'
 import roundHtml from '../fixtures/info64/round.html?raw'
+import standingsUnplayedHtml from '../fixtures/info64/standings-unplayed.html?raw'
+import standingsHtml from '../fixtures/info64/standings.html?raw'
 import teamGamesHtml from '../fixtures/info64/team-games.html?raw'
 import teamListingHtml from '../fixtures/info64/team-listing.html?raw'
+import teamStandingsHtml from '../fixtures/info64/team-standings.html?raw'
 import teamTournamentHtml from '../fixtures/info64/team-tournament.html?raw'
 import tournamentHtml from '../fixtures/info64/tournament.html?raw'
 
@@ -140,6 +144,52 @@ describe('parseGamesPage', () => {
 
 	it('lanza si la página no es la esperada', async () => {
 		await expect(parseGamesPage('<html><body>Error 502</body></html>')).rejects.toThrow()
+	})
+})
+
+describe('parseStandingsPage', () => {
+	it('lee la ronda, las rondas, los desempates y cada fila por su cabecera', async () => {
+		const page = await parseStandingsPage(standingsHtml)
+		expect(page).toMatchObject({ round: 5, rounds: 7, tiebreaks: ['BH', 'BH/M1', 'WON'] })
+		expect(page!.rows).toHaveLength(5)
+		expect(page!.rows[0]).toEqual({
+			pos: 1,
+			startRank: 2,
+			name: 'Fabuzo Lerinat, Tomeco',
+			points: 4.5,
+			tiebreaks: [14, 9.5, 4],
+			rating: 2215
+		})
+		expect(page!.rows.map((r) => r.startRank)).toEqual([2, 1, 4, 3, 5])
+		// Un ELO inverosímil en la columna FIDE, como en el ranking inicial.
+		expect(page!.rows[4]).toMatchObject({ points: 1.5, rating: null })
+	})
+
+	it('por equipos: sin ronda en el título, con el ELO medio', async () => {
+		const page = await parseStandingsPage(teamStandingsHtml)
+		expect(page).toMatchObject({ round: null, rounds: 3, tiebreaks: ['MatPnt', 'GamPnt', 'Dir_MP'] })
+		expect(page!.rows[0]).toEqual({
+			pos: 1,
+			startRank: 3,
+			name: 'Club Tablero Norte',
+			points: 6,
+			tiebreaks: [6, 9.5, 0],
+			rating: 2105
+		})
+	})
+
+	it('sin resultados: todos a 0 y la columna de desempate sin código', async () => {
+		const page = await parseStandingsPage(standingsUnplayedHtml)
+		expect(page).toMatchObject({ round: null, rounds: 2, tiebreaks: [] })
+		expect(page!.rows.map((r) => [r.pos, r.startRank, r.points, r.tiebreaks])).toEqual([
+			[1, 2, 0, []],
+			[1, 1, 0, []]
+		])
+	})
+
+	it('devuelve null si la página no es la de la clasificación', async () => {
+		expect(await parseStandingsPage(tournamentHtml)).toBeNull()
+		expect(await parseStandingsPage(roundHtml)).toBeNull()
 	})
 })
 
