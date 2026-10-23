@@ -1,7 +1,9 @@
-import { describe, expect, it } from 'vitest'
+import { env } from 'cloudflare:workers'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { buildGameRows } from '../../src/ingest/games'
+import { fetchText } from '../../src/ingest/http'
 import { findLichessBroadcasts, parseTournamentPage } from '../../src/ingest/info64/parse'
-import { gamesOfTournament, parseBroadcastUrl } from '../../src/ingest/lichess/api'
+import { gamesOfTournament, parseBroadcastUrl, resolveTourId } from '../../src/ingest/lichess/api'
 import { parseGames } from '../../src/lib/chess/pgn'
 import broadcastHtml from '../fixtures/info64/tournament-broadcast.html?raw'
 import broadcastRoundHtml from '../fixtures/info64/tournament-broadcast-round.html?raw'
@@ -30,6 +32,28 @@ describe('enlaces a retransmisiones en info64', () => {
 		expect(findLichessBroadcasts('Retransmisión: https://lichess.org/broadcast/x/AbCdEf12.')).toEqual([
 			'https://lichess.org/broadcast/x/AbCdEf12'
 		])
+	})
+})
+
+describe('peticiones a lichess', () => {
+	afterEach(() => vi.restoreAllMocks())
+
+	it('llevan el token de la cuenta del proyecto; las de info64, no', async () => {
+		const sent: { url: string; auth: string | null; agent: string | null }[] = []
+		vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+			const headers = new Headers(init?.headers)
+			sent.push({ url: String(input), auth: headers.get('Authorization'), agent: headers.get('User-Agent') })
+			return Response.json({ tour: { id: 'TorneoAB' }, round: { id: 'Ronda001' } })
+		})
+
+		expect(await resolveTourId({ kind: 'round', id: 'Ronda001' })).toBe('TorneoAB')
+		await fetchText('https://info64.org/torneo-inventado')
+
+		expect(sent.map(({ url, auth }) => ({ url, auth }))).toEqual([
+			{ url: 'https://lichess.org/api/broadcast/-/-/Ronda001', auth: `Bearer ${env.LICHESS_TOKEN}` },
+			{ url: 'https://info64.org/torneo-inventado', auth: null }
+		])
+		expect(sent.every((s) => s.agent?.startsWith('MapleChess/'))).toBe(true)
 	})
 })
 

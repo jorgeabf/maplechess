@@ -9,7 +9,7 @@
 //
 // Las partidas de las retransmisiones tienen licencia CC BY-SA 4.0
 // (https://database.lichess.org/#broadcasts): la web lo indica donde salen.
-import type { WorkflowStepConfig } from 'cloudflare:workers'
+import { env, type WorkflowStepConfig } from 'cloudflare:workers'
 import { matchName, type NameCandidate } from '../../lib/chess/names'
 import { parseGames, type ParsedGame } from '../../lib/chess/pgn'
 import type { TimeClass } from '../../lib/chess/timecontrol'
@@ -47,9 +47,21 @@ export function parseBroadcastUrl(url: string): BroadcastRef | null {
 	return null
 }
 
+/**
+ * Cabeceras de las peticiones a lichess: el token de la cuenta del proyecto
+ * (secreto LICHESS_TOKEN, sólo study:read). La API de retransmisiones limita
+ * mucho las peticiones anónimas y anuncia que dejará de responderlas
+ * (lichess-org/lila#21283); con token, 120 por minuto. Sin él (en local, sin
+ * .dev.vars), se pide como anónimo. Sólo va a lichess, nunca a info64.
+ */
+function lichessHeaders(): HeadersInit {
+	const token = env.LICHESS_TOKEN
+	return token ? { Authorization: `Bearer ${token}` } : {}
+}
+
 async function fetchOrNull(url: string): Promise<Response | null> {
 	try {
-		return await fetchOk(url)
+		return await fetchOk(url, { headers: lichessHeaders() })
 	} catch (error) {
 		// Retransmisión borrada o privada: se trata como si no hubiera.
 		if (error instanceof HttpError && error.status === 404) return null

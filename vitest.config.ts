@@ -17,7 +17,8 @@ export default defineConfig(async () => {
 					d1Databases: ['DB'],
 					// El límite de ritmo, encendido y con los números de wrangler.jsonc.
 					ratelimits: { RATE_LIMITER: { namespace_id: '26102201', simple: { limit: 30, period: 60 } } },
-					bindings: { TEST_MIGRATIONS: migrations, RATE_LIMIT: 'on' }
+					// Un token de lichess inventado, para ver que las peticiones lo llevan.
+					bindings: { TEST_MIGRATIONS: migrations, RATE_LIMIT: 'on', LICHESS_TOKEN: 'lip_inventado' }
 				}
 			})
 		],
