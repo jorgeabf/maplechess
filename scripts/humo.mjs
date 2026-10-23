@@ -37,7 +37,8 @@ const CHECKS = [
 		text: '[White "Anton Guijarro, David"]',
 		headers: { 'Content-Disposition': (value) => /^attachment; filename=".+\.pgn"$/.test(value ?? '') }
 	},
-	html('/torneos/12053', 'Participantes ('),
+	// Uno terminado y de adultos: su página ya no cambia (el 12053, de menores, se borra).
+	html('/torneos/10201', 'Clasificación final'),
 	html('/acerca', 'Acerca de MapleChess'),
 	html('/privacidad', 'Tu derecho a oponerte'),
 	html('/aviso-legal', 'Exactitud de los datos'),
