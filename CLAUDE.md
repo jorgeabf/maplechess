@@ -41,6 +41,7 @@ MapleChess es un buscador de jugadores españoles (lista FIDE, federación ESP),
     - Se deciden a mano, por `source` y `source_key`: `excluido` 1, no se guarda; 0, se guarda como los demás; NULL, por revisar.
     - La ingesta se los salta antes de pedir nada: info64 (la ventana, `keys`, los emparejamientos y la clasificación) y lichess, también con `force`.
     - Los que lo parecen por el nombre (`looksSensitive`, en castellano, inglés, catalán y gallego) los apunta por revisar la ingesta al guardarlos (info64 y torneos propios de lichess) y, mientras, los guarda como los demás. `/api/estado` da entonces la alarma (ver «Producción»). Cómo revisarlos, en la guía de operación.
+      - «A la ciega» y «a la cega» no cuentan: es jugar sin ver el tablero. El 23-oct-2026 cinco torneos así (el Desafío a la Ciega de València y el Pablo Morán de Oviedo) dieron la alarma y se marcaron con 0.
     - El reprocesado (`{"sensibles":true}`, `applySensitive`) borra los marcados, con sus partidas, participantes, emparejamientos y clasificación en cascada, y apunta los guardados que lo parecen y no están en la tabla.
     - Hueco conocido: la pasada de lichess no reconoce la retransmisión de un torneo de info64 marcado (ya no tiene participantes) y la guardaría como torneo propio. Si el nombre lo parece, se apunta; si no, sólo lo evita marcar también la retransmisión (`source` `lichess`).
     - Los benéficos («Jaque al Alzheimer», «Blitz solidario…») y los abiertos a todos no revelan nada de quien juega: el detector no los mira, o se marcan con 0.
