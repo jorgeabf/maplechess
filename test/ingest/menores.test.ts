@@ -54,6 +54,11 @@ describe('isMinorsTournament', () => {
 			'FIDE World U9-U17 Rapid & Blitz Chess Championships',
 			'European Youth Chess Championship 2030 | G12',
 			'Festival Infantil Inventado | O10',
+			'FIDE World Championship 2030 - O7',
+			'FIDE World Championship 2030 - G9',
+			'FIDE World Championship 2030 - O11',
+			'FIDE World Championship 2030 - G13',
+			'European Youth Inventado | G9',
 			'Campeonato por Edades de Ninguna Parte S08',
 			'Equipos S-12 Inventados',
 			'Zonal Inventado S1416',
@@ -100,6 +105,18 @@ describe('isMinorsTournament', () => {
 		}
 	})
 
+	it('reconoce los de niños', () => {
+		for (const name of [
+			'Seronda Kids Inventada',
+			'Business Meets Chess&Kids Inventado',
+			'Los Viernes Inventados Opening Kids 2030',
+			'I Torneo Inventado para niños',
+			'Torneo de Ninguna Parte para niñas'
+		]) {
+			expect(isMinorsTournament(name), name).toBe(true)
+		}
+	})
+
 	it('deja los topes de ELO, Sub 16 y Sub 18, cadete y juvenil, las escuelas de ajedrez y los grupos', () => {
 		for (const name of [
 			'Open Internacional Inventado Sub2200',
@@ -113,7 +130,10 @@ describe('isMinorsTournament', () => {
 			'Campeonato Juvenil Inventado',
 			'Open Escuela de Ajedrez Inventada',
 			'Xake Eskola Inventada Open',
+			'Jornada de Entrenamiento G6',
 			'Jornada de Entrenamiento G8',
+			'Jornada de Entrenamiento G9',
+			'Torneo de los Santos Niños Inventado ABSOLUTO',
 			'German University Chess Championship 2030',
 			'Campeonato Absoluto de Ninguna Parte',
 			'Memorial Benjamina Inventada'
