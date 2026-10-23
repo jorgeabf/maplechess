@@ -94,7 +94,7 @@ const nav = [
 		<header class="site-header">
 			<div class="page bar">
 				<a class="brand" href="/">
-					<Logo size={32} />
+					<Logo size={40} />
 					<span>{siteName}</span>
 				</a>
 				<div class="end">
@@ -186,16 +186,31 @@ const nav = [
 		column-gap: var(--space-5);
 	}
 
+	/*
+	 * El logo, el relleno y el hueco crecen con la pantalla, de 320 a 640 px de
+	 * ancho, y el nombre con --text-xl. En escritorio la cabecera mide 64 px,
+	 * con el logo a 40; en el móvil, donde el menú va en otra fila, la de la
+	 * marca se queda en 51 px a 375, con el logo a 33. Con la altura de línea
+	 * de los titulares, el nombre no pasa del alto del logo.
+	 */
 	.brand {
+		--logo: clamp(2rem, 1.5rem + 2.5vw, 2.5rem);
+		--aire: clamp(var(--space-2), 0.25rem + 1.25vw, var(--space-3));
 		display: inline-flex;
 		align-items: center;
-		gap: var(--space-2);
-		padding-block: var(--space-2);
+		gap: var(--aire);
+		padding-block: var(--aire);
 		font-family: var(--font-serif);
-		font-size: var(--text-l);
+		font-size: var(--text-xl);
 		font-weight: var(--weight-strong);
+		line-height: 1.2;
 		color: var(--text);
 		text-decoration: none;
+	}
+
+	.brand :global(.logo) {
+		inline-size: var(--logo);
+		block-size: var(--logo);
 	}
 
 	/*
