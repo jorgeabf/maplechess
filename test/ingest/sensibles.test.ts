@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { buildGameRows } from '../../src/ingest/games'
 import { Info64SyncWorkflow, type Info64SyncParams } from '../../src/ingest/info64/sync'
 import type { TournamentPlayer } from '../../src/ingest/info64/parse'
+import type { BroadcastRef } from '../../src/ingest/lichess/api'
 import {
 	replacePairings,
 	replaceParticipations,
@@ -259,7 +260,7 @@ describe('applySensitive', () => {
 		await mark('info64', 'xl-open-fedc', 1)
 		await mark('info64', 'blitz-solidario-sindrome', 0)
 
-		expect(await applySensitive(db)).toEqual({ proposed: 1, deleted: 1 })
+		expect(await applySensitive(db)).toEqual({ proposed: 1, broadcasts: 1, deleted: 1 })
 
 		expect(await count('SELECT count(*) AS n FROM tournaments WHERE id = ?1', sensitive)).toBe(0)
 		for (const table of ['participations', 'games', 'pairings', 'standings']) {
@@ -274,10 +275,45 @@ describe('applySensitive', () => {
 		expect(await proposed()).toEqual([
 			{ source: 'info64', key: 'blitz-solidario-sindrome', nombre: 'Torneo inventado', excluido: 0 },
 			{ source: 'info64', key: 'torneo-inclusivo-inventado', nombre: 'Torneo Inclusivo Inventado', excluido: null },
-			{ source: 'info64', key: 'xl-open-fedc', nombre: 'Torneo inventado', excluido: 1 }
+			{ source: 'info64', key: 'xl-open-fedc', nombre: 'Torneo inventado', excluido: 1 },
+			// Su retransmisión, para que la pasada de lichess no la guarde como torneo propio.
+			{ source: 'lichess', key: 'Inventad', nombre: 'XL Open FEDC', excluido: 1 }
 		])
 
 		// Repetirlo no cambia nada.
-		expect(await applySensitive(db)).toEqual({ proposed: 0, deleted: 0 })
+		expect(await applySensitive(db)).toEqual({ proposed: 0, broadcasts: 0, deleted: 0 })
+	})
+
+	it('marca también la retransmisión que enlaza info64, aunque el enlace sea de una ronda', async () => {
+		const input = tournament('open-feds-inventado', 'Open FEDS Inventado')
+		const id = await upsertTournament(db, input)
+		await replaceParticipations(db, id, players)
+		const [white, black] = players
+		const game = `[Event "Torneo"]\n[Round "1.1"]\n[White "${white.name}"]\n[Black "${black.name}"]\n[Result "1-0"]\n\n1. d4 d5 1-0\n`
+		await saveGames(db, id, buildGameRows(parseGames(game), players, input), '2026-10-01T00:00:00.000Z', {
+			name: 'lichess',
+			url: 'https://lichess.org/broadcast/open-feds-inventado/ronda-1/Ronda001'
+		})
+		// Otro grupo, ya revisado como guardable: no cambia.
+		await saveLichessTour(
+			db,
+			{ tourId: 'Revisada', name: 'Open Inventado B', url: null, status: 'duplicado', tournamentId: id, espPlayers: 2, finished: true },
+			'2026-10-01T00:00:00.000Z'
+		)
+		await mark('lichess', 'Revisada', 0)
+		await mark('info64', 'open-feds-inventado', 1)
+
+		const asked: BroadcastRef[] = []
+		const resolve = async (ref: BroadcastRef) => {
+			asked.push(ref)
+			return ref.id === 'Ronda001' ? 'TorneoAB' : null
+		}
+		expect(await applySensitive(db, resolve)).toEqual({ proposed: 0, broadcasts: 1, deleted: 1 })
+		expect(asked).toEqual([{ kind: 'round', id: 'Ronda001' }])
+		expect(await proposed()).toEqual([
+			{ source: 'info64', key: 'open-feds-inventado', nombre: 'Torneo inventado', excluido: 1 },
+			{ source: 'lichess', key: 'Revisada', nombre: 'Torneo inventado', excluido: 0 },
+			{ source: 'lichess', key: 'TorneoAB', nombre: 'Open FEDS Inventado', excluido: 1 }
+		])
 	})
 })

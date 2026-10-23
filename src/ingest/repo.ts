@@ -672,6 +672,57 @@ const EXCLUDED_IDS = `SELECT t.id FROM torneos_sensibles s
 	JOIN tournaments t ON t.source = s.source AND t.source_key = s.source_key
 	WHERE s.excluido = 1`
 
+/** Retransmisión de lichess, por su id de torneo, con un nombre para torneos_sensibles. */
+export interface BroadcastKey {
+	key: string
+	name: string
+}
+
+/** Retransmisiones de lichess de los torneos marcados (excluido = 1) que aún están guardados. */
+export interface ExcludedBroadcasts {
+	/** Las que la pasada de lichess ha decidido de uno de ellos (lichess_tours): enlazadas, duplicadas o el propio. */
+	tours: BroadcastKey[]
+	/** Los enlaces de info64 de los que salen sus partidas (games_source_url), de torneo o de ronda. */
+	links: { url: string; name: string }[]
+}
+
+export async function loadExcludedBroadcasts(db: D1Database): Promise<ExcludedBroadcasts> {
+	const { results: tours } = await db
+		.prepare(`SELECT tour_id AS key, name FROM lichess_tours WHERE tournament_id IN (${EXCLUDED_IDS})`)
+		.all<BroadcastKey>()
+	const { results: links } = await db
+		.prepare(
+			`SELECT games_source_url AS url, name FROM tournaments
+			WHERE games_source = 'lichess' AND games_source_url IS NOT NULL AND id IN (${EXCLUDED_IDS})`
+		)
+		.all<{ url: string; name: string }>()
+	return { tours, links }
+}
+
+/**
+ * Marca esas retransmisiones de lichess como no guardables (excluido = 1).
+ * Una ya revisada como guardable (excluido = 0) no cambia. Devuelve cuántas
+ * cambian.
+ */
+export async function excludeBroadcasts(db: D1Database, broadcasts: BroadcastKey[]): Promise<number> {
+	if (broadcasts.length === 0) return 0
+	const now = new Date().toISOString()
+	const results = await db.batch(
+		chunkByJsonSize(broadcasts).map((json) =>
+			db
+				.prepare(
+					`INSERT INTO torneos_sensibles (source, source_key, nombre, excluido, creado)
+					SELECT 'lichess', json_extract(value, '$.key'), json_extract(value, '$.name'), 1, ?1
+					FROM json_each(?2)
+					WHERE true
+					ON CONFLICT (source, source_key) DO UPDATE SET excluido = 1 WHERE torneos_sensibles.excluido IS NULL`
+				)
+				.bind(now, json)
+		)
+	)
+	return results.reduce((n, r) => n + r.meta.changes, 0)
+}
+
 /**
  * Borra los torneos guardados que no se guardan (excluido = 1). Sus partidas,
  * participantes, emparejamientos y clasificación se van en cascada, y las

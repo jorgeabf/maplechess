@@ -24,6 +24,7 @@ import { parseGames } from '../lib/chess/pgn'
 import { timeClassOf } from '../lib/chess/timecontrol'
 import { madridYear } from '../lib/dates'
 import { derivedColumns, type DerivedColumns } from './games'
+import { LICHESS_STEP, parseBroadcastUrl, resolveTourId, type BroadcastRef } from './lichess/api'
 import { isMinorsTournament } from './menores'
 import { isRetired, publicName, publicPgnNames, RETIRED_NAME, retiredKey } from './nombres'
 import {
@@ -31,6 +32,8 @@ import {
 	deleteExcludedTournaments,
 	deleteRetiredPlayers,
 	deleteTournaments,
+	excludeBroadcasts,
+	loadExcludedBroadcasts,
 	loadGamesForReprocess,
 	loadHomonymParticipations,
 	loadPairingNames,
@@ -46,6 +49,7 @@ import {
 	updateGamePlayers,
 	updatePairingPlayers,
 	withoutRetired,
+	type BroadcastKey,
 	type StoredGame
 } from './repo'
 import { looksSensitive } from './sensibles'
@@ -85,7 +89,8 @@ export class GamesReprocessWorkflow extends WorkflowEntrypoint<Env, GamesReproce
 		const all = !retiradas && !sensibles && !menores
 		// Lo primero: las partidas de los torneos borrados ya no se recorren.
 		if (all || sensibles) {
-			const sensitive = await step.do('torneos sensibles', () => applySensitive(this.env.DB))
+			// Puede preguntar a lichess de qué torneo es una ronda: con sus reintentos.
+			const sensitive = await step.do('torneos sensibles', LICHESS_STEP, () => applySensitive(this.env.DB))
 			console.log(`[reprocess] torneos sensibles: ${JSON.stringify(sensitive)}`)
 		}
 		if (all || menores) {
@@ -238,6 +243,8 @@ export async function applyRetired(db: D1Database): Promise<RetiredCleanup> {
 export interface SensitiveCleanup {
 	/** Torneos guardados que parecen sensibles y se han apuntado para revisarlos. */
 	proposed: number
+	/** Retransmisiones de lichess de los marcados que se han marcado también. */
+	broadcasts: number
 	/** Torneos marcados (excluido = 1) que se han borrado, con todo lo suyo. */
 	deleted: number
 }
@@ -245,10 +252,14 @@ export interface SensitiveCleanup {
 /**
  * Aplica la tabla torneos_sensibles a lo guardado: apunta para revisarlos los
  * torneos que lo parecen por el nombre (looksSensitive) y aún no están en ella,
- * y borra los marcados, que la ingesta ya no lee. Recorre los nombres de todos
- * los torneos: sólo lo usa el reprocesado. Repetirlo no cambia nada.
+ * marca también las retransmisiones de lichess de los marcados y borra éstos,
+ * que la ingesta ya no lee. Recorre los nombres de todos los torneos: sólo lo
+ * usa el reprocesado. Repetirlo no cambia nada.
  */
-export async function applySensitive(db: D1Database): Promise<SensitiveCleanup> {
+export async function applySensitive(
+	db: D1Database,
+	resolve: (ref: BroadcastRef) => Promise<string | null> = resolveTourId
+): Promise<SensitiveCleanup> {
 	const { results } = await db
 		.prepare('SELECT source, source_key AS key, name FROM tournaments')
 		.all<{ source: string; key: string; name: string }>()
@@ -256,9 +267,32 @@ export async function applySensitive(db: D1Database): Promise<SensitiveCleanup> 
 		db,
 		results.filter((t) => looksSensitive(t.name))
 	)
+	const broadcasts = await excludeBroadcasts(db, await excludedBroadcasts(db, resolve))
 	const deleted = await deleteExcludedTournaments(db)
 	if (deleted > 0) await refreshTotals(db)
-	return { proposed, deleted }
+	return { proposed, broadcasts, deleted }
+}
+
+/**
+ * Las retransmisiones de lichess de los torneos marcados, antes de borrarlos:
+ * borrado el torneo de info64, la pasada de lichess no reconocería su
+ * retransmisión (ya no hay participantes con los que cruzarla) y la guardaría
+ * como torneo propio. Son las que esa pasada ha decidido de ellos y la que
+ * enlaza info64, de la que salen sus partidas; para un enlace a una ronda se
+ * pregunta a lichess de qué torneo es.
+ */
+async function excludedBroadcasts(
+	db: D1Database,
+	resolve: (ref: BroadcastRef) => Promise<string | null>
+): Promise<BroadcastKey[]> {
+	const { tours, links } = await loadExcludedBroadcasts(db)
+	const found = new Map(tours.map((t) => [t.key, t.name]))
+	for (const link of links) {
+		const ref = parseBroadcastUrl(link.url)
+		const id = ref && (await resolve(ref))
+		if (id && !found.has(id)) found.set(id, link.name)
+	}
+	return [...found].map(([key, name]) => ({ key, name }))
 }
 
 /**
