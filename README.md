@@ -81,6 +81,8 @@ El **repertorio** es el árbol de aperturas del jugador con cada color. En cada 
 
 Las páginas se generan en el servidor y las búsquedas son formularios normales: todo funciona sin JavaScript menos el tablero y el motor.
 
+En el móvil se puede **instalar como una app** (en Chrome, «Instalar aplicación»; en Safari, «Añadir a pantalla de inicio»): se abre sin la barra del navegador y, si has dicho quién eres, directamente en tu próxima partida.
+
 Al importar, el ritmo (estándar, rápidas o blitz) se clasifica con la regla de la FIDE a partir del texto que publica cada torneo. También se quitan las partidas que la fuente publica repetidas, se descartan los ELO imposibles y se guarda el reloj de cada jugada cuando el PGN lo trae.
 
 ## Cómo funciona
@@ -115,7 +117,7 @@ flowchart LR
 
 - **Ingesta:** los Workflows leen las fuentes paso a paso. Cada paso se guarda y sólo se reintenta el que falla, así que una carga de horas sobrevive a los errores puntuales. Entre petición y petición hay una pausa.
 - **Base de datos:** D1 (SQLite) con búsqueda de texto FTS5, sin distinguir tildes.
-- **Web:** Astro genera cada página en el servidor, en el mismo Worker. Las consultas están pensadas para leer pocas filas, porque D1 cobra por filas recorridas.
+- **Web:** Astro genera cada página en el servidor, en el mismo Worker. Las consultas están pensadas para leer pocas filas, porque D1 cobra por filas recorridas. Para los buscadores, cada página lleva su URL canónica y un sitemap reúne las fichas, los torneos y las partidas.
 - **Navegador:** sólo el tablero (chessground), el visor y el motor llevan JavaScript. Stockfish 19, en su versión ligera de un hilo, se descarga al activarlo.
 
 ### De dónde salen los datos
@@ -245,54 +247,19 @@ test/              Tests y fixtures sintéticos con la estructura de las fuentes
 </details>
 
 <details>
-<summary><strong>Despliegue</strong></summary>
+<summary><strong>Desplegar una copia propia</strong></summary>
 
 <br>
 
-Necesita una cuenta de Cloudflare con **Workers Paid**. La importación de la lista FIDE necesita más de los 30 s de CPU por defecto (`limits.cpu_ms` en `wrangler.jsonc`).
+Necesita una cuenta de Cloudflare con **Workers Paid**: la importación de la lista FIDE pasa de los 30 s de CPU por defecto.
 
-1. Inicia sesión en Cloudflare:
-
-   ```bash
-   pnpm exec wrangler login
-   ```
-
-2. Crea la base de datos y pon su id en `database_id`, en `wrangler.jsonc`:
-
-   ```bash
-   pnpm exec wrangler d1 create ajedrez --jurisdiction eu
-   ```
-
-3. Aplica las migraciones a la base de producción:
-
-   ```bash
-   pnpm db:migrate:remote
-   ```
-
-4. Sube el token de administración como secreto:
-
-   ```bash
-   pnpm exec wrangler secret put ADMIN_TOKEN
-   ```
-
-5. Despliega:
-
-   ```bash
-   pnpm run deploy
-   ```
-
-   Sólo despliega `origin/main`, con el árbol limpio y fuera de las horas de los crons. Antes copia el motor y apunta el marcador de Time Travel de D1 en `despliegues.log`; después pasa la prueba de humo de `scripts/humo.mjs`, que pide jugadores, partidas y torneos de MapleChess: en una instalación nueva, cambia su URL y sus rutas, y el dominio (`routes` de `wrangler.jsonc`, `site` de `astro.config.mjs` y la URL de workers.dev que redirige `src/middleware.ts`). Cambia también la URL de `.github/workflows/vigilancia.yml`, que dos veces al día pide `/api/estado` y avisa por correo si alguna sincronización falla.
-
-   El límite de ritmo de las búsquedas y las descargas viene apagado (`RATE_LIMIT` en `wrangler.jsonc`): va por IP y cortaría a los jugadores que comparten la wifi de una sala de juego. [CLAUDE.md](CLAUDE.md) explica cuándo encenderlo.
-
-6. Lanza la carga inicial con `/api/admin/sync`, en este orden:
-   1. La lista FIDE.
-   2. info64, en ventanas mensuales encadenadas: unas 11 horas, a una petición por segundo.
-   3. Las retransmisiones de lichess. `scripts/lichess-rondas.mjs` saca las rondas con españoles de los volcados mensuales de [database.lichess.org](https://database.lichess.org/#broadcasts), y el Workflow de lichess las importa: unas 6 horas para 12 meses.
-
-   Los parámetros están en [CLAUDE.md](CLAUDE.md).
-
-Después, cada migración se aplica con `pnpm db:migrate:remote` antes de desplegar, tras apuntar el marcador de Time Travel ([CLAUDE.md](CLAUDE.md) explica cómo volver atrás). Si añade una columna que se deriva del PGN, tras desplegar hay que lanzar el reprocesado de las partidas guardadas (`games-reprocess`).
+1. Inicia sesión: `pnpm exec wrangler login`.
+2. Crea la base de datos (`pnpm exec wrangler d1 create ajedrez --jurisdiction eu`) y pon su id en `database_id`, en `wrangler.jsonc`.
+3. Aplica las migraciones: `pnpm db:migrate:remote`.
+4. Sube el token de administración: `pnpm exec wrangler secret put ADMIN_TOKEN`.
+5. Cambia el dominio: `routes` de `wrangler.jsonc`, `site` de `astro.config.mjs`, la URL de workers.dev de `src/middleware.ts`, la línea `Sitemap:` de `public/robots.txt` y las URL de `scripts/humo.mjs` y `.github/workflows/vigilancia.yml`.
+6. Despliega: `pnpm run deploy`.
+7. Carga los datos con `/api/admin/sync`: la lista FIDE, info64 y las retransmisiones de lichess. Los parámetros, en [CLAUDE.md](CLAUDE.md).
 
 </details>
 
