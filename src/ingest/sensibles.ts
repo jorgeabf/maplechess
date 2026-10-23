@@ -27,7 +27,14 @@ const SENSITIVE_WORDS = new RegExp(
 /** La ONCE, en mayúsculas: en minúsculas es un número. */
 const ONCE = /\bONCE\b/
 
+/**
+ * «A la ciega» (en catalán, «a la cega») es jugar sin ver el tablero: no dice
+ * nada de quien juega. Se quita antes de buscar, así que «a la ciega para
+ * ciegos» sigue contando.
+ */
+const BLINDFOLD = /\ba la (ciega|cega)\b/g
+
 /** ¿Parece, por el nombre, un torneo que revela un dato de salud? */
 export function looksSensitive(name: string): boolean {
-	return ONCE.test(name) || SENSITIVE_WORDS.test(stripDiacritics(name).toLowerCase())
+	return ONCE.test(name) || SENSITIVE_WORDS.test(stripDiacritics(name).toLowerCase().replace(BLINDFOLD, ''))
 }

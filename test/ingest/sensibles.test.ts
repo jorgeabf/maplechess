@@ -70,9 +70,20 @@ describe('looksSensitive', () => {
 			'Torneig per a cecs',
 			'Ajedrez adaptado en silla de ruedas',
 			'Blitz Solidario Síndrome de Asperger',
-			'Torneo en el Centro Penitenciario de Ninguna Parte'
+			'Torneo en el Centro Penitenciario de Ninguna Parte',
+			'Simultáneas a la ciega para ciegos'
 		]) {
 			expect(looksSensitive(name), name).toBe(true)
+		}
+	})
+
+	it('no cuenta «a la ciega», que es jugar sin ver el tablero', () => {
+		for (const name of [
+			'II Desafío a la Ciega de Ninguna Parte',
+			'I Desafiament a la Cega / I Desafío a la Ciega',
+			'XXX Torneo a la ciega Inventado'
+		]) {
+			expect(looksSensitive(name), name).toBe(false)
 		}
 	})
 
