@@ -48,8 +48,7 @@ import { CONTACT, OWNER } from '../lib/legal'
 		<ul>
 			<li>
 				<strong>De la ficha:</strong> nombre, FIDE ID, título, ELO estándar, de rápidas y de blitz, si está inactivo,
-				sexo y año de nacimiento. El año de quien puede ser menor de edad no sale en ninguna página, tampoco junto a su
-				nombre.
+				sexo y año de nacimiento. Si puede ser menor de edad, mira <a href="#menores">Menores de edad</a>.
 			</li>
 			<li>
 				<strong>De los torneos:</strong> en cuáles ha jugado, con su equipo, su número inicial, sus puntos y
@@ -63,7 +62,7 @@ import { CONTACT, OWNER } from '../lib/legal'
 				<strong>Lo que sale de sus partidas:</strong> el repertorio (qué aperturas juega con cada color) y el dossier
 				para preparar una partida contra él (sus líneas principales, cómo han cambiado en el último año, sus resultados
 				según el ELO del rival y sus apuros de tiempo). Analizan cómo juega una persona, lo que el RGPD llama elaborar
-				un perfil, pero no se usan para tomar decisiones sobre nadie.
+				un perfil, pero no se usan para tomar decisiones sobre nadie. De quien puede ser menor, no hay ni uno ni otro.
 			</li>
 		</ul>
 
@@ -103,14 +102,22 @@ import { CONTACT, OWNER } from '../lib/legal'
 		</p>
 		<p>
 			Son datos que la FIDE y la federación ya publican, y quien juega un torneo valorado sabe que se publican. Para que
-			ese interés no pase por encima de los jugadores, el año de nacimiento de los menores no se muestra, el repertorio,
-			el dossier y las descargas en PGN no salen en los buscadores, y cualquiera puede pedir que se le retire.
+			ese interés no pase por encima de los jugadores:
 		</p>
+		<ul>
+			<li>
+				de los menores no se muestra el año de nacimiento ni hay repertorio ni dossier, y sus fichas no salen en los
+				buscadores;
+			</li>
+			<li>no se publican los torneos de hasta Sub&nbsp;14, los escolares ni los que dicen algo de la salud de quien juega;</li>
+			<li>de nadie salen en los buscadores el repertorio, el dossier ni las descargas en PGN;</li>
+			<li>cualquiera puede pedir que se le retire.</li>
+		</ul>
 
 		<h3>Quién los ve</h3>
 		<p>
-			Cualquiera que visite la web, sin registrarse. Las fichas, los torneos y las partidas salen en los buscadores; el
-			repertorio, el dossier y las descargas, no. Cloudflare los trata por encargo para servir la web (ver{' '}
+			Cualquiera que visite la web, sin registrarse. Las fichas (salvo las de quien puede ser menor), los torneos y las
+			partidas salen en los buscadores; el repertorio, el dossier y las descargas, no. Cloudflare los trata por encargo para servir la web (ver{' '}
 			<a href="#ayuda">Quién ayuda</a>).
 		</p>
 
@@ -124,6 +131,39 @@ import { CONTACT, OWNER } from '../lib/legal'
 			<li>Las próximas partidas, hasta que se juega la ronda.</li>
 			<li>Las copias de seguridad de la base de datos y el registro de las actualizaciones, 30 días.</li>
 		</ul>
+
+		<h3 id="menores">Menores de edad</h3>
+		<p>
+			Cuenta como posible menor quien cumple 18 años o menos este año, según el año de nacimiento de la lista FIDE, que
+			no da el día. De quien puede serlo:
+		</p>
+		<ul>
+			<li>su año de nacimiento no sale en ninguna página, tampoco junto a su nombre;</li>
+			<li>su ficha no sale en los buscadores;</li>
+			<li>
+				su próxima partida sale en la página del torneo, como en la fuente, pero no en su ficha, salvo para quien ha
+				pulsado en ella «Soy yo»;
+			</li>
+			<li>no hay repertorio ni dossier, ni sus descargas.</li>
+		</ul>
+		<p>
+			Además, no se guardan los torneos de hasta Sub&nbsp;14 ni los escolares (los de un colegio y el deporte en edad
+			escolar), que dirían la edad o el colegio de quien juega.
+		</p>
+		<p>
+			Sí sale en el ranking sub-18, como en las listas de la FIDE y de la federación, y en los demás torneos y partidas
+			que ha jugado. Si en la lista FIDE no consta su año, o no tiene FIDE ID, no hay forma de saber que es menor. Su
+			padre, su madre o su tutor pueden pedir que se le retire (ver <a href="#oposicion">Tu derecho a oponerte</a>).
+		</p>
+
+		<h3 id="salud">Torneos que revelan un dato de salud</h3>
+		<p>
+			No se publican categorías especiales de datos (artículo 9 del RGPD), como la salud. Por eso no están los torneos en
+			los que participar dice algo de la salud de quien juega: los de ajedrecistas ciegos o sordos, con discapacidad
+			física o de ajedrez inclusivo, ni sus partidas, participantes y clasificaciones. Se revisan a mano, y la web avisa
+			de los nuevos que lo parecen por el nombre. Si ves alguno que se ha pasado, escribe a{' '}
+			<a href={`mailto:${CONTACT}`}>{CONTACT}</a> y se quita.
+		</p>
 
 		{/* El art. 21.4 RGPD pide el derecho de oposición explícito, claro y aparte de lo demás: por eso va en su tarjeta. */}
 		<section class="card" aria-labelledby="oposicion">
@@ -187,7 +227,8 @@ import { CONTACT, OWNER } from '../lib/legal'
 				<strong>Cookie:</strong> sólo hay una, y sólo si la pides. Al preparar una partida puedes indicar tu FIDE ID
 				para cruzar tus partidas con las del rival, o pulsar «Soy yo» en tu ficha, y se guarda en la cookie{' '}
 				<code>yo</code> durante un año para no tener que repetirlo. Con ella, la portada te avisa también de tu próximo
-				emparejamiento. No se usa para nada más ni se comparte. «No soy yo» la borra.
+				emparejamiento. No comprueba que seas tú, así que no abre el dossier ni el repertorio de quien puede ser menor,
+				ni siquiera los tuyos. No se usa para nada más ni se comparte. «No soy yo» la borra.
 			</li>
 			<li>
 				<strong>Correo:</strong> si escribes a {CONTACT}, tu correo llega a un buzón de Outlook.com y se guarda
