@@ -39,6 +39,8 @@ const CHECKS = [
 	},
 	html('/torneos/12053', 'Participantes ('),
 	html('/acerca', 'Acerca de MapleChess'),
+	html('/privacidad', 'Tu derecho a oponerte'),
+	html('/aviso-legal', 'Exactitud de los datos'),
 	html('/humo-no-existe', 'No encontramos esa página', 404),
 	{
 		path: '/api/admin/sync',

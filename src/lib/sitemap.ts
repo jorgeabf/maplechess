@@ -13,7 +13,7 @@ export type SitemapKind = (typeof SITEMAP_KINDS)[number]
 export type SitemapPart = { kind: 'paginas' } | { kind: SitemapKind; n: number }
 
 /** Páginas fijas que se indexan; las búsquedas no (robots.txt). */
-export const STATIC_PAGES = ['/', '/jugadores', '/partidas', '/torneos', '/acerca']
+export const STATIC_PAGES = ['/', '/jugadores', '/partidas', '/torneos', '/acerca', '/privacidad', '/aviso-legal']
 
 export function partName(part: SitemapPart): string {
 	return part.kind === 'paginas' ? part.kind : `${part.kind}-${part.n}`

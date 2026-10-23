@@ -266,7 +266,7 @@ Necesita una cuenta de Cloudflare con **Workers Paid**: la importación de la li
 ## Seguridad y datos personales
 
 - **Un fallo de seguridad** no se publica en una incidencia: avísalo en privado desde la pestaña [Security](https://github.com/jorgeabf/maplechess/security) del repositorio, con «Report a vulnerability».
-- **Para que se retiren tus datos** (o los de un menor a tu cargo), la página [/acerca](https://maplechess.es/acerca) explica cómo pedirlo.
+- **Para que se retiren tus datos** (o los de un menor a tu cargo), la [política de privacidad](https://maplechess.es/privacidad#oposicion) explica cómo pedirlo.
 - Los ficheros de prueba (`test/fixtures/`) no llevan datos de personas reales: tienen la estructura de las fuentes, con nombres y FIDE ID inventados.
 
 ## Licencia
@@ -274,7 +274,7 @@ Necesita una cuenta de Cloudflare con **Workers Paid**: la importación de la li
 [GPL-3.0 o posterior](LICENSE), la misma que chessground, chessops y Stockfish.
 
 - **Aperturas:** nombres de dominio público (CC0).
-- **Datos de jugadores, torneos y partidas:** pertenecen a sus fuentes y se muestran tal como ellas los publican. La página [/acerca](https://maplechess.es/acerca) explica cómo pedir que se retire alguno.
+- **Datos de jugadores, torneos y partidas:** pertenecen a sus fuentes y se muestran tal como ellas los publican. La [política de privacidad](https://maplechess.es/privacidad#oposicion) explica cómo pedir que se retire alguno.
 - **Partidas de las retransmisiones de lichess:** licencia [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/deed.es); aquí se ofrecen con la misma licencia.
 - **Tipografía de los titulares:** Source Serif 4 de Adobe ([SIL Open Font License 1.1](public/fonts/OFL.txt)), modificada y renombrada «Titulares».
 - **Piezas del tablero** (`src/assets/pieces/mpchess/`): mpchess, de Maxime Chupin, con licencia GPL-3.0.

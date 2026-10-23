@@ -1,6 +1,6 @@
 ---
 import Base from '../layouts/Base.astro'
-import { CC_BY_SA, SOURCE_CODE } from '../lib/licenses'
+import { CC_BY_SA, ENGINE_SOURCE, ENGINE_VERSION, SOURCE_CODE } from '../lib/licenses'
 ---
 
 <Base title="Acerca de">
@@ -12,7 +12,7 @@ import { CC_BY_SA, SOURCE_CODE } from '../lib/licenses'
 			propio navegador.
 		</p>
 
-		<h2>De dónde salen los datos</h2>
+		<h2 id="fuentes">De dónde salen los datos</h2>
 		<ul>
 			<li>
 				<strong>Torneos, participantes y partidas:</strong>{' '}
@@ -41,14 +41,16 @@ import { CC_BY_SA, SOURCE_CODE } from '../lib/licenses'
 		</ul>
 		<p>
 			Los datos se copian tal como los publican las fuentes. Si encuentras un error, lo mejor es corregirlo en origen
-			(el árbitro del torneo, la retransmisión o la FIDE); aquí se actualizará en la siguiente sincronización.
+			(el árbitro del torneo, la retransmisión o la FIDE); aquí se actualizará en la siguiente sincronización. Qué datos
+			personales se publican, para qué y cómo pedir que se retiren los tuyos, en la{' '}
+			<a href="/privacidad">política de privacidad</a>.
 		</p>
 
-		<h2>Software</h2>
+		<h2 id="software">Software</h2>
 		<ul>
 			<li>
 				Motor de análisis: <a href="https://stockfishchess.org" rel="noopener">Stockfish</a> 19 (build ligera de{' '}
-				<a href="https://github.com/nmrugg/stockfish.js" rel="noopener">stockfish.js</a>), licencia GPL-3.0.{' '}
+				<a href={ENGINE_SOURCE} rel="noopener">stockfish.js {ENGINE_VERSION}</a>, con su código), licencia GPL-3.0.{' '}
 				<a href="/engine/Copying.txt">Texto de la licencia</a>.
 			</li>
 			<li>
@@ -70,45 +72,6 @@ import { CC_BY_SA, SOURCE_CODE } from '../lib/licenses'
 				<a href={SOURCE_CODE} rel="noopener">su código está en GitHub</a>.
 			</li>
 		</ul>
-
-		<h2>Datos personales</h2>
-		<p>
-			Sólo se muestran datos que ya son públicos en las fuentes: nombre, FIDE ID, ELO, título, resultados y, salvo en
-			los menores de edad, año de nacimiento.
-		</p>
-		<p>
-			Si quieres que se te retire, escribe a <a href="mailto:contacto@maplechess.es">contacto@maplechess.es</a> con tu FIDE ID
-			(o el del menor, si eres su padre, madre o tutor). En unos días tu ficha desaparece y, en las partidas, los torneos
-			y los emparejamientos, tu nombre pasa a «Jugador retirado», sin FIDE ID. Las partidas se quedan, porque también son
-			de tus rivales. No vuelve a aparecer con las siguientes actualizaciones de las fuentes. Las copias de seguridad de
-			la base de datos (30 días) y los registros técnicos (7 días) caducan solos.
-		</p>
-		<p>
-			Como cualquier web, al visitarla Cloudflare, donde está alojada, guarda durante 7 días la dirección IP y la página
-			pedida, para la seguridad y para diagnosticar errores. No se usan para nada más.
-		</p>
-
-		<h2>Cookies</h2>
-		<p>
-			Sólo hay una, y sólo si la pides: al preparar una partida puedes indicar tu FIDE ID para cruzar tus partidas con
-			las del rival, o pulsar «Soy yo» en tu ficha, y se guarda en la cookie <code>yo</code> durante un año para no
-			tener que repetirlo. Con ella, la
-			portada te avisa también de tu próximo emparejamiento. No se usa para nada más ni se comparte. «No soy yo» la
-			borra. No hay cookies de analítica ni de publicidad.
-		</p>
 	</article>
 </Base>
 
-<style>
-	.prose {
-		max-inline-size: var(--reading-width);
-	}
-
-	.prose h2 {
-		margin-top: var(--space-6);
-	}
-
-	.prose li + li {
-		margin-top: var(--space-2);
-	}
-</style>
