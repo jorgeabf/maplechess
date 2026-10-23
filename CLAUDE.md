@@ -77,7 +77,10 @@ MapleChess es un buscador de jugadores españoles (lista FIDE, federación ESP),
     - Los botones de navegación van en un `role="group"`, no `toolbar`: una barra de herramientas promete moverse con las flechas entre sus botones.
     - El tablero lleva `aria-hidden`: chessground pinta las coordenadas como texto.
   - **Lo que puede fallar o limitarse va después del estado:** la URL, el portapapeles, el almacenamiento. Safari lanza un `SecurityError` tras 100 `history.replaceState` en 30 s, así que el visor escribe `#j` 300 ms después de la última jugada, en un `try/catch`.
-  - `panel-busqueda.ts`: el popover de la cabecera se cierra cuando el foco sale de él hacia otro elemento; si no, quedaba encima del elemento enfocado. Sin `relatedTarget` no se cierra: Safari no enfoca el botón «Buscar» al pulsarlo.
+  - `panel-busqueda.ts`: el popover de la cabecera se cierra cuando el foco sale de él hacia otro elemento; si no, quedaba encima del elemento enfocado. Sin `relatedTarget` no se cierra: Safari no enfoca el botón «Buscar» al pulsarlo. También se cierra en `pagehide`, al buscar: si no, al volver con Atrás bfcache lo enseñaba abierto.
+  - **bfcache:** todas las páginas entran, también la partida con el motor (su Worker se congela y sigue al volver). Comprobado el 23-oct-2026 en Chrome, con el evento `Page.backForwardCacheNotUsed` de CDP: `notRestoredReasons` sólo dice «masked», y Playwright arranca Chromium sin bfcache.
+    - Para no perderlo: nada de `unload` ni de `Cache-Control: no-store`.
+    - Lo que haya que hacer al salir, en `pagehide`: escribir el `#j` pendiente, cerrar el buscador.
 - `public/robots.txt`: bloquea repertorio, dossier y PGN, que no aportan al índice y cada visita lee todas las partidas de un jugador; el repertorio, además, tiene un enlace por jugada y es un espacio de URL casi infinito. Su línea `Sitemap:` lleva la URL absoluta del dominio, escrita: si cambia `site` (`astro.config.mjs`), cambiarla también.
 - **Sitemap** (`src/pages/sitemap.xml.ts` y `src/pages/sitemap/[parte].xml.ts`): un índice y trozos de hasta 50.000 URL (`src/lib/sitemap.ts`, consultas en `src/lib/db/sitemap.ts`), con la misma URL canónica que da Base.
   - Las páginas fijas (`paginas.xml`) y, por trozos, los torneos, las partidas con jugadas y las fichas con torneos o partidas. Lo que lleva `noindex` no entra.
