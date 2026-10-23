@@ -6,6 +6,7 @@
 // empezar la siguiente, para no mezclar líneas de dos posiciones.
 import { version } from 'stockfish/package.json'
 import { parseInfo, type UciInfo } from '../../lib/chess/uci'
+import { VisibleDeadline } from './plazo'
 
 /** La carpeta es la versión del paquete (scripts/copy-engine.mjs): se cachea como inmutable. */
 const ENGINE_URL = `/engine/${version}/stockfish.js`
@@ -23,7 +24,9 @@ export const ENGINE_LINES = 3
  * Tiempo para arrancar: descargar y compilar el wasm (~1,9 MB). Si el wasm
  * falla, stockfish.js lo deja en una promesa sin capturar dentro del Worker,
  * que no llega a onerror: un motor que no ha dicho «readyok» en este tiempo se
- * da por perdido.
+ * da por perdido. Sólo cuenta con la página visible: si se cambia de app
+ * mientras carga, iOS suspende la página y el Worker, y al volver el plazo ya
+ * habría vencido antes de que el Worker pudiera terminar.
  */
 const START_TIMEOUT_MS = 30_000
 
@@ -42,7 +45,9 @@ export class Engine {
 	private state: State = 'starting'
 	private pending: { fen: string; infinite: boolean } | null = null
 	private current: Analysis | null = null
-	private readonly startTimer: ReturnType<typeof setTimeout>
+	private readonly startDeadline = new VisibleDeadline(START_TIMEOUT_MS, () => this.fail())
+	/** Lo que sólo hace falta mientras arranca: parar el plazo con la página oculta. */
+	private readonly starting = new AbortController()
 
 	/** `onError`: el Worker no carga (un 404 del script, el wasm) o falla. */
 	constructor(
@@ -53,7 +58,12 @@ export class Engine {
 		this.worker.onmessage = (event: MessageEvent<string>) => this.receive(String(event.data))
 		this.worker.onerror = () => this.fail()
 		this.worker.onmessageerror = () => this.fail()
-		this.startTimer = setTimeout(() => this.fail(), START_TIMEOUT_MS)
+		document.addEventListener(
+			'visibilitychange',
+			() => (document.hidden ? this.startDeadline.pause() : this.startDeadline.resume()),
+			{ signal: this.starting.signal }
+		)
+		if (!document.hidden) this.startDeadline.resume()
 		this.send('uci')
 	}
 
@@ -75,13 +85,19 @@ export class Engine {
 	}
 
 	destroy(): void {
-		clearTimeout(this.startTimer)
+		this.started()
 		this.worker.terminate()
 	}
 
 	private fail(): void {
-		clearTimeout(this.startTimer)
+		this.started()
 		this.onError()
+	}
+
+	/** Se acaba el arranque: ha dicho «readyok», ha fallado o se cierra. */
+	private started(): void {
+		this.startDeadline.cancel()
+		this.starting.abort()
 	}
 
 	private send(command: string): void {
@@ -112,7 +128,7 @@ export class Engine {
 			this.send('setoption name Hash value 32')
 			this.send('isready')
 		} else if (line === 'readyok') {
-			clearTimeout(this.startTimer)
+			this.started()
 			if (this.state === 'starting') this.startPending()
 		} else if (line.startsWith('bestmove')) {
 			if (this.state === 'searching' && this.current) {
