@@ -1,4 +1,4 @@
-import { env } from 'cloudflare:workers'
+import { env, type WorkflowEvent, type WorkflowStep } from 'cloudflare:workers'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
 	fetchTopPage,
@@ -12,12 +12,14 @@ import {
 import {
 	broadcastParticipants,
 	decide,
+	LichessSyncWorkflow,
 	selectTours,
 	sinceOf,
 	syncTour,
 	tourInfo,
 	tournamentTimeControl,
-	type LichessRequest
+	type LichessRequest,
+	type LichessSyncParams
 } from '../../src/ingest/lichess/sync'
 import {
 	loadLichessTours,
@@ -323,7 +325,8 @@ describe('syncTour', () => {
 			db.prepare('DELETE FROM games'),
 			db.prepare('DELETE FROM participations'),
 			db.prepare('DELETE FROM tournaments'),
-			db.prepare('DELETE FROM players')
+			db.prepare('DELETE FROM players'),
+			db.prepare('DELETE FROM torneos_sensibles')
 		])
 		await addSpanishPlayers(fixtureIds.filter((id) => id !== FOREIGN))
 	})
@@ -487,5 +490,31 @@ describe('syncTour', () => {
 		mockLichess([])
 		expect(await syncTour(db, { ...candidate, finished: false }, direct)).toMatchObject({ status: null })
 		expect(await loadLichessTours(db, [TOUR_ID])).toEqual([])
+	})
+
+	it('apunta para revisarlo el torneo propio que parece sensible (torneos_sensibles)', async () => {
+		mockLichess()
+		const info = { tour: { ...detail.tour, name: 'XII Open Inventado para Ciegos' }, finished: true }
+		expect(await syncTour(db, candidate, direct, info)).toMatchObject({ status: 'propio', games: 6 })
+		expect(await db.prepare('SELECT source, source_key AS key, nombre, excluido FROM torneos_sensibles').all()).toMatchObject({
+			results: [{ source: 'lichess', key: TOUR_ID, nombre: 'XII Open Inventado para Ciegos', excluido: null }]
+		})
+	})
+
+	it('no pide una retransmisión marcada como sensible, ni con force', async () => {
+		const requested = mockLichess()
+		await db
+			.prepare("INSERT INTO torneos_sensibles (source, source_key, nombre, excluido, creado) VALUES ('lichess', ?1, 'Torneo inventado', 1, '2026-10-23')")
+			.bind(TOUR_ID)
+			.run()
+		// Pasos de verdad, sin Workflow ni pausas.
+		const step = {
+			do: async (_name: string, ...rest: unknown[]) => (rest.at(-1) as () => Promise<unknown>)(),
+			sleep: async () => {}
+		} as unknown as WorkflowStep
+		const event = { payload: { tours: [TOUR_ID], force: true }, timestamp: new Date() } as WorkflowEvent<LichessSyncParams>
+		await (Object.assign(Object.create(LichessSyncWorkflow.prototype), { env }) as LichessSyncWorkflow).run(event, step)
+		expect(requested).toEqual([])
+		expect(await count('SELECT count(*) AS n FROM tournaments')).toBe(0)
 	})
 })
