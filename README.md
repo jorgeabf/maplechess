@@ -30,7 +30,7 @@ Saber contra quién te toca en la próxima ronda, ver qué aperturas juega y dó
 
 | | |
 | --- | --- |
-| **Busca** | Unos 98.000 jugadores españoles de la lista FIDE, más de 12.000 torneos de info64 desde 2014 y sus partidas. |
+| **Busca** | Unos 98.000 jugadores españoles de la lista FIDE, unos 8.500 torneos de info64 desde 2014 y sus partidas. |
 | **Mira quién te toca** | Los emparejamientos de la próxima ronda, en cuanto info64 los publica, con un enlace para preparar a cada rival. |
 | **Prepara al rival** | Un dossier por color: sus líneas principales, qué ha cambiado este año, cómo puntúa según el rival, sus apuros de tiempo y dónde te separas tú. |
 | **Analiza** | Visor con variantes, comentarios y relojes, y Stockfish 19 en el propio navegador. |
@@ -69,6 +69,8 @@ El **dossier** es una página por color, para leer en el móvil o imprimir:
 - **Tú contra tu rival:** con tu nombre o tu FIDE ID, vuestras partidas y, en cada una de sus líneas, dónde te desvías tú o dónde juega algo que nunca te han jugado. Si estáis emparejados, lo avisa y abre con tu color. Tu ID se recuerda en una cookie, la única del sitio; también se puede indicar con «Soy yo» en tu ficha.
 
 El **repertorio** es el árbol de aperturas del jugador con cada color. En cada posición se ve qué jugadas ha hecho él o sus rivales, cuántas veces, con qué resultado y cuándo fue la última. Junta las transposiciones, filtra por periodo (2 o 5 años), ritmo y ELO del rival, y se recorre pulsando en la tabla o moviendo las piezas en el tablero, con Stockfish en la posición y la descarga en PGN de las partidas que pasan por ella.
+
+De quien puede ser menor de edad (cumple 18 años o menos este año, según la lista FIDE) no hay dossier ni repertorio, y su ficha no sale en los buscadores. La [política de privacidad](https://maplechess.es/privacidad#menores) lo explica.
 
 ### Partidas y torneos
 
@@ -130,6 +132,8 @@ flowchart LR
 | [lichess-org/chess-openings](https://github.com/lichess-org/chess-openings) | Códigos ECO y nombres de las aperturas (CC0) | A mano (`pnpm openings`) |
 
 La ingesta es educada con las fuentes: como mucho una petición por segundo a info64 y, a lichess, una cada vez y con pausa entre una y otra, siempre con un User-Agent que la identifica.
+
+**No se guardan** los torneos de hasta Sub 14 ni los escolares, que dirían la edad o el colegio de quien juega, ni los que revelan un dato de salud: los de ajedrecistas ciegos o sordos, con discapacidad física o de ajedrez inclusivo. La [política de privacidad](https://maplechess.es/privacidad#salud) lo explica.
 
 **chess-results no se usa:** sus términos prohíben copiar y republicar sus datos.
 
