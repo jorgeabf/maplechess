@@ -1,6 +1,7 @@
 // Clasificación de un torneo (tabla standings; ver la migración 0011), tal
 // como la publica la fuente.
-import { hasGamesSql } from './games'
+import { madridYear } from '../dates'
+import { hasDossierSql, minorsBornSince } from './players'
 
 export interface StandingRow {
 	pos: number
@@ -21,8 +22,8 @@ export interface StandingRow {
 	fideId: number | null
 	title: string | null
 	fed: string | null
-	/** 1 si tiene partidas (de cualquier torneo): sólo entonces hay dossier. */
-	hasGames: 0 | 1
+	/** 1 si tiene dossier (hasDossierSql): sólo entonces se enlaza. */
+	hasDossier: 0 | 1
 }
 
 export interface Standings {
@@ -37,26 +38,27 @@ export interface Standings {
 
 // En el orden de la clave de standings: se recorre sin ordenar. Cada jugador
 // se busca en participations por su clave; el LEFT JOIN fija ese orden de
-// recorrido.
+// recorrido. ?2 es el año de hasDossierSql.
 const PLAYER_ROWS = `SELECT s.pos, s.start_rank AS startRank, s.points, s.tiebreaks,
-		pa.name, pa.rating, pa.fide_id AS fideId, pa.title, pa.fed, ${hasGamesSql('pa.fide_id')} AS hasGames
+		pa.name, pa.rating, pa.fide_id AS fideId, pa.title, pa.fed, ${hasDossierSql('pa.fide_id', '?2')} AS hasDossier
 	FROM standings s
 	LEFT JOIN participations pa ON pa.tournament_id = s.tournament_id AND pa.team = '' AND pa.start_rank = s.start_rank
 	WHERE s.tournament_id = ?1 ORDER BY s.pos, s.start_rank`
 
 const TEAM_ROWS = `SELECT s.pos, s.start_rank AS startRank, s.points, s.tiebreaks,
-		s.name, s.rating, NULL AS fideId, NULL AS title, NULL AS fed, 0 AS hasGames
+		s.name, s.rating, NULL AS fideId, NULL AS title, NULL AS fed, 0 AS hasDossier
 	FROM standings s WHERE s.tournament_id = ?1 ORDER BY s.pos, s.start_rank`
 
 /** Clasificación del torneo, o null si no hay ninguna guardada. */
 export async function getTournamentStandings(
 	db: D1Database,
 	id: number,
-	type: 'individual' | 'team'
+	type: 'individual' | 'team',
+	year = madridYear(new Date())
 ): Promise<Standings | null> {
 	const [meta, rows] = await db.batch<unknown>([
 		db.prepare('SELECT rounds, standings_round AS round, tiebreaks FROM tournaments WHERE id = ?1').bind(id),
-		db.prepare(type === 'team' ? TEAM_ROWS : PLAYER_ROWS).bind(id)
+		type === 'team' ? db.prepare(TEAM_ROWS).bind(id) : db.prepare(PLAYER_ROWS).bind(id, minorsBornSince(year))
 	])
 	const info = meta.results[0] as { rounds: number | null; round: number | null; tiebreaks: string | null } | undefined
 	const results = rows.results as (Omit<StandingRow, 'tiebreaks'> & { tiebreaks: string })[]

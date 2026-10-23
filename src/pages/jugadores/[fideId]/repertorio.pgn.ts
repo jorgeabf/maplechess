@@ -3,7 +3,7 @@ import { env } from 'cloudflare:workers'
 import { explore, parseLine } from '../../../lib/chess/repertoire'
 import { addYears, isoDate } from '../../../lib/dates'
 import { exportGameIds, gamesPgn } from '../../../lib/db/games'
-import { getPlayer } from '../../../lib/db/players'
+import { getPlayer, MINOR_UNAVAILABLE } from '../../../lib/db/players'
 import { getPlayerGames, repertoireGames } from '../../../lib/db/repertoire'
 import { COLOR_NAME } from '../../../lib/format'
 import { positiveInt, repertoireParams } from '../../../lib/params'
@@ -15,6 +15,8 @@ export const GET: APIRoute = async ({ params, url }) => {
 	const fideId = positiveInt(params.fideId)
 	const player = fideId === null ? null : await getPlayer(env.DB, fideId)
 	if (fideId === null || !player) return notFound('Jugador no encontrado')
+	// Un posible menor no tiene repertorio (CLAUDE.md, «Menores»).
+	if (player.minor) return notFound(MINOR_UNAVAILABLE)
 
 	const { color, period, timeClass, minElo, maxElo, moves } = repertoireParams(url.searchParams)
 	const from = period ? addYears(isoDate(new Date()), -Number(period)) : null

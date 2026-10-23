@@ -187,6 +187,18 @@ describe('searchPlayers', () => {
 		expect((await getPlayer(db, 9000001, 2026))?.birthYear).toBeNull()
 		expect((await getPlayer(db, 9000003, 2026))?.birthYear).toBe(2007)
 	})
+
+	it('la ficha dice quién puede ser menor; sin año, como un adulto', async () => {
+		await db.batch([
+			db.prepare('UPDATE players SET birth_year = 2008 WHERE fide_id = 9000001'),
+			db.prepare('UPDATE players SET birth_year = 2007 WHERE fide_id = 9000003')
+		])
+		const minor = async (fideId: number, year: number) => (await getPlayer(db, fideId, year))?.minor
+		expect(await minor(9000001, 2026)).toBe(true)
+		expect(await minor(9000001, 2027)).toBe(false)
+		expect(await minor(9000003, 2026)).toBe(false)
+		expect(await minor(9000002, 2026)).toBe(false)
+	})
 })
 
 describe('mayBeMinor', () => {

@@ -40,38 +40,60 @@ beforeEach(async () => {
 		db.prepare('DELETE FROM games'),
 		db.prepare('DELETE FROM participations'),
 		db.prepare('DELETE FROM tournaments'),
+		db.prepare('DELETE FROM players'),
 		db.prepare('DELETE FROM site_totals')
 	])
 })
 
 describe('participantes', () => {
 
-	it('marca quién tiene partidas, con cualquier color y de cualquier torneo', async () => {
+	it('marca quién tiene dossier: partidas con cualquier color y de cualquier torneo, y no poder ser menor', async () => {
 		const id = await tournament('open-de-prueba')
 		const other = await tournament('otro-torneo')
 		await replaceParticipations(db, id, [
 			player(1, 'Blancas, Ana', 9000001),
 			player(2, 'Negras, Berta', 9000002),
 			player(3, 'Sin Partidas, Carla', 9000003),
-			player(4, 'Sin Fide, Diana', null)
+			player(4, 'Sin Fide, Diana', null),
+			player(5, 'Menor Inventada, Eva', 9000005)
 		])
-		// Una partida en otro torneo, entre la 1 (blancas) y la 2 (negras).
-		await db
-			.prepare(
-				`INSERT INTO games (tournament_id, round, board, date, white_name, black_name, white_fide_id, black_fide_id,
-					result, ply_count, pgn, seen_at)
-				VALUES (?1, 1, 1, '2026-09-25', 'Blancas, Ana', 'Negras, Berta', 9000001, 9000002, '1-0', 40, '', '2026-09-25')`
+		// En la lista FIDE, la 1 nació en 2007 (adulta en 2026), la 5 en 2008
+		// (puede ser menor) y la 2 no tiene año: como una adulta.
+		const born: [number, number | null][] = [
+			[9000001, 2007],
+			[9000002, null],
+			[9000005, 2008]
+		]
+		// Dos partidas en otro torneo: la 1 (blancas) contra la 2 (negras) y la 5 contra la 1.
+		const games: [number, number][] = [
+			[9000001, 9000002],
+			[9000005, 9000001]
+		]
+		await db.batch([
+			...born.map(([fideId, year]) =>
+				db.prepare("INSERT INTO players (fide_id, name, birth_year, seen_at) VALUES (?1, 'Inventado, Alguien', ?2, '')").bind(fideId, year)
+			),
+			...games.map(([white, black], i) =>
+				db
+					.prepare(
+						`INSERT INTO games (tournament_id, round, board, date, white_name, black_name, white_fide_id, black_fide_id,
+							result, ply_count, pgn, seen_at)
+						VALUES (?1, 1, ?2, '2026-09-25', 'Blancas', 'Negras', ?3, ?4, '1-0', 40, '', '2026-09-25')`
+					)
+					.bind(other, i + 1, white, black)
 			)
-			.bind(other)
-			.run()
+		])
 
-		const participants = await getTournamentParticipants(db, id)
-		expect(participants.map((p) => [p.name, p.hasGames])).toEqual([
+		const participants = await getTournamentParticipants(db, id, 2026)
+		expect(participants.map((p) => [p.name, p.hasDossier])).toEqual([
 			['Blancas, Ana', 1],
 			['Negras, Berta', 1],
 			['Sin Partidas, Carla', 0],
-			['Sin Fide, Diana', 0]
+			['Sin Fide, Diana', 0],
+			['Menor Inventada, Eva', 0]
 		])
+		// En 2027, la nacida en 2008 ya no puede ser menor.
+		expect((await getTournamentParticipants(db, id, 2027)).at(-1)?.hasDossier).toBe(1)
 	})
 })
 

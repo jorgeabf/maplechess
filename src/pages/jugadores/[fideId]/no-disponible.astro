@@ -1,0 +1,25 @@
+---
+// El dossier y el repertorio de un posible menor (mayBeMinor), que no están
+// disponibles, ni siquiera con su cookie yo (CLAUDE.md, «Menores»). Lo pintan
+// preparar.astro y repertorio.astro con Astro.rewrite: la URL sigue siendo la
+// que se pidió. Pedida directamente para alguien que no puede ser menor, es
+// la 404 de siempre.
+import { env } from 'cloudflare:workers'
+import Base from '../../../layouts/Base.astro'
+import { getPlayer, MINOR_UNAVAILABLE } from '../../../lib/db/players'
+import { displayName } from '../../../lib/format'
+import { positiveInt } from '../../../lib/params'
+
+const fideId = positiveInt(Astro.params.fideId)
+const player = fideId === null ? null : await getPlayer(env.DB, fideId)
+if (fideId === null || !player?.minor) return Astro.rewrite('/404')
+Astro.response.status = 404
+---
+
+<Base title="No disponible" section="jugadores" noindex>
+	<h1>No disponible</h1>
+	<p>{MINOR_UNAVAILABLE}</p>
+	<p class="page-actions">
+		<a class="button secondary" href={`/jugadores/${fideId}`}>Ficha de {displayName(player.name)}</a>
+	</p>
+</Base>

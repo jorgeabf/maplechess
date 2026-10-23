@@ -44,6 +44,7 @@ beforeEach(async () => {
 		db.prepare('DELETE FROM participations'),
 		db.prepare('DELETE FROM standings'),
 		db.prepare('DELETE FROM tournaments'),
+		db.prepare('DELETE FROM players'),
 		db.prepare('DELETE FROM retiradas')
 	])
 })
@@ -60,14 +61,19 @@ describe('getTournamentStandings', () => {
 			player(2, 'Segundo Inventado, Dos 2013', 9400002),
 			player(3, 'Retirada Inventada, Alguien', 9400003)
 		])
-		// Una partida del primero, en cualquier torneo: tiene dossier.
-		await db
-			.prepare(
-				`INSERT INTO games (tournament_id, round, board, white_name, black_name, white_fide_id, result, ply_count, pgn, seen_at)
-				VALUES (?1, 1, 1, 'Primero Inventado, Uno', 'Otro, Alguien', 9400001, '1-0', 10, '', '2026-10-01')`
+		// Una partida del primero y otra del segundo, en cualquier torneo. El
+		// primero tiene dossier; el segundo nació en 2013, puede ser menor y no lo tiene.
+		await db.batch([
+			db.prepare("INSERT INTO players (fide_id, name, birth_year, seen_at) VALUES (9400002, 'Segundo Inventado, Dos 2013', 2013, '')"),
+			...[9400001, 9400002].map((fideId, i) =>
+				db
+					.prepare(
+						`INSERT INTO games (tournament_id, round, board, white_name, black_name, white_fide_id, result, ply_count, pgn, seen_at)
+						VALUES (?1, 1, ?2, 'Inventado', 'Otro, Alguien', ?3, '1-0', 10, '', '2026-10-01')`
+					)
+					.bind(id, i + 1, fideId)
 			)
-			.bind(id)
-			.run()
+		])
 		await replaceStandings(
 			db,
 			id,
@@ -79,7 +85,7 @@ describe('getTournamentStandings', () => {
 			])
 		)
 
-		const standings = await getTournamentStandings(db, id, 'individual')
+		const standings = await getTournamentStandings(db, id, 'individual', 2026)
 		expect(standings).toMatchObject({ round: 4, rounds: 7, tiebreaks: ['BH', 'WON'] })
 		expect(standings!.rows).toEqual([
 			{
@@ -92,10 +98,10 @@ describe('getTournamentStandings', () => {
 				fideId: 9400002,
 				title: null,
 				fed: 'ESP',
-				hasGames: 0
+				hasDossier: 0
 			},
-			expect.objectContaining({ pos: 2, name: 'Primero Inventado, Uno', title: 'FM', fideId: 9400001, hasGames: 1 }),
-			expect.objectContaining({ pos: 3, name: RETIRED_NAME, fideId: null, title: null, hasGames: 0 })
+			expect.objectContaining({ pos: 2, name: 'Primero Inventado, Uno', title: 'FM', fideId: 9400001, hasDossier: 1 }),
+			expect.objectContaining({ pos: 3, name: RETIRED_NAME, fideId: null, title: null, hasDossier: 0 })
 		])
 	})
 
@@ -122,7 +128,7 @@ describe('getTournamentStandings', () => {
 					fideId: null,
 					title: null,
 					fed: null,
-					hasGames: 0
+					hasDossier: 0
 				}
 			]
 		})

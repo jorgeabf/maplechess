@@ -1,8 +1,10 @@
 // Consultas del sitemap (lib/sitemap.ts). Medido en la D1 remota el 22-oct-2026
 // con 98.047 jugadores, 12.528 torneos y 132.438 partidas: el índice lee 3
 // filas y los trozos, unas 335.000 en total (CLAUDE.md, «D1 cobra por filas recorridas»).
+import { madridYear } from '../dates'
 import { SITEMAP_SIZE, type SitemapKind } from '../sitemap'
 import { hasGamesSql } from './games'
+import { minorsBornSince } from './players'
 
 /**
  * Trozos de cada tipo, para el índice. Las partidas y los torneos van por
@@ -28,20 +30,28 @@ export async function sitemapCounts(db: D1Database, size = SITEMAP_SIZE): Promis
  *   está en la misma fila.
  * - Jugadores: los FIDE ID son dispersos (de 100.234 a 652.009.386, en
  *   bloques), así que van por posición, de `size` en `size`, y sólo las fichas
- *   con torneos o partidas, el criterio del noindex de la ficha. Lee las filas
- *   que salta OFFSET más una por ficha que entra: el segundo trozo, unas
- *   120.000. Un EXISTS que no encuentra nada no suma.
+ *   con torneos o partidas que no pueden ser de un menor en `year`
+ *   (mayBeMinor), el criterio del noindex de la ficha. Lee las filas que
+ *   salta OFFSET más una por ficha que entra: el segundo trozo, unas 120.000.
+ *   Un EXISTS que no encuentra nada no suma, y el año va en la misma fila.
  */
-export async function sitemapIds(db: D1Database, kind: SitemapKind, n: number, size = SITEMAP_SIZE): Promise<number[]> {
+export async function sitemapIds(
+	db: D1Database,
+	kind: SitemapKind,
+	n: number,
+	size = SITEMAP_SIZE,
+	year = madridYear(new Date())
+): Promise<number[]> {
 	const from = (n - 1) * size
 	const statement =
 		kind === 'jugadores'
 			? db
 					.prepare(
-						`SELECT p.fide_id AS id FROM (SELECT fide_id FROM players ORDER BY fide_id LIMIT ?1 OFFSET ?2) p
-						WHERE EXISTS (SELECT 1 FROM participations pa WHERE pa.fide_id = p.fide_id) OR ${hasGamesSql('p.fide_id')}`
+						`SELECT p.fide_id AS id FROM (SELECT fide_id, birth_year FROM players ORDER BY fide_id LIMIT ?1 OFFSET ?2) p
+						WHERE (p.birth_year IS NULL OR p.birth_year < ?3)
+							AND (EXISTS (SELECT 1 FROM participations pa WHERE pa.fide_id = p.fide_id) OR ${hasGamesSql('p.fide_id')})`
 					)
-					.bind(size, from)
+					.bind(size, from, minorsBornSince(year))
 			: db
 					.prepare(
 						kind === 'partidas'

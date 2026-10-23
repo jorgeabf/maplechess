@@ -223,7 +223,7 @@ const standingsNote =
 										) : (
 											<>
 												<PlayerName name={s.name} title={s.title} fideId={s.fideId} />
-												{s.fideId && s.hasGames === 1 && (
+												{s.fideId && s.hasDossier === 1 && (
 													<span class="prepare">
 														{' '}
 														·{' '}
@@ -292,7 +292,7 @@ const standingsNote =
 												<td class="end num">{p.startRank}</td>
 												<td class="name">
 													<PlayerName name={p.name} title={p.title} fideId={p.fideId} />
-													{p.fideId && p.hasGames === 1 && (
+													{p.fideId && p.hasDossier === 1 && (
 														<span class="prepare">
 															{' '}
 															·{' '}

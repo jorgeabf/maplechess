@@ -1,7 +1,8 @@
 // Consultas de torneos.
+import { madridYear } from '../dates'
 import { placeTerms } from './fts'
-import { hasGamesSql } from './games'
 import { offset, PAGE_SIZE, toPage, type Page } from './pagination'
+import { hasDossierSql, minorsBornSince } from './players'
 
 export interface TournamentRow {
 	id: number
@@ -126,18 +127,22 @@ export interface TournamentParticipant {
 	title: string | null
 	fed: string | null
 	rating: number | null
-	/** 1 si tiene partidas (de cualquier torneo): sólo entonces hay dossier. */
-	hasGames: 0 | 1
+	/** 1 si tiene dossier (hasDossierSql): sólo entonces se enlaza. */
+	hasDossier: 0 | 1
 }
 
-export async function getTournamentParticipants(db: D1Database, id: number): Promise<TournamentParticipant[]> {
+export async function getTournamentParticipants(
+	db: D1Database,
+	id: number,
+	year = madridYear(new Date())
+): Promise<TournamentParticipant[]> {
 	const { results } = await db
 		.prepare(
 			`SELECT pa.start_rank AS startRank, nullif(pa.team, '') AS team, pa.name, pa.fide_id AS fideId,
-				pa.title, pa.fed, pa.rating, ${hasGamesSql('pa.fide_id')} AS hasGames
+				pa.title, pa.fed, pa.rating, ${hasDossierSql('pa.fide_id', '?2')} AS hasDossier
 			FROM participations pa WHERE pa.tournament_id = ?1 ORDER BY pa.team, pa.start_rank`
 		)
-		.bind(id)
+		.bind(id, minorsBornSince(year))
 		.all<TournamentParticipant>()
 	return results
 }

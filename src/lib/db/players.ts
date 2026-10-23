@@ -156,13 +156,34 @@ export function ageLimit(category: RankingCategory, year: number): { born: 'sinc
 /**
  * Quien puede ser menor de edad en `year`. De la lista FIDE sólo se sabe el año
  * de nacimiento, así que son los sub-18: los nacidos en `year - 18` cumplen 18
- * en algún momento del año. Su año de nacimiento no sale en ninguna página (lo
- * quitan estas consultas), ni tampoco en el nombre de los homónimos
- * (upsertFidePlayers), aunque la FIDE lo publique.
+ * en algún momento del año. Sin año, como un adulto. Su año de nacimiento no
+ * sale en ninguna página (lo quitan estas consultas), ni tampoco en el nombre
+ * de los homónimos (upsertFidePlayers), aunque la FIDE lo publique. Su ficha
+ * no se indexa ni enseña su próxima partida, y no tiene dossier ni repertorio.
  */
 export function mayBeMinor(birthYear: number | null, year: number): boolean {
-	return birthYear !== null && birthYear >= year - AGE_CATEGORIES.sub18.years
+	return birthYear !== null && birthYear >= minorsBornSince(year)
 }
+
+/** Año de nacimiento desde el que se puede ser menor en `year` (mayBeMinor), para las consultas. */
+export function minorsBornSince(year: number): number {
+	return year - AGE_CATEGORIES.sub18.years
+}
+
+/**
+ * Condición SQL de quien tiene dossier y repertorio: tiene partidas y no puede
+ * ser menor. `bornSince` es el parámetro con minorsBornSince del año. La edad
+ * se mira sólo en quien tiene partidas (SQLite no evalúa el resto de un AND
+ * falso): una fila más por cada uno de la lista FIDE. Al revés, la sumaba
+ * cada jugador, también los que no tienen partidas.
+ */
+export function hasDossierSql(fideIdColumn: string, bornSince: string): string {
+	return `(${hasGamesSql(fideIdColumn)}
+		AND NOT EXISTS (SELECT 1 FROM players m WHERE m.fide_id = ${fideIdColumn} AND m.birth_year >= ${bornSince}))`
+}
+
+/** Lo que dicen el dossier, el repertorio y su PGN de un posible menor (jugadores/[fideId]/no-disponible.astro). */
+export const MINOR_UNAVAILABLE = 'El dossier y el repertorio no están disponibles para jugadores que pueden ser menores de edad.'
 
 function publicBirthYear<T extends { birthYear: number | null }>(player: T, year: number): T {
 	return mayBeMinor(player.birthYear, year) ? { ...player, birthYear: null } : player
@@ -277,6 +298,8 @@ export async function findPlayersByName(
 export interface PlayerProfile extends PlayerChoice {
 	/** false si no está (o ya no está) en la lista FIDE como ESP: datos sacados de sus torneos. */
 	inFideList: boolean
+	/** Puede ser menor (mayBeMinor); el año ya no está en birthYear. */
+	minor: boolean
 }
 
 export async function getPlayer(
@@ -287,8 +310,8 @@ export async function getPlayer(
 	const player = await db
 		.prepare(`SELECT ${PLAYER_COLUMNS} FROM players p WHERE p.fide_id = ?1`)
 		.bind(fideId)
-		.first<Omit<PlayerProfile, 'inFideList'>>()
-	if (player) return { ...publicBirthYear(player, year), inFideList: true }
+		.first<Omit<PlayerProfile, 'inFideList' | 'minor'>>()
+	if (player) return { ...publicBirthYear(player, year), inFideList: true, minor: mayBeMinor(player.birthYear, year) }
 
 	// Jugador extranjero o dado de baja: se muestra con lo que digan sus torneos.
 	const fallback = await db
@@ -310,7 +333,8 @@ export async function getPlayer(
 		ratingRapid: null,
 		ratingBlitz: null,
 		inactive: 0,
-		inFideList: false
+		inFideList: false,
+		minor: false
 	}
 }
 
