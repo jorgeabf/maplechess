@@ -1,5 +1,5 @@
 // Consultas de torneos.
-import { prefixTerms } from './fts'
+import { placeTerms } from './fts'
 import { hasGamesSql } from './games'
 import { offset, PAGE_SIZE, toPage, type Page } from './pagination'
 
@@ -73,7 +73,7 @@ export async function searchTournaments(
 		params.push(value)
 		return `?${params.length}`
 	}
-	const terms = prefixTerms(f.q)
+	const terms = placeTerms(f.q)
 	if (terms) where.push(`t.id IN (SELECT rowid FROM tournaments_fts WHERE tournaments_fts MATCH ${p(terms)})`)
 	if (f.from) where.push(`t.end_date >= ${p(f.from)}`)
 	if (f.to) where.push(`t.start_date <= ${p(f.to)}`)

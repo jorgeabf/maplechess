@@ -11,7 +11,7 @@ export function stripDiacritics(text: string): string {
 }
 
 /** Palabras del nombre, sin tildes y en minúsculas. */
-function words(text: string): string[] {
+export function words(text: string): string[] {
 	return stripDiacritics(text)
 		.toLowerCase()
 		.split(/[^\p{L}\p{N}]+/u)
