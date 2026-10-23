@@ -895,6 +895,19 @@
 		margin: 0;
 	}
 
+	/* Páginas de texto: Acerca de, Privacidad y Aviso legal. */
+	.prose {
+		max-inline-size: var(--reading-width);
+	}
+
+	.prose h2 {
+		margin-top: var(--space-6);
+	}
+
+	.prose li + li {
+		margin-top: var(--space-2);
+	}
+
 	/* Aviso breve dentro del contenido. */
 	.note {
 		padding: var(--space-2) var(--space-3);
