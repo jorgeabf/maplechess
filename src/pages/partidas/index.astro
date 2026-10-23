@@ -73,7 +73,7 @@ const advancedOpen = Boolean(filters.eco || filters.from || filters.to || filter
 				<RitmoSelect value={filters.timeClass} />
 				<label>
 					ECO
-					<input name="eco" value={filters.eco} placeholder="B90, C…" size="6" maxlength="3" pattern="[A-Ea-e][0-9]{0,2}" />
+					<input name="eco" value={filters.eco} placeholder="B90, B9…" size="6" maxlength="3" pattern="[A-Ea-e][0-9]{0,2}" />
 				</label>
 				<label>
 					Desde
@@ -89,23 +89,10 @@ const advancedOpen = Boolean(filters.eco || filters.from || filters.to || filter
 	</form>
 
 	{
-		empty && (
-			<p class="muted intro">
-				Busca por jugador (y si quieres por rival y color), apertura o fechas. Por ejemplo,{' '}
-				<a href="/partidas?jugador=anton+guijarro&rival=santos+latasa">las partidas entre Antón Guijarro y Santos Latasa</a>,
-				o <a href="/partidas?eco=B9">toda la Najdorf</a> con «B9» en ECO, que abarca de B90 a B99. Para ver todas las
-				partidas de alguien identificado por su FIDE ID, entra en su ficha desde <a href="/jugadores">Jugadores</a>.
-			</p>
-		)
-	}
-	{
 		upcomingGroups.length > 0 && (
 			<section aria-labelledby="pronto">
 				<h2 id="pronto">Se juegan pronto</h2>
-				<p class="muted">
-					Las mesas de más nivel de las próximas rondas emparejadas, como mucho dos por torneo. «Preparar» abre el
-					dossier del jugador con el color que lleva.
-				</p>
+				<p class="muted">Las mesas de más nivel de las próximas rondas emparejadas, como mucho dos por torneo.</p>
 				<Emparejamientos groups={upcomingGroups} />
 			</section>
 		)
@@ -160,11 +147,6 @@ const advancedOpen = Boolean(filters.eco || filters.from || filters.to || filter
 <style>
 	.filters {
 		margin-bottom: var(--space-5);
-	}
-
-	.intro {
-		max-inline-size: var(--reading-width);
-		margin-bottom: var(--space-6);
 	}
 
 	.result-head {
