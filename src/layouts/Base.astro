@@ -98,7 +98,7 @@ const nav = [
 					<span>{siteName}</span>
 				</a>
 				<div class="end">
-					<nav aria-label="Secciones">
+					<nav class="tabs" aria-label="Secciones">
 						<ul>
 							{
 								nav.map((item) => (
@@ -131,15 +131,40 @@ const nav = [
 		</main>
 		<footer class="site-footer">
 			<div class="page">
+				<div class="footer-main">
+					<div class="footer-about">
+						<a class="footer-brand" href="/">
+							<Logo size={32} />
+							<span>{siteName}</span>
+						</a>
+						<p>Jugadores, torneos y partidas del ajedrez español, para preparar a tu próximo rival.</p>
+					</div>
+					{/* Las secciones salen de la lista del menú, detrás de la portada, que es
+					    donde se empieza a preparar una partida. Lo que es del sitio, aparte. */}
+					<nav class="footer-nav" aria-label="Pie de página">
+						<ul>
+							<li><a href="/">Prepara tu partida</a></li>
+							{
+								nav.map((item) => (
+									<li>
+										<a href={item.href}>{item.label}</a>
+									</li>
+								))
+							}
+						</ul>
+						<ul>
+							<li><a href="/acerca">Acerca de</a></li>
+						</ul>
+					</nav>
+				</div>
 				{/* {' '} explícitos: Astro, como JSX, quita el espacio con salto de línea entre texto y etiqueta. */}
-				<p>
+				<p class="credits">
 					Datos de <a href="https://info64.org" rel="noopener">info64</a> (FEDA), de la{' '}
 					<a href="https://ratings.fide.com" rel="noopener">lista FIDE</a> y de las{' '}
 					<a href="https://lichess.org/broadcast" rel="noopener">retransmisiones de lichess</a> (
-					<a href={CC_BY_SA} rel="license noopener">CC BY-SA 4.0</a>). Motor{' '}
+					<a class="license" href={CC_BY_SA} rel="license noopener">CC BY-SA 4.0</a>). Motor{' '}
 					<a href="https://stockfishchess.org" rel="noopener">Stockfish</a>.{' '}
-					<a href={SOURCE_CODE} rel="noopener">Código libre</a> bajo GPL-3.0 ·{' '}
-					<a href="/acerca">Acerca de</a>
+					<a href={SOURCE_CODE} rel="noopener">Código libre</a> bajo <span class="license">GPL-3.0</span>.
 				</p>
 			</div>
 		</footer>
@@ -225,7 +250,7 @@ const nav = [
 		min-width: 0;
 	}
 
-	nav {
+	.tabs {
 		display: flex;
 		min-width: 0;
 	}
@@ -235,7 +260,7 @@ const nav = [
 	 * borde de la pantalla (margen negativo) y su padding deja el texto de la
 	 * primera pestaña a plomo con el logo. Por la derecha acaba en la lupa.
 	 */
-	nav ul {
+	.tabs ul {
 		display: flex;
 		margin: 0;
 		margin-inline-start: calc(-1 * var(--space-4));
@@ -247,13 +272,13 @@ const nav = [
 		scrollbar-width: none;
 	}
 
-	nav li {
+	.tabs li {
 		display: flex;
 	}
 
 	/* El borde va arriba y abajo para que el texto quede centrado; el de abajo
 	   es el subrayado, que en la fila de la marca toca el borde de la cabecera. */
-	nav a {
+	.tabs a {
 		display: flex;
 		align-items: center;
 		padding: var(--space-2) var(--space-3);
@@ -266,16 +291,16 @@ const nav = [
 
 	/* La lista recorta lo que sale de ella por arriba y por abajo: el anillo de
 	   foco, del mismo grosor que el global, va por dentro. */
-	nav a:focus-visible {
+	.tabs a:focus-visible {
 		outline-offset: -2px;
 	}
 
-	nav a:hover {
+	.tabs a:hover {
 		border-block-end-color: var(--border-strong);
 		color: var(--text);
 	}
 
-	nav a[aria-current='page'] {
+	.tabs a[aria-current='page'] {
 		border-block-end-color: var(--accent);
 		color: var(--accent);
 	}
@@ -305,12 +330,12 @@ const nav = [
 	   de los enlaces: se funden con el fondo y la activa se marca con el de
 	   selección. */
 	@media (forced-colors: active) {
-		nav a,
+		.tabs a,
 		.search-toggle {
 			border-color: Canvas;
 		}
 
-		nav a[aria-current='page'] {
+		.tabs a[aria-current='page'] {
 			border-block-end-color: Highlight;
 		}
 	}
@@ -320,16 +345,82 @@ const nav = [
 		padding-bottom: var(--space-7);
 	}
 
-	/* Al final del scroll, el texto queda por encima de la barra de gestos. */
+	/*
+	 * Pie: la marca y qué es la web, los enlaces y, debajo, las atribuciones.
+	 * Con el fondo y la raya de la cabecera, que así enmarcan la página. Al
+	 * final del scroll, el texto queda por encima de la barra de gestos.
+	 */
 	.site-footer {
 		border-top: 1px solid var(--border);
-		padding-block: var(--space-5) calc(var(--space-5) + env(safe-area-inset-bottom, 0px));
+		background: var(--surface);
+		padding-block: var(--space-6) calc(var(--space-5) + env(safe-area-inset-bottom, 0px));
 		font-size: var(--text-s);
 		color: var(--text-muted);
 	}
 
-	.site-footer p {
+	/*
+	 * Marca y enlaces comparten fila mientras quepan; si no, los enlaces bajan,
+	 * sin punto de corte. Una sección más alarga su lista, y una lista más se
+	 * pone al lado de las otras o debajo, sin tocar nada.
+	 */
+	.footer-main {
+		display: flex;
+		flex-wrap: wrap;
+		justify-content: space-between;
+		gap: var(--space-5) var(--space-7);
+	}
+
+	.footer-about {
+		flex: 0 1 22rem;
+		display: grid;
+		align-content: start;
+		gap: var(--space-3);
+	}
+
+	.footer-about p {
 		margin: 0;
+	}
+
+	/* La marca de la cabecera, en pequeño. Sin justify-self, el enlace llenaría la columna. */
+	.footer-brand {
+		display: inline-flex;
+		align-items: center;
+		justify-self: start;
+		gap: var(--space-2);
+		font-family: var(--font-serif);
+		font-size: var(--text-l);
+		font-weight: var(--weight-strong);
+		line-height: 1.2;
+		color: var(--text);
+		text-decoration: none;
+	}
+
+	/* Las listas, arriba: estiradas al alto de la más larga, la rejilla de la
+	   corta repartiría el hueco entre sus filas. */
+	.footer-nav {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: start;
+		gap: var(--space-4) var(--space-7);
+	}
+
+	.footer-nav ul {
+		display: grid;
+		gap: var(--space-2);
+		margin: 0;
+		padding: 0;
+		list-style: none;
+	}
+
+	.credits {
+		margin: var(--space-5) 0 0;
+		padding-top: var(--space-4);
+		border-top: 1px solid var(--border);
+	}
+
+	/* El nombre de una licencia, entero: a 250 px quedaba «GPL-» al final de una línea y «3.0» en la siguiente. */
+	.license {
+		white-space: nowrap;
 	}
 
 	/* En papel sobran el menú y el pie; la marca queda para saber de dónde sale. */
@@ -339,7 +430,7 @@ const nav = [
 			background: none;
 		}
 
-		nav,
+		.tabs,
 		.search-toggle,
 		.site-footer,
 		.skip {
