@@ -29,11 +29,15 @@ if (fideId === null) return Astro.rewrite('/404')
 
 const { color, period, timeClass, minElo, maxElo, moves, page } = repertoireParams(Astro.url.searchParams)
 const from = period ? addYears(isoDate(new Date()), -Number(period)) : null
+// A la vez, porque cada jugada del explorador es una página. Las partidas de
+// un posible menor se leen, pero no salen: no tiene repertorio (CLAUDE.md,
+// «Menores») y nada enlaza aquí.
 const [player, playerGames] = await Promise.all([
 	getPlayer(env.DB, fideId),
 	getPlayerGames(env.DB, fideId, color, { from, timeClass, minOpponentElo: minElo, maxOpponentElo: maxElo })
 ])
 if (!player) return Astro.rewrite('/404')
+if (player.minor) return Astro.rewrite(`/jugadores/${fideId}/no-disponible`)
 const games = repertoireGames(playerGames)
 // Tu propio repertorio (cookie yo): los textos te hablan a ti.
 const own = isOwn(resolveMe(null, Astro.cookies.get(ME_COOKIE)?.value), fideId)

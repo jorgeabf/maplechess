@@ -56,7 +56,8 @@ describe('emparejamientos', () => {
 			db.prepare('DELETE FROM games'),
 			db.prepare('DELETE FROM pairings'),
 			db.prepare('DELETE FROM participations'),
-			db.prepare('DELETE FROM tournaments')
+			db.prepare('DELETE FROM tournaments'),
+			db.prepare('DELETE FROM players')
 		])
 	})
 
@@ -67,8 +68,8 @@ describe('emparejamientos', () => {
 		expect(round!.pairings).toHaveLength(7)
 		expect(round!.pairings[0]).toEqual({
 			board: 1,
-			white: { name: 'Vusuta Inevabume, Azene', title: 'FM', fideId: 9000001, rating: 2249, hasGames: 0 },
-			black: { name: 'Barejezi Vobozu, Lura', title: null, fideId: 9000007, rating: 2063, hasGames: 0 }
+			white: { name: 'Vusuta Inevabume, Azene', title: 'FM', fideId: 9000001, rating: 2249, hasDossier: 0 },
+			black: { name: 'Barejezi Vobozu, Lura', title: null, fideId: 9000007, rating: 2063, hasDossier: 0 }
 		})
 		// El número 3 no está entre los participantes: nombre y ELO de la página de la ronda.
 		expect(round!.pairings[1].black).toEqual({
@@ -76,7 +77,7 @@ describe('emparejamientos', () => {
 			title: null,
 			fideId: null,
 			rating: 2219,
-			hasGames: 0
+			hasDossier: 0
 		})
 	})
 
@@ -96,14 +97,14 @@ describe('emparejamientos', () => {
 				board: 1,
 				startsAt: '2026-10-24 16:00',
 				color: 'black',
-				opponent: { name: 'Vusuta Inevabume, Azene', title: 'FM', fideId: 9000001, rating: 2249, hasGames: 0 }
+				opponent: { name: 'Vusuta Inevabume, Azene', title: 'FM', fideId: 9000001, rating: 2249, hasDossier: 0 }
 			}
 		])
 		const [game] = await getUpcomingGames(db, 9000004, BEFORE)
 		expect(game).toMatchObject({ board: 2, color: 'white', opponent: { name: 'Umal Muro, Zuta Otahec', fideId: null } })
 	})
 
-	it('marca qué jugadores tienen partidas, para enlazar sólo esos dossieres', async () => {
+	it('marca qué jugadores tienen dossier (partidas), para enlazar sólo esos', async () => {
 		const id = await loadRound()
 		// Una partida de la ronda 1 del 1 con negras; su rival no tiene FIDE ID.
 		await db
@@ -115,9 +116,31 @@ describe('emparejamientos', () => {
 			.bind(id)
 			.run()
 		const round = await getUpcomingRound(db, id, BEFORE)
-		expect([round!.pairings[0].white.hasGames, round!.pairings[0].black.hasGames]).toEqual([1, 0])
-		expect((await getUpcomingGames(db, 9000007, BEFORE))[0].opponent.hasGames).toBe(1)
-		expect((await getUpcomingGames(db, 9000001, BEFORE))[0].opponent.hasGames).toBe(0)
+		expect([round!.pairings[0].white.hasDossier, round!.pairings[0].black.hasDossier]).toEqual([1, 0])
+		expect((await getUpcomingGames(db, 9000007, BEFORE))[0].opponent.hasDossier).toBe(1)
+		expect((await getUpcomingGames(db, 9000001, BEFORE))[0].opponent.hasDossier).toBe(0)
+	})
+
+	it('un posible menor no tiene dossier, aunque tenga partidas', async () => {
+		const id = await loadRound()
+		// El 1 tiene una partida y nació en 2008: en 2026 puede ser menor; en 2027, ya no.
+		await db.batch([
+			db.prepare("INSERT INTO players (fide_id, name, birth_year, seen_at) VALUES (9000001, 'Vusuta Inevabume, Azene', 2008, '')"),
+			db
+				.prepare(
+					`INSERT INTO games (tournament_id, round, board, date, white_name, black_name, white_fide_id, black_fide_id,
+						result, ply_count, pgn, seen_at)
+					VALUES (?1, 1, 1, '2026-10-17', 'Otro, Rival', 'Vusuta Inevabume, Azene', NULL, 9000001, '0-1', 40, '', '2026-10-18')`
+				)
+				.bind(id),
+			// La ronda, en 2027, para poder pedirla con una hora de ese año.
+			db.prepare("UPDATE pairings SET starts_at = '2027-01-02 10:00'")
+		])
+		const top = (await getTopUpcomingPairings(db, 8, BEFORE)).find((m) => m.board === 1)
+		expect([top?.white.fideId, top?.white.hasDossier]).toEqual([9000001, 0])
+		expect((await getUpcomingRound(db, id, BEFORE))!.pairings[0].white.hasDossier).toBe(0)
+		expect((await getUpcomingGames(db, 9000007, BEFORE))[0].opponent.hasDossier).toBe(0)
+		expect((await getUpcomingGames(db, 9000007, '2027-01-01 10:00'))[0].opponent.hasDossier).toBe(1)
 	})
 
 	it('al leer otra vez la ronda sustituye lo guardado', async () => {
@@ -203,8 +226,8 @@ describe('emparejamientos', () => {
 				round: 5,
 				startsAt: '2026-10-24 17:00',
 				board: 1,
-				white: { name: 'Blancas, Una', title: null, fideId: 9100001, rating: 2500, hasGames: 1 },
-				black: { name: 'Negras, Otra', title: null, fideId: null, rating: 2500, hasGames: 0 }
+				white: { name: 'Blancas, Una', title: null, fideId: 9100001, rating: 2500, hasDossier: 1 },
+				black: { name: 'Negras, Otra', title: null, fideId: null, rating: 2500, hasDossier: 0 }
 			})
 		})
 
@@ -216,7 +239,7 @@ describe('emparejamientos', () => {
 		it('lee las elegidas por la clave primaria', async () => {
 			const { results } = await db
 				.prepare(`EXPLAIN QUERY PLAN ${PAIRINGS_BY_KEY_SQL}`)
-				.bind('[[1,2]]')
+				.bind('[[1,2]]', 2008)
 				.all<{ detail: string }>()
 			expect(results.map((r) => r.detail).join(' | ')).toContain('PRIMARY KEY (tournament_id=? AND board=?)')
 		})

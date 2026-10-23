@@ -1,6 +1,6 @@
 ---
 // Mesas emparejadas: mesa y, de blancas y negras, el jugador y su ELO, con
-// «preparar» (el dossier del jugador con el color que lleva) si tiene partidas.
+// «preparar» (el dossier del jugador con el color que lleva) si lo tiene.
 // En el torneo es su próxima ronda, en un grupo sin encabezado: la ronda y la
 // hora las pone la página. En /partidas son las mesas destacadas, en un grupo
 // por torneo encabezado por el torneo, la ronda y la hora.
@@ -53,7 +53,7 @@ const { groups } = Astro.props
 									<>
 										<td>
 											<PlayerName name={player.name} title={player.title} fideId={player.fideId} />
-											{player.fideId && player.hasGames === 1 && (
+											{player.fideId && player.hasDossier === 1 && (
 												<>
 													{' '}
 													<span class="prepare">

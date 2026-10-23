@@ -28,10 +28,13 @@ beforeAll(async () => {
 				.prepare("INSERT INTO tournaments (id, source, source_key, name, type, url) VALUES (?1, 'info64', ?1, 'Torneo', 'individual', '')")
 				.bind(id)
 		),
-		// Siete jugadores; con ficha que se indexa, el 200 y el 500 (torneos), el
-		// 300 (partida con blancas) y el 700 (con negras).
+		// Siete jugadores; con torneos, el 200 y el 500; con una partida con
+		// blancas, el 300, y con negras, el 700. El 200 nació en 2008: en 2026
+		// puede ser menor y su ficha no se indexa. El 500, en 2007.
 		...[100, 200, 300, 400, 500, 600, 700].map((id) =>
-			db.prepare("INSERT INTO players (fide_id, name, seen_at) VALUES (?1, 'Supuesto Irreal, Otro', ?2)").bind(id, seen)
+			db
+				.prepare("INSERT INTO players (fide_id, name, birth_year, seen_at) VALUES (?1, 'Supuesto Irreal, Otro', ?2, ?3)")
+				.bind(id, id === 200 ? 2008 : id === 500 ? 2007 : null, seen)
 		),
 		...[200, 500].map((id, i) =>
 			db
@@ -57,8 +60,8 @@ describe('sitemapCounts', () => {
 })
 
 describe('sitemapIds', () => {
-	const ids = async (kind: 'jugadores' | 'torneos' | 'partidas', n: number) =>
-		(await sitemapIds(db, kind, n, SIZE)).sort((a, b) => a - b)
+	const ids = async (kind: 'jugadores' | 'torneos' | 'partidas', n: number, year = 2026) =>
+		(await sitemapIds(db, kind, n, SIZE, year)).sort((a, b) => a - b)
 
 	it('partidas con jugadas, por rangos de id', async () => {
 		expect(await ids('partidas', 1)).toEqual([1, 3])
@@ -72,9 +75,13 @@ describe('sitemapIds', () => {
 		expect(await ids('torneos', 2)).toEqual([5])
 	})
 
-	it('jugadores con torneos o partidas, de tres en tres por posición', async () => {
-		expect(await ids('jugadores', 1)).toEqual([200, 300])
+	it('jugadores con torneos o partidas que no pueden ser menores, de tres en tres por posición', async () => {
+		expect(await ids('jugadores', 1)).toEqual([300])
 		expect(await ids('jugadores', 2)).toEqual([500])
 		expect(await ids('jugadores', 3)).toEqual([700])
+	})
+
+	it('el nacido en 2008 entra en 2027, cuando ya no puede ser menor', async () => {
+		expect(await ids('jugadores', 1, 2027)).toEqual([200, 300])
 	})
 })

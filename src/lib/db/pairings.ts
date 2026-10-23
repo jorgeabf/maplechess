@@ -2,15 +2,16 @@
 // 0004). Sólo cuentan las rondas que aún no han empezado: `now` es la hora
 // local de España, en el mismo formato que starts_at.
 import { madridDateTime } from '../dates'
-import { hasGamesSql, topPerTournament } from './games'
+import { topPerTournament } from './games'
+import { hasDossierSql, minorsBornSince } from './players'
 
 export interface PairingPlayer {
 	name: string
 	title: string | null
 	fideId: number | null
 	rating: number | null
-	/** 1 si tiene partidas: sólo entonces se enlaza su dossier. */
-	hasGames: 0 | 1
+	/** 1 si tiene dossier (hasDossierSql): sólo entonces se enlaza. */
+	hasDossier: 0 | 1
 }
 
 export interface RoundPairing {
@@ -26,12 +27,18 @@ export interface PairedRound {
 	pairings: RoundPairing[]
 }
 
-/** La mesa y sus dos jugadores, de la tabla pairings con alias `p` (ver toRoundPairing). */
-const PAIRING_COLUMNS = `p.board,
+/**
+ * La mesa y sus dos jugadores, de la tabla pairings con alias `p` (ver
+ * toRoundPairing). `bornSince` es el parámetro de hasDossierSql.
+ */
+const pairingColumns = (bornSince: string) => `p.board,
 	p.white_name AS whiteName, p.white_title AS whiteTitle, p.white_fide_id AS whiteFideId, p.white_rating AS whiteRating,
-	${hasGamesSql('p.white_fide_id')} AS whiteHasGames,
+	${hasDossierSql('p.white_fide_id', bornSince)} AS whiteHasDossier,
 	p.black_name AS blackName, p.black_title AS blackTitle, p.black_fide_id AS blackFideId, p.black_rating AS blackRating,
-	${hasGamesSql('p.black_fide_id')} AS blackHasGames`
+	${hasDossierSql('p.black_fide_id', bornSince)} AS blackHasDossier`
+
+/** Desde qué año de nacimiento se puede ser menor en el año de `now` (minorsBornSince). */
+const bornSinceAt = (now: string) => minorsBornSince(Number(now.slice(0, 4)))
 
 interface PairingRow {
 	board: number
@@ -39,12 +46,12 @@ interface PairingRow {
 	whiteTitle: string | null
 	whiteFideId: number | null
 	whiteRating: number | null
-	whiteHasGames: 0 | 1
+	whiteHasDossier: 0 | 1
 	blackName: string
 	blackTitle: string | null
 	blackFideId: number | null
 	blackRating: number | null
-	blackHasGames: 0 | 1
+	blackHasDossier: 0 | 1
 }
 
 function toRoundPairing(r: PairingRow): RoundPairing {
@@ -55,14 +62,14 @@ function toRoundPairing(r: PairingRow): RoundPairing {
 			title: r.whiteTitle,
 			fideId: r.whiteFideId,
 			rating: r.whiteRating,
-			hasGames: r.whiteHasGames
+			hasDossier: r.whiteHasDossier
 		},
 		black: {
 			name: r.blackName,
 			title: r.blackTitle,
 			fideId: r.blackFideId,
 			rating: r.blackRating,
-			hasGames: r.blackHasGames
+			hasDossier: r.blackHasDossier
 		}
 	}
 }
@@ -75,10 +82,10 @@ export async function getUpcomingRound(
 ): Promise<PairedRound | null> {
 	const { results } = await db
 		.prepare(
-			`SELECT p.round, p.starts_at AS startsAt, ${PAIRING_COLUMNS}
+			`SELECT p.round, p.starts_at AS startsAt, ${pairingColumns('?3')}
 			FROM pairings p WHERE p.tournament_id = ?1 AND p.starts_at > ?2 ORDER BY p.board`
 		)
-		.bind(tournamentId, now)
+		.bind(tournamentId, now, bornSinceAt(now))
 		.all<PairingRow & { round: number; startsAt: string }>()
 	if (results.length === 0) return null
 	return {
@@ -99,10 +106,11 @@ export interface UpcomingPairing extends RoundPairing {
 
 /**
  * Las mesas que se piden, por torneo y mesa (JSON de pares [torneo, mesa]), en
- * ese orden. Cada una entra por la clave primaria de pairings.
+ * ese orden, y el año de hasDossierSql. Cada una entra por la clave primaria
+ * de pairings.
  */
 export const PAIRINGS_BY_KEY_SQL = `SELECT p.tournament_id AS tournamentId, t.name AS tournamentName, p.round,
-		p.starts_at AS startsAt, ${PAIRING_COLUMNS}
+		p.starts_at AS startsAt, ${pairingColumns('?2')}
 	FROM json_each(?1) k
 	JOIN pairings p ON p.tournament_id = k.value ->> 0 AND p.board = k.value ->> 1
 	JOIN tournaments t ON t.id = p.tournament_id
@@ -113,7 +121,7 @@ export const PAIRINGS_BY_KEY_SQL = `SELECT p.tournament_id AS tournamentId, t.na
  * los torneos, como mucho dos por torneo; las que tienen un jugador sin ELO no
  * entran. Recorre la tabla entera, que es pequeña (313 filas el 21-oct-2026:
  * una ronda por torneo, de los próximos 8 días), elige y sólo después lee las
- * elegidas: así hasGamesSql corre en ellas y no en todas.
+ * elegidas: así hasDossierSql corre en ellas y no en todas.
  */
 export async function getTopUpcomingPairings(
 	db: D1Database,
@@ -128,7 +136,7 @@ export async function getTopUpcomingPairings(
 	if (top.length === 0) return []
 	const { results: rows } = await db
 		.prepare(PAIRINGS_BY_KEY_SQL)
-		.bind(JSON.stringify(top.map((m) => [m.tournamentId, m.board])))
+		.bind(JSON.stringify(top.map((m) => [m.tournamentId, m.board])), bornSinceAt(now))
 		.all<PairingRow & Omit<UpcomingPairing, keyof RoundPairing>>()
 	return rows.map(({ tournamentId, tournamentName, round, startsAt, ...row }) => ({
 		tournamentId,
@@ -161,7 +169,7 @@ export async function getUpcomingGames(
 	const columns = (color: 'white' | 'black', rival: 'white' | 'black') =>
 		`p.tournament_id AS tournamentId, t.name AS tournamentName, p.round, p.board, p.starts_at AS startsAt,
 		'${color}' AS color, p.${rival}_name AS name, p.${rival}_title AS title,
-		p.${rival}_fide_id AS fideId, p.${rival}_rating AS rating, ${hasGamesSql(`p.${rival}_fide_id`)} AS hasGames`
+		p.${rival}_fide_id AS fideId, p.${rival}_rating AS rating, ${hasDossierSql(`p.${rival}_fide_id`, '?3')} AS hasDossier`
 	// Una consulta por color: cada una recorre su índice parcial (pairings_white, pairings_black).
 	const { results } = await db
 		.prepare(
@@ -174,10 +182,10 @@ export async function getUpcomingGames(
 			WHERE p.black_fide_id = ?1 AND p.starts_at > ?2
 			ORDER BY startsAt`
 		)
-		.bind(fideId, now)
+		.bind(fideId, now, bornSinceAt(now))
 		.all<UpcomingGameRow>()
-	return results.map(({ name, title, fideId: opponentId, rating, hasGames, ...game }) => ({
+	return results.map(({ name, title, fideId: opponentId, rating, hasDossier, ...game }) => ({
 		...game,
-		opponent: { name, title, fideId: opponentId, rating, hasGames }
+		opponent: { name, title, fideId: opponentId, rating, hasDossier }
 	}))
 }

@@ -37,11 +37,13 @@ const { color, result, eco, timeClass, page } = gameFilters(params)
 const ownResult = result === 'win' || result === 'draw' || result === 'loss' ? result : ''
 const filters = { fideId, color, result: ownResult, eco, timeClass } as const
 
+// La próxima partida de un posible menor (mayBeMinor) sólo sale en su ficha;
+// en las de los demás, en la página del torneo.
 const [games, stats, tournaments, upcoming] = await Promise.all([
 	searchGames(env.DB, filters, page),
 	getPlayerSummary(env.DB, fideId),
 	getPlayerTournaments(env.DB, fideId),
-	getUpcomingGames(env.DB, fideId)
+	player.minor && !own ? [] : getUpcomingGames(env.DB, fideId)
 ])
 
 const pgnQuery = new URLSearchParams()
@@ -53,9 +55,12 @@ const pgnHref = `/jugadores/${fideId}.pgn${pgnQuery.size ? `?${pgnQuery}` : ''}`
 const filtered = color !== 'any' || ownResult !== '' || eco !== '' || timeClass !== null
 
 const totalGames = stats.colors.reduce((n, c) => n + c.games, 0)
-// Sin torneos ni partidas sólo quedan los datos de la lista FIDE: no se
-// indexa, y el sitemap la deja fuera con el mismo criterio (db/sitemap.ts).
+// Sin torneos ni partidas sólo quedan los datos de la lista FIDE, y la de un
+// posible menor no se indexa: el sitemap las deja fuera con el mismo criterio
+// (db/sitemap.ts).
 const empty = tournaments.length === 0 && totalGames === 0
+// Un posible menor no tiene dossier ni repertorio (CLAUDE.md, «Menores»).
+const hasDossier = totalGames > 0 && !player.minor
 const percent = (n: number, of: number) => (of ? formatPercent(n / of) : '—')
 const colorName = { white: 'Blancas', black: 'Negras' } as const
 const openingGroups = (['white', 'black'] as const)
@@ -82,8 +87,8 @@ const dossierLinks = own
 // condición que en ProximasPartidas), éstos pasan a secundarios. En la ficha
 // de otro, uno de ellos lleva además al mismo dossier.
 const upcomingPrepares = own
-	? upcoming.some((g) => g.opponent.fideId && g.opponent.hasGames === 1)
-	: upcoming.length > 0
+	? upcoming.some((g) => g.opponent.fideId && g.opponent.hasDossier === 1)
+	: upcoming.length > 0 && hasDossier
 ---
 
 <Base
@@ -91,7 +96,7 @@ const upcomingPrepares = own
 	section="jugadores"
 	description={`Partidas y torneos de ${name} (FIDE ${fideId}).`}
 	canonical={`/jugadores/${fideId}`}
-	noindex={empty}
+	noindex={empty || player.minor}
 >
 	<header class="profile page-head">
 		<div>
@@ -141,10 +146,10 @@ const upcomingPrepares = own
 		</dl>
 	</header>
 
-	<ProximasPartidas class="upcoming" games={upcoming} you={own} owner={{ fideId, name, hasGames: totalGames > 0 }} />
+	<ProximasPartidas class="upcoming" games={upcoming} you={own} owner={{ fideId, name, hasDossier }} />
 
 	{
-		totalGames > 0 && (
+		hasDossier && (
 			<nav class="prepare" aria-label={own ? 'Mi dossier y mi repertorio' : 'Preparar una partida'}>
 				<span class="muted">{own ? 'Mi dossier:' : 'Preparar una partida:'}</span>
 				{dossierLinks.map((l) => (

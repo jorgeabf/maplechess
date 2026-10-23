@@ -16,8 +16,8 @@ interface Props {
 	games: UpcomingGame[]
 	/** En tu ficha y en la portada habla de ti: «Tu próxima partida», «Juegas». */
 	you?: boolean
-	/** Dueño de la ficha: sin `you`, el enlace prepara contra él, si tiene partidas. */
-	owner?: { fideId: number; name: string; hasGames: boolean }
+	/** Dueño de la ficha: sin `you`, el enlace prepara contra él, si tiene dossier. */
+	owner?: { fideId: number; name: string; hasDossier: boolean }
 	/** Título sólo para lectores de pantalla: en la portada ya pregunta el h1. */
 	hideHeading?: boolean
 	class?: string
@@ -30,11 +30,11 @@ const rival = (color: 'white' | 'black') => (color === 'white' ? 'black' : 'whit
 // El color del dossier es el de quien se prepara: tu rival o el dueño de la ficha.
 function prepareLink(game: UpcomingGame) {
 	if (you) {
-		return game.opponent.fideId && game.opponent.hasGames === 1
+		return game.opponent.fideId && game.opponent.hasDossier === 1
 			? { href: dossierHref(game.opponent.fideId, rival(game.color)), label: 'Preparar la partida' }
 			: null
 	}
-	return owner?.hasGames ? { href: dossierHref(owner.fideId, game.color), label: `Preparar contra ${owner.name}` } : null
+	return owner?.hasDossier ? { href: dossierHref(owner.fideId, game.color), label: `Preparar contra ${owner.name}` } : null
 }
 const cards = games.map((game) => ({ game, prepare: prepareLink(game) }))
 ---

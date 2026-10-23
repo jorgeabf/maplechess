@@ -68,6 +68,9 @@ const [player, mePlayer, myUpcoming] = await Promise.all([
 	meId ? getUpcomingGames(env.DB, meId) : []
 ])
 if (!player) return Astro.rewrite('/404')
+// Un posible menor no tiene dossier (CLAUDE.md, «Menores»). Sí se cruzan sus
+// partidas en el de un adulto, si «tú» eres él.
+if (player.minor) return Astro.rewrite(`/jugadores/${fideId}/no-disponible`)
 
 // La cookie, sólo ahora que se sabe si tu ID existe (meCookieAction). Una vez
 // guardada o borrada, la URL no lleva `yo` (dropMeParam), para que no quede en
