@@ -19,7 +19,10 @@
 	// Secretos del Worker. Los valores van con `wrangler secret put` y, en local,
 	// en .dev.vars. Declarados aquí, `wrangler types` los pone en Env sin leer
 	// .dev.vars (que no se versiona), así que la CI genera los mismos tipos.
-	"secrets": { "required": ["ADMIN_TOKEN"] },
+	// ADMIN_TOKEN protege /api/admin/sync; LICHESS_TOKEN es un token de lichess
+	// de sólo lectura (study:read), para su API de retransmisiones.
+	// wrangler deploy no despliega si falta alguno en el Worker.
+	"secrets": { "required": ["ADMIN_TOKEN", "LICHESS_TOKEN"] },
 	// Límite de ritmo de las rutas caras (búsquedas, PGN, dossier y repertorio,
 	// ver src/middleware.ts): 30 peticiones por minuto y por IP. Apagado a
 	// propósito: por IP cortaría a quienes comparten la wifi de una sala de juego

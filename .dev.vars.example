@@ -1,2 +1,5 @@
 # Copia a .dev.vars para desarrollo local. En producción: wrangler secret put ADMIN_TOKEN
 ADMIN_TOKEN=pon-aqui-un-token-largo-y-aleatorio
+# Token de lichess con sólo study:read (lichess.org/account/oauth/token). Vacío,
+# las peticiones a lichess van sin él, muy limitadas. En producción: wrangler secret put LICHESS_TOKEN
+LICHESS_TOKEN=
