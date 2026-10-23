@@ -256,16 +256,16 @@ let requested: string[] = []
 const requestsSoFar = () => requested.length
 
 /** Simula la API de lichess y apunta qué se pide. */
-function mockLichess(players: BroadcastPlayer[] = fixturePlayers, pgn = broadcastPgn): string[] {
+function mockLichess(players: BroadcastPlayer[] = fixturePlayers, pgn = broadcastPgn, tour = detail.tour): string[] {
 	requested = []
 	vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
 		const url = String(input instanceof Request ? input.url : input)
 		requested.push(url)
 		if (url.endsWith(`/broadcast/${TOUR_ID}/players`)) return Response.json(players)
 		if (url.endsWith(`/api/broadcast/${TOUR_ID}.pgn`)) return new Response(pgn)
-		if (url.endsWith(`/api/broadcast/${TOUR_ID}`)) return Response.json(detail)
+		if (url.endsWith(`/api/broadcast/${TOUR_ID}`)) return Response.json({ ...detail, tour })
 		if (url.endsWith(`/api/broadcast/-/-/${ROUND_ID}`)) {
-			return Response.json({ tour: detail.tour, round: { id: ROUND_ID, finished: true } })
+			return Response.json({ tour, round: { id: ROUND_ID, finished: true } })
 		}
 		return new Response('no encontrado', { status: 404 })
 	})
@@ -515,6 +515,27 @@ describe('syncTour', () => {
 		const event = { payload: { tours: [TOUR_ID], force: true }, timestamp: new Date() } as WorkflowEvent<LichessSyncParams>
 		await (Object.assign(Object.create(LichessSyncWorkflow.prototype), { env }) as LichessSyncWorkflow).run(event, step)
 		expect(requested).toEqual([])
+		expect(await count('SELECT count(*) AS n FROM tournaments')).toBe(0)
+	})
+
+	it('no guarda ni apunta una retransmisión de menores (con tours, se mira al leerla)', async () => {
+		const requested = mockLichess()
+		const info = { tour: { ...detail.tour, name: 'Campeonato Inventado Sub 12 | U12' }, finished: true }
+		expect(await syncTour(db, candidate, direct, info)).toMatchObject({ status: null, games: 0 })
+		expect(requested.some((url) => url.endsWith('.pgn'))).toBe(false)
+		expect(await count('SELECT count(*) AS n FROM tournaments')).toBe(0)
+		expect(await loadLichessTours(db, [TOUR_ID])).toEqual([])
+	})
+
+	it('de una retransmisión de menores la pasada sólo pide la ronda que la nombra', async () => {
+		const requested = mockLichess(fixturePlayers, broadcastPgn, { ...detail.tour, name: 'European Youth Inventado 2030 | G12' })
+		const step = {
+			do: async (_name: string, ...rest: unknown[]) => (rest.at(-1) as () => Promise<unknown>)(),
+			sleep: async () => {}
+		} as unknown as WorkflowStep
+		const event = { payload: { rounds: [ROUND_ID] }, timestamp: new Date() } as WorkflowEvent<LichessSyncParams>
+		await (Object.assign(Object.create(LichessSyncWorkflow.prototype), { env }) as LichessSyncWorkflow).run(event, step)
+		expect(requested).toEqual([expect.stringContaining(`/api/broadcast/-/-/${ROUND_ID}`)])
 		expect(await count('SELECT count(*) AS n FROM tournaments')).toBe(0)
 	})
 })

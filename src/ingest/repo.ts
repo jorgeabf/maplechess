@@ -680,6 +680,24 @@ export async function deleteExcludedTournaments(db: D1Database): Promise<number>
 	return results.length
 }
 
+/** Torneos por sentencia en deleteTournaments: unos 4.000 participantes y 400 partidas en cascada. */
+const TOURNAMENTS_PER_DELETE = 100
+
+/**
+ * Borra esos torneos, con sus partidas, participantes, emparejamientos y
+ * clasificación en cascada, de TOURNAMENTS_PER_DELETE en TOURNAMENTS_PER_DELETE:
+ * miles a la vez serían una sola transacción enorme. Cada trozo es una
+ * sentencia aparte, así que un reintento sólo repite los que quedan.
+ */
+export async function deleteTournaments(db: D1Database, ids: number[], size = TOURNAMENTS_PER_DELETE): Promise<void> {
+	for (let i = 0; i < ids.length; i += size) {
+		await db
+			.prepare('DELETE FROM tournaments WHERE id IN (SELECT value FROM json_each(?1))')
+			.bind(JSON.stringify(ids.slice(i, i + size)))
+			.run()
+	}
+}
+
 /**
  * Guarda las columnas derivadas de las partidas indicadas. Las que no cambian
  * no se reescriben (ni se facturan como filas escritas); devuelve cuántas cambian.

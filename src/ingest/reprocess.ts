@@ -11,23 +11,26 @@
 // (nombres.ts): quita el año de los menores de los nombres de las partidas
 // (columnas y cabeceras del PGN), de los participantes y de los emparejamientos,
 // y anonimiza a los retirados (tabla retiradas). Y borra los torneos sensibles
-// (tabla torneos_sensibles), que no se guardan.
+// (tabla torneos_sensibles) y los de menores (menores.ts), que no se guardan.
 //
 //   POST /api/admin/sync  {"workflow":"reprocess"}
 //   wrangler workflows trigger games-reprocess '{}'
 //   wrangler workflows trigger games-reprocess '{"retiradas":true}'   (sólo la retirada)
 //   wrangler workflows trigger games-reprocess '{"sensibles":true}'   (sólo los torneos sensibles)
+//   wrangler workflows trigger games-reprocess '{"menores":true}'     (sólo los torneos de menores)
 import { WorkflowEntrypoint, type WorkflowEvent, type WorkflowStep } from 'cloudflare:workers'
 import { normalizeName } from '../lib/chess/names'
 import { parseGames } from '../lib/chess/pgn'
 import { timeClassOf } from '../lib/chess/timecontrol'
 import { madridYear } from '../lib/dates'
 import { derivedColumns, type DerivedColumns } from './games'
+import { isMinorsTournament } from './menores'
 import { isRetired, publicName, publicPgnNames, RETIRED_NAME, retiredKey } from './nombres'
 import {
 	anonymizeRetiredParticipations,
 	deleteExcludedTournaments,
 	deleteRetiredPlayers,
+	deleteTournaments,
 	loadGamesForReprocess,
 	loadHomonymParticipations,
 	loadPairingNames,
@@ -54,6 +57,8 @@ export interface GamesReprocessParams {
 	retiradas?: boolean
 	/** Sólo los torneos sensibles (applySensitive), sin recorrer las partidas: tras marcar alguno. */
 	sensibles?: boolean
+	/** Sólo los torneos de menores (applyMinorsTournaments), sin recorrer las partidas: si cambia la regla. */
+	menores?: boolean
 }
 
 /** Partidas por paso: unos 2 MB de PGN y unas décimas de segundo de CPU. */
@@ -76,12 +81,16 @@ export interface ReprocessedBatch {
 
 export class GamesReprocessWorkflow extends WorkflowEntrypoint<Env, GamesReprocessParams> {
 	async run(event: WorkflowEvent<GamesReprocessParams>, step: WorkflowStep): Promise<void> {
-		const { retiradas, sensibles } = event.payload
-		const all = !retiradas && !sensibles
+		const { retiradas, sensibles, menores } = event.payload
+		const all = !retiradas && !sensibles && !menores
 		// Lo primero: las partidas de los torneos borrados ya no se recorren.
 		if (all || sensibles) {
 			const sensitive = await step.do('torneos sensibles', () => applySensitive(this.env.DB))
 			console.log(`[reprocess] torneos sensibles: ${JSON.stringify(sensitive)}`)
+		}
+		if (all || menores) {
+			const minors = await step.do('torneos de menores', () => applyMinorsTournaments(this.env.DB))
+			console.log(`[reprocess] torneos de menores: ${JSON.stringify(minors)}`)
 		}
 		if (all) {
 			let after = event.payload.after ?? 0
@@ -249,4 +258,17 @@ export async function applySensitive(db: D1Database): Promise<SensitiveCleanup> 
 	const deleted = await deleteExcludedTournaments(db)
 	if (deleted > 0) await refreshTotals(db)
 	return { proposed, deleted }
+}
+
+/**
+ * Borra los torneos de menores guardados (isMinorsTournament, por el nombre),
+ * que la ingesta ya no lee. Recorre los nombres de todos los torneos: sólo lo
+ * usa el reprocesado. Repetirlo no cambia nada. Devuelve cuántos ha borrado.
+ */
+export async function applyMinorsTournaments(db: D1Database): Promise<{ deleted: number }> {
+	const { results } = await db.prepare('SELECT id, name FROM tournaments').all<{ id: number; name: string }>()
+	const ids = results.filter((t) => isMinorsTournament(t.name)).map((t) => t.id)
+	await deleteTournaments(db, ids)
+	if (ids.length > 0) await refreshTotals(db)
+	return { deleted: ids.length }
 }
