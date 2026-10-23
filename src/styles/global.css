@@ -425,6 +425,16 @@
 	}
 
 	/*
+	 * El gris de la web, no el del navegador: el #757575 de Chrome quedaba sobre
+	 * el campo a 4,5:1 en claro y a 3,7:1 en oscuro. opacity: 1, por si el
+	 * navegador lo atenúa con opacidad.
+	 */
+	::placeholder {
+		color: var(--text-muted);
+		opacity: 1;
+	}
+
+	/*
 	 * Flecha propia del select: la nativa es gruesa y queda pegada al texto y al
 	 * borde. Dos degradados de 6×6 px forman un chevrón de trazo fino ("\" y "/")
 	 * con el color de un token, así que cambia con el tema; un SVG en data URI no
