@@ -102,85 +102,76 @@ const categoryHref = (id: string) => `${withParams(Astro.url, { categoria: id })
 	}
 
 	{
-		ranking && (
-			<>
-				<p class="muted intro">
-					Busca entre los jugadores de la federación española en la lista FIDE. Escribe sólo el principio de cada
-					palabra, sin acentos: <a href="/jugadores?q=ant+guij">«ant guij»</a> encuentra a David Antón Guijarro.
-					También puedes filtrar por título, ELO o actividad, como <a href="/jugadores?elo_min=1800&elo_max=2000&activos=1">los activos de 1800 a 2000</a>.
+		ranking && ranking.top.length > 0 && (
+			<section id="ranking" aria-labelledby="ranking-titulo">
+				<h2 id="ranking-titulo">Ranking de España</h2>
+				<p class="muted list">
+					{category === 'femenino' ? 'Jugadoras activas' : 'Jugadores activos'} en la lista FIDE{ranking.listDate && ` de ${formatMonth(ranking.listDate)}`}, a ritmo
+					estándar.{ageNote}
 				</p>
-				{ranking.top.length > 0 && (
-					<section id="ranking" aria-labelledby="ranking-titulo">
-						<h2 id="ranking-titulo">Ranking de España</h2>
-						<p class="muted list">
-							{category === 'femenino' ? 'Jugadoras activas' : 'Jugadores activos'} en la lista FIDE{ranking.listDate && ` de ${formatMonth(ranking.listDate)}`}, a ritmo
-							estándar.{ageNote}
-						</p>
-						<div class="selectors">
-							<Segmented showLabel label="Categoría" options={categories} current={category} href={categoryHref} />
-						</div>
-						<div class="ranking">
-							<section class="card" aria-labelledby="primeros">
-								<h3 id="primeros">{titles[category].top(ranking.top.length)}</h3>
-								<table class="data-table">
-									<thead>
-										<tr>
-											<th scope="col" class="end">Nº</th>
-											<th scope="col">Jugador</th>
-											<th scope="col" class="end">ELO</th>
-											{showBorn && (
-												<th scope="col" class="end">
-													<span aria-hidden="true">Nac.</span>
-													<span class="visually-hidden">Año de nacimiento</span>
-												</th>
-											)}
-										</tr>
-									</thead>
-									<tbody>
-										{ranking.top.map((p, i) => (
-											<tr>
-												<td class="end num">{i + 1}</td>
-												<td class="name">
-													<PlayerName name={p.name} fideId={p.fideId} title={p.title} />
-												</td>
-												<td class="end num">{p.ratingStd}</td>
-												{showBorn && <td class="end num">{p.birthYear}</td>}
-											</tr>
-										))}
-									</tbody>
-								</table>
-							</section>
-							{ranking.risers.length > 0 && (
-								<section class="card" aria-labelledby="suben">
-									<h3 id="suben">{titles[category].risers}</h3>
-									<table class="data-table">
-										<thead>
-											<tr>
-												<th scope="col">Jugador</th>
-												<th scope="col" class="end">ELO</th>
-												<th scope="col" class="end">
-													Sube<span class="visually-hidden"> desde la lista anterior</span>
-												</th>
-											</tr>
-										</thead>
-										<tbody>
-											{ranking.risers.map((p) => (
-												<tr>
-													<td class="name">
-														<PlayerName name={p.name} fideId={p.fideId} title={p.title} />
-													</td>
-													<td class="end num">{p.ratingStd}</td>
-													<td class="end num">+{p.gain}</td>
-												</tr>
-											))}
-										</tbody>
-									</table>
-								</section>
-							)}
-						</div>
+				<div class="selectors">
+					<Segmented showLabel label="Categoría" options={categories} current={category} href={categoryHref} />
+				</div>
+				<div class="ranking">
+					<section class="card" aria-labelledby="primeros">
+						<h3 id="primeros">{titles[category].top(ranking.top.length)}</h3>
+						<table class="data-table">
+							<thead>
+								<tr>
+									<th scope="col" class="end">Nº</th>
+									<th scope="col">Jugador</th>
+									<th scope="col" class="end">ELO</th>
+									{showBorn && (
+										<th scope="col" class="end">
+											<span aria-hidden="true">Nac.</span>
+											<span class="visually-hidden">Año de nacimiento</span>
+										</th>
+									)}
+								</tr>
+							</thead>
+							<tbody>
+								{ranking.top.map((p, i) => (
+									<tr>
+										<td class="end num">{i + 1}</td>
+										<td class="name">
+											<PlayerName name={p.name} fideId={p.fideId} title={p.title} />
+										</td>
+										<td class="end num">{p.ratingStd}</td>
+										{showBorn && <td class="end num">{p.birthYear}</td>}
+									</tr>
+								))}
+							</tbody>
+						</table>
 					</section>
-				)}
-			</>
+					{ranking.risers.length > 0 && (
+						<section class="card" aria-labelledby="suben">
+							<h3 id="suben">{titles[category].risers}</h3>
+							<table class="data-table">
+								<thead>
+									<tr>
+										<th scope="col">Jugador</th>
+										<th scope="col" class="end">ELO</th>
+										<th scope="col" class="end">
+											Sube<span class="visually-hidden"> desde la lista anterior</span>
+										</th>
+									</tr>
+								</thead>
+								<tbody>
+									{ranking.risers.map((p) => (
+										<tr>
+											<td class="name">
+												<PlayerName name={p.name} fideId={p.fideId} title={p.title} />
+											</td>
+											<td class="end num">{p.ratingStd}</td>
+											<td class="end num">+{p.gain}</td>
+										</tr>
+									))}
+								</tbody>
+							</table>
+						</section>
+					)}
+				</div>
+			</section>
 		)
 	}
 
@@ -239,11 +230,6 @@ const categoryHref = (id: string) => `${withParams(Astro.url, { categoria: id })
 		display: grid;
 		grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
 		gap: var(--space-3);
-	}
-
-	.intro {
-		max-inline-size: var(--reading-width);
-		margin-bottom: var(--space-6);
 	}
 
 	.list {
