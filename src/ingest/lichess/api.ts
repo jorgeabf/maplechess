@@ -48,7 +48,7 @@ export function parseBroadcastUrl(url: string): BroadcastRef | null {
 }
 
 /**
- * Cabeceras de las peticiones a lichess: el token de la cuenta del proyecto
+ * Cabeceras de las peticiones a lichess: un token de lichess de sólo lectura
  * (secreto LICHESS_TOKEN, sólo study:read). La API de retransmisiones limita
  * mucho las peticiones anónimas y anuncia que dejará de responderlas
  * (lichess-org/lila#21283); con token, 120 por minuto. Sin él (en local, sin
