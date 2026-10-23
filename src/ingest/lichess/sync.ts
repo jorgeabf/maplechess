@@ -50,6 +50,7 @@ import {
 	type LichessTour,
 	type LichessTourStatus
 } from '../repo'
+import { isMinorsTournament } from '../menores'
 import { looksSensitive } from '../sensibles'
 import {
 	fetchBroadcastPgn,
@@ -180,9 +181,10 @@ export class LichessSyncWorkflow extends WorkflowEntrypoint<Env, LichessSyncPara
 		}
 
 		const pending = await step.do('pendientes', async () => {
-			// Las sensibles no se leen, ni con force (torneos_sensibles).
+			// Las sensibles (torneos_sensibles) y las de menores no se leen, ni con
+			// force. Con tours aún no se sabe el nombre: lo mira syncTour.
 			const excluded = await loadExcluded(db, SOURCE)
-			const allowed = candidates.filter((c) => !excluded.has(c.id))
+			const allowed = candidates.filter((c) => !excluded.has(c.id) && !isMinorsTournament(c.name))
 			return selectTours(
 				allowed,
 				await loadLichessTours(
@@ -372,6 +374,8 @@ export async function syncTour(
 	if (listed.verdict === 'none') return listed.kept ? { ...skip('propio'), avisos: 1 } : skip('sin_espanoles')
 	const info = preloaded ?? (await lichess(`torneo ${candidate.id}`, () => loadTour(db, candidate)))
 	if (!info) return skip('sin_espanoles')
+	// De menores (con tours, sólo ahora se sabe su nombre): no se guarda ni se apunta.
+	if (isMinorsTournament(info.tour.name)) return skip(null)
 	return lichess(`partidas ${candidate.id}`, () => syncTourGames(db, candidate, info, listed))
 }
 
