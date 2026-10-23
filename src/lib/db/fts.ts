@@ -2,7 +2,11 @@
 //
 // Cada palabra se busca como prefijo ("guij" encuentra "Guijarro") y entre
 // comillas, para que caracteres como - o : no se interpreten como operadores.
-import { stripDiacritics } from '../chess/names'
+import { words } from '../chess/names'
+import { placeAt } from '../toponimos'
+
+/** Una o varias palabras seguidas, la última como prefijo. */
+const prefix = (phrase: string[]) => `"${phrase.join(' ')}"*`
 
 /**
  * Palabras de búsqueda como prefijos FTS5, o null si no queda ninguna. Una
@@ -11,12 +15,33 @@ import { stripDiacritics } from '../chess/names'
  * búsqueda más cara (unas 530.000 filas de D1).
  */
 export function prefixTerms(text: string): string | null {
-	const words = stripDiacritics(text)
-		.toLowerCase()
-		.split(/[^\p{L}\p{N}]+/u)
-		.filter(Boolean)
-	if (!words.some((w) => w.length > 1)) return null
-	return words.map((w) => `"${w}"*`).join(' ')
+	const query = words(text)
+	if (!query.some((w) => w.length > 1)) return null
+	return query.map((w) => prefix([w])).join(' ')
+}
+
+/**
+ * Como prefixTerms, pero una provincia o una comunidad se busca por todos sus
+ * nombres (`toponimos.ts`): «alava» encuentra también «Alavesa» y «Araba».
+ * Para los nombres de los torneos.
+ */
+export function placeTerms(text: string): string | null {
+	const query = words(text)
+	if (!query.some((w) => w.length > 1)) return null
+	const terms: string[] = []
+	for (let i = 0; i < query.length; ) {
+		const place = placeAt(query, i)
+		if (place) {
+			const names = place.names.map(prefix)
+			terms.push(names.length > 1 ? `(${names.join(' OR ')})` : names[0])
+			i += place.length
+		} else {
+			terms.push(prefix([query[i]]))
+			i++
+		}
+	}
+	// AND explícito: tras un paréntesis, FTS5 no admite el implícito.
+	return terms.join(' AND ')
 }
 
 /** Restringe los términos a una columna: `col : (t1 t2)`. */

@@ -125,3 +125,38 @@ describe('searchTournaments', () => {
 		expect(await search({ type: 'team', upcoming: true })).toEqual({ names: [], total: 0, upcoming: 0 })
 	})
 })
+
+describe('searchTournaments por provincia o comunidad', () => {
+	const search = async (q: string) => {
+		const result = await searchTournaments(
+			db,
+			{ q, upcoming: false, withGames: false, from: '', to: '', type: null, page: 1 },
+			'2026-10-20'
+		)
+		return result.rows.map((t) => t.name).sort()
+	}
+
+	beforeEach(async () => {
+		await tournament('Cto Individual Preferente Alavesa 2026')
+		await tournament('Cto de Alava de veteranos 2026')
+		await tournament('Arabako Txapelketa 2026')
+		await tournament('Cto de Castilla y León 2026')
+		await tournament('Cto Castellano-Leonés Sub-12 2026')
+		await tournament('Open de León 2026')
+		await tournament('Open de Lugo 2026')
+	})
+
+	it('cualquiera de sus nombres encuentra los demás', async () => {
+		const alava = ['Arabako Txapelketa 2026', 'Cto Individual Preferente Alavesa 2026', 'Cto de Alava de veteranos 2026']
+		expect(await search('alava')).toEqual(alava)
+		expect(await search('alavesa 2026')).toEqual(alava)
+	})
+
+	it('una comunidad de varias palabras, entera', async () => {
+		expect(await search('castilla y leon')).toEqual(['Cto Castellano-Leonés Sub-12 2026', 'Cto de Castilla y León 2026'])
+		expect(await search('castilla y leon 2026')).toEqual([
+			'Cto Castellano-Leonés Sub-12 2026',
+			'Cto de Castilla y León 2026'
+		])
+	})
+})
