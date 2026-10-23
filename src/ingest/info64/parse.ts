@@ -323,6 +323,147 @@ export async function parseTeamListing(html: string): Promise<TournamentPlayer[]
 	return teams.flatMap((team) => toPlayers(team.rows, clean(team.name) || null))
 }
 
+export interface StandingRow {
+	/** Puesto en la clasificación. */
+	pos: number
+	/** Número del ranking inicial del jugador o del equipo. */
+	startRank: number
+	/** Jugador o equipo. */
+	name: string
+	points: number
+	/** Valores de los desempates, en el orden de StandingsPage.tiebreaks. */
+	tiebreaks: (number | null)[]
+	/** ELO del jugador o, en los torneos por equipos, ELO medio del equipo. */
+	rating: number | null
+}
+
+export interface StandingsPage {
+	/** Ronda tras la que va la clasificación; null si la página no lo dice. */
+	round: number | null
+	/** Rondas del torneo; null si el menú no enlaza ninguna. */
+	rounds: number | null
+	/** Códigos de los desempates («BH», «BH/M1»…), en el orden de la tabla. */
+	tiebreaks: string[]
+	rows: StandingRow[]
+}
+
+type StandingField = 'pos' | 'startRank' | 'name' | 'points' | 'rating'
+
+const STANDING_HEADERS: Record<string, StandingField> = {
+	'Pos.': 'pos',
+	'Ran.': 'startRank',
+	Name: 'name',
+	'Pts.': 'points',
+	FIDE: 'rating',
+	'Rating average': 'rating'
+}
+
+/** Cifra con decimales ("6.5", "2476"); null si la celda está vacía o no lo es. */
+function toNumber(text: string): number | null {
+	const value = Number(text)
+	return text !== '' && Number.isFinite(value) ? value : null
+}
+
+/**
+ * Página /standings, la clasificación. El título dice tras qué ronda va
+ * ("Standings after the round 5"); sin resultados, y en los torneos por
+ * equipos aunque hayan terminado, sólo "Standings". #standings-table tiene
+ * una fila por jugador o por equipo, y sus columnas se localizan por la
+ * cabecera, porque las clases se repiten: playerstartrank vale para el puesto,
+ * el número inicial y los puntos. Los desempates, por la clase de sus celdas
+ * (playertiebreak), porque su cabecera es el código, distinto en cada torneo.
+ * Las rondas del torneo salen de los enlaces a cada una del menú. Devuelve
+ * null si la página no tiene esa forma.
+ */
+export async function parseStandingsPage(html: string): Promise<StandingsPage | null> {
+	const found = { heading: '', headingDone: false, table: false, rounds: 0 }
+	const headers: string[] = []
+	const rows: { cells: string[]; classes: string[] }[] = []
+
+	await run(
+		new HTMLRewriter()
+			.on('#tournament-options-menu a[href]', {
+				element(el) {
+					const round = toInt(/\/(\d+)\/?$/.exec(el.getAttribute('href') ?? '')?.[1] ?? '')
+					if (round && round > found.rounds) found.rounds = round
+				}
+			})
+			.on('#standings h2', {
+				text(chunk) {
+					if (!found.headingDone) found.heading += chunk.text
+				},
+				element(el) {
+					el.onEndTag(() => {
+						found.headingDone = true
+					})
+				}
+			})
+			.on('#standings-table', {
+				element() {
+					found.table = true
+				}
+			})
+			.on('#standings-table thead th', {
+				element() {
+					headers.push('')
+				},
+				text(chunk) {
+					headers[headers.length - 1] += chunk.text
+				}
+			})
+			.on('#standings-table tbody tr', {
+				element() {
+					rows.push({ cells: [], classes: [] })
+				}
+			})
+			.on('#standings-table tbody td', {
+				element(el) {
+					const row = rows.at(-1)
+					row?.cells.push('')
+					row?.classes.push(el.getAttribute('class') ?? '')
+				},
+				text(chunk) {
+					const cells = rows.at(-1)?.cells
+					if (cells?.length) cells[cells.length - 1] += chunk.text
+				}
+			}),
+		html
+	)
+
+	if (!found.table) return null
+	const columns: Partial<Record<StandingField, number>> = {}
+	for (const [i, header] of headers.map(clean).entries()) {
+		const field = STANDING_HEADERS[header]
+		if (field) columns[field] ??= i
+	}
+	const { pos, startRank, name, points, rating } = columns
+	if (pos === undefined || startRank === undefined || name === undefined || points === undefined) return null
+	// Las columnas de desempate con código: sin resultados, la cabecera va vacía.
+	const tiebreakColumns = (rows[0]?.classes ?? []).flatMap((cls, i) =>
+		cls.split(/\s+/).includes('playertiebreak') && clean(headers[i] ?? '') ? [i] : []
+	)
+
+	const cell = (cells: string[], i: number) => clean(cells[i] ?? '')
+	const standings = rows.flatMap(({ cells }, i): StandingRow[] => {
+		const row = {
+			pos: toInt(cell(cells, pos)) ?? i + 1,
+			startRank: toInt(cell(cells, startRank)) ?? 0,
+			name: cell(cells, name),
+			points: toNumber(cell(cells, points)) ?? 0,
+			tiebreaks: tiebreakColumns.map((c) => toNumber(cell(cells, c))),
+			rating: rating === undefined ? null : plausibleRating(toInt(cell(cells, rating)))
+		}
+		return row.name && row.startRank > 0 ? [row] : []
+	})
+	const round = /after the round\s+(\d+)/i.exec(clean(found.heading))?.[1]
+	return {
+		round: round ? Number(round) : null,
+		rounds: found.rounds || null,
+		tiebreaks: tiebreakColumns.map((c) => clean(headers[c])),
+		rows: standings
+	}
+}
+
 /**
  * Página /games: devuelve el PGN de todas las partidas, o null si el torneo no
  * tiene. Si la página no es ninguna de las dos cosas (error, cambio de diseño)

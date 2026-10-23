@@ -7,7 +7,7 @@ import { normalizeName } from '../lib/chess/names'
 import { madridYear } from '../lib/dates'
 import type { FidePlayer } from './fide/parse'
 import type { DerivedColumns, GameRow, Participant, TournamentContext } from './games'
-import type { Pairing, PairedPlayer, TournamentPlayer, TournamentType } from './info64/parse'
+import type { Pairing, PairedPlayer, StandingsPage, TournamentPlayer, TournamentType } from './info64/parse'
 import { anonymizePgn, isRetired, publicName, RETIRED_NAME, retiredKey, type Retired } from './nombres'
 
 const MAX_JSON_BYTES = 1_000_000
@@ -143,6 +143,72 @@ export async function loadParticipants(db: D1Database, tournamentId: number): Pr
 		.bind(tournamentId)
 		.all<Participant>()
 	return results
+}
+
+/**
+ * Sustituye la clasificación del torneo y apunta sus rondas, la ronda tras la
+ * que va y sus desempates. Como con los participantes, una lectura sin puntos
+ * (vacía, o de un torneo aún sin resultados, todos a 0) no borra la guardada.
+ * En los individuales tampoco una con algún número que no esté entre los
+ * participantes, porque el jugador sale de ahí: el nombre y el FIDE ID no se
+ * repiten en standings, así que tampoco el año de los menores ni los
+ * retirados. Devuelve false si se ha conservado una clasificación guardada o
+ * la lectura no casa con los participantes, para avisar.
+ */
+export async function replaceStandings(
+	db: D1Database,
+	tournamentId: number,
+	type: TournamentType,
+	page: StandingsPage
+): Promise<boolean> {
+	if (!page.rows.some((r) => r.points > 0)) {
+		const stored = await db.prepare('SELECT 1 FROM standings WHERE tournament_id = ?1 LIMIT 1').bind(tournamentId).first()
+		return stored === null
+	}
+	const team = type === 'team'
+	if (!team) {
+		const ranks = [...new Set(page.rows.map((r) => r.startRank))]
+		const known = await db
+			.prepare(
+				`SELECT count(*) AS n FROM participations
+				WHERE tournament_id = ?1 AND team = '' AND start_rank IN (SELECT value FROM json_each(?2))`
+			)
+			.bind(tournamentId, JSON.stringify(ranks))
+			.first<{ n: number }>()
+		if ((known?.n ?? 0) < ranks.length) return false
+	}
+	const rows = page.rows.map((r) => ({
+		pos: r.pos,
+		startRank: r.startRank,
+		name: team ? r.name : null,
+		rating: team ? r.rating : null,
+		points: r.points,
+		tiebreaks: r.tiebreaks
+	}))
+	await db.batch([
+		db.prepare('DELETE FROM standings WHERE tournament_id = ?1').bind(tournamentId),
+		...chunkByJsonSize(rows).map((json) =>
+			db
+				.prepare(
+					`INSERT INTO standings (tournament_id, pos, start_rank, name, rating, points, tiebreaks)
+					SELECT ?1,
+						json_extract(value, '$.pos'),
+						json_extract(value, '$.startRank'),
+						json_extract(value, '$.name'),
+						json_extract(value, '$.rating'),
+						json_extract(value, '$.points'),
+						json_extract(value, '$.tiebreaks')
+					FROM json_each(?2)
+					WHERE true
+					ON CONFLICT DO NOTHING`
+				)
+				.bind(tournamentId, json)
+		),
+		db
+			.prepare('UPDATE tournaments SET rounds = coalesce(?2, rounds), standings_round = ?3, tiebreaks = ?4 WHERE id = ?1')
+			.bind(tournamentId, page.rounds, page.round, JSON.stringify(page.tiebreaks))
+	])
+	return true
 }
 
 /** De dónde salen las partidas de un torneo. */
@@ -740,6 +806,28 @@ export async function loadTournamentIds(db: D1Database, source: string, keys: st
 		.bind(source, JSON.stringify(keys))
 		.all<{ key: string; id: number }>()
 	return Object.fromEntries(results.map((r) => [r.key, r.id]))
+}
+
+/**
+ * Torneos guardados de la fuente que empiezan entre from y to (ambos
+ * incluidos), sin los que aún no han empezado el día `today`.
+ */
+export async function loadTournamentsStarting(
+	db: D1Database,
+	source: string,
+	from: string,
+	to: string,
+	today: string
+): Promise<{ key: string; id: number; type: TournamentType }[]> {
+	const { results } = await db
+		.prepare(
+			`SELECT source_key AS key, id, type FROM tournaments
+			WHERE start_date BETWEEN ?2 AND ?3 AND start_date <= ?4 AND source = ?1
+			ORDER BY start_date, id`
+		)
+		.bind(source, from, to, today)
+		.all<{ key: string; id: number; type: TournamentType }>()
+	return results
 }
 
 export interface CheckedTournament {

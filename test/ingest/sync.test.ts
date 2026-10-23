@@ -1,7 +1,13 @@
 import { env, type WorkflowEvent, type WorkflowStep } from 'cloudflare:workers'
 import { describe, expect, it } from 'vitest'
 import type { EventTournament } from '../../src/ingest/info64/parse'
-import { Info64SyncWorkflow, RECHECK_DAYS, selectPending, type Info64SyncParams } from '../../src/ingest/info64/sync'
+import {
+	Info64SyncWorkflow,
+	RECHECK_DAYS,
+	selectPending,
+	windowInstanceId,
+	type Info64SyncParams
+} from '../../src/ingest/info64/sync'
 import { addDays, endOfMonth, madridDateTime } from '../../src/lib/dates'
 
 const candidate = (key: string, firstRound: string, lastRound = firstRound): EventTournament => ({
@@ -48,6 +54,7 @@ describe('Info64SyncWorkflow', () => {
 				if (name === 'torneo roto') throw new Error('info64 no responde')
 				steps.push(name)
 				if (name.startsWith('torneo ')) return { id: 1, key: 'sano', broadcasts: [] }
+				if (name.startsWith('clasificación ')) return true
 				if (name.startsWith('partidas ')) return { games: 0, identified: 0, illegal: 0, source: null }
 				return (rest.at(-1) as () => Promise<unknown>)()
 			},
@@ -60,7 +67,14 @@ describe('Info64SyncWorkflow', () => {
 
 		await workflow.run(event, step)
 
-		expect(steps).toEqual(['pendientes', 'torneo sano', 'partidas sano', 'totales'])
+		expect(steps).toEqual(['pendientes', 'torneo sano', 'clasificación sano', 'partidas sano', 'totales'])
+	})
+})
+
+describe('windowInstanceId', () => {
+	it('las ventanas de sólo clasificación no chocan con las de la carga inicial', () => {
+		expect(windowInstanceId('2014-01-01', '2014-01-31')).toBe('info64-2014-01-01-2014-01-31')
+		expect(windowInstanceId('2014-01-01', '2014-01-31', 'only')).toBe('info64-clasificacion-2014-01-01-2014-01-31')
 	})
 })
 
