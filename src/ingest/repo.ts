@@ -17,8 +17,13 @@ const MAX_JSON_BYTES = 1_000_000
  * lee entera en cada escritura que la necesita.
  */
 export async function loadRetired(db: D1Database): Promise<Retired> {
-	const { results } = await db.prepare('SELECT fide_id AS fideId, nombre FROM retiradas').all<{ fideId: number; nombre: string }>()
-	return { ids: new Set(results.map((r) => r.fideId)), names: new Set(results.map((r) => retiredKey(r.nombre))) }
+	const { results } = await db
+		.prepare('SELECT fide_id AS fideId, nombre FROM retiradas')
+		.all<{ fideId: number | null; nombre: string }>()
+	return {
+		ids: new Set(results.flatMap((r) => (r.fideId === null ? [] : [r.fideId]))),
+		names: new Set(results.map((r) => retiredKey(r.nombre)))
+	}
 }
 
 /** Parte las filas en lotes cuyo JSON no pase de maxBytes. */

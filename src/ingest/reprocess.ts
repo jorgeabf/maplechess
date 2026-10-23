@@ -190,7 +190,8 @@ export interface RetiredCleanup {
  */
 export async function applyRetired(db: D1Database): Promise<RetiredCleanup> {
 	const retired = await loadRetired(db)
-	if (retired.ids.size === 0) return { players: 0, participations: 0, games: 0, pairings: 0 }
+	// Todos tienen nombre; no todos, FIDE ID.
+	if (retired.names.size === 0) return { players: 0, participations: 0, games: 0, pairings: 0 }
 	const { results } = await db.prepare('SELECT nombre FROM retiradas').all<{ nombre: string }>()
 	// Los participantes sin FIDE ID se comparan por name_norm, que lleva el año
 	// de los homónimos adultos: con él y sin él.
