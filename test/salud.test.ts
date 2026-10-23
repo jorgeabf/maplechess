@@ -16,7 +16,10 @@ const estado = async () => {
 }
 
 beforeEach(async () => {
-	await env.DB.prepare("DELETE FROM sync_state WHERE key GLOB 'salud.*'").run()
+	await env.DB.batch([
+		env.DB.prepare("DELETE FROM sync_state WHERE key GLOB 'salud.*'"),
+		env.DB.prepare('DELETE FROM torneos_sensibles')
+	])
 })
 
 describe('runStatus', () => {
@@ -80,7 +83,8 @@ describe('GET /api/estado', () => {
 		expect(cache).toBe('no-store')
 		expect(body).toEqual({
 			estado: 'ok',
-			pasadas: { info64: 'ok', emparejamientos: 'ok', lichess: 'ok', fide: 'ok' }
+			pasadas: { info64: 'ok', emparejamientos: 'ok', lichess: 'ok', fide: 'ok' },
+			sensibles: 'ok'
 		})
 	})
 
@@ -92,7 +96,8 @@ describe('GET /api/estado', () => {
 		expect(cache).toBe('no-store')
 		expect(body).toEqual({
 			estado: 'fallo',
-			pasadas: { info64: 'caducada', emparejamientos: 'ok', lichess: 'ok', fide: 'ok' }
+			pasadas: { info64: 'caducada', emparejamientos: 'ok', lichess: 'ok', fide: 'ok' },
+			sensibles: 'ok'
 		})
 	})
 
@@ -101,7 +106,30 @@ describe('GET /api/estado', () => {
 		expect(status).toBe(200)
 		expect(body).toEqual({
 			estado: 'ok',
-			pasadas: { info64: 'sin datos', emparejamientos: 'sin datos', lichess: 'sin datos', fide: 'sin datos' }
+			pasadas: { info64: 'sin datos', emparejamientos: 'sin datos', lichess: 'sin datos', fide: 'sin datos' },
+			sensibles: 'ok'
+		})
+	})
+
+	it('con un torneo sensible por revisar, 503 aunque las pasadas vayan bien; revisado, 200', async () => {
+		for (const run of HEALTH_RUNS) await saveHealth(env.DB, run, { ok: 10, fallos: 0, avisos: 0 }, hoursAgo(1, new Date()))
+		const add = (key: string, excluido: number | null) =>
+			env.DB.prepare(
+				"INSERT INTO torneos_sensibles (source, source_key, nombre, excluido, creado) VALUES ('info64', ?1, 'Torneo inventado', ?2, '2026-10-23')"
+			)
+				.bind(key, excluido)
+				.run()
+		await add('excluido', 1)
+		await add('conservado', 0)
+		expect(await estado()).toMatchObject({ status: 200, body: { estado: 'ok', sensibles: 'ok' } })
+
+		await add('por-revisar', null)
+		const { status, body } = await estado()
+		expect(status).toBe(503)
+		expect(body).toEqual({
+			estado: 'fallo',
+			pasadas: { info64: 'ok', emparejamientos: 'ok', lichess: 'ok', fide: 'ok' },
+			sensibles: 'por revisar'
 		})
 	})
 })

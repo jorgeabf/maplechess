@@ -33,10 +33,12 @@ import {
 	deleteLichessTournament,
 	findInfo64Tournament,
 	gamesStoredElsewhere,
+	loadExcluded,
 	loadLichessTours,
 	loadParticipants,
 	loadSyncState,
 	loadTournamentContext,
+	proposeSensitive,
 	refreshTotals,
 	replaceParticipations,
 	saveGames,
@@ -48,6 +50,7 @@ import {
 	type LichessTour,
 	type LichessTourStatus
 } from '../repo'
+import { looksSensitive } from '../sensibles'
 import {
 	fetchBroadcastPgn,
 	fetchRound,
@@ -176,16 +179,19 @@ export class LichessSyncWorkflow extends WorkflowEntrypoint<Env, LichessSyncPara
 			candidates.push(...(await listCandidates(since, lichess)))
 		}
 
-		const pending = await step.do('pendientes', async () =>
-			selectTours(
-				candidates,
+		const pending = await step.do('pendientes', async () => {
+			// Las sensibles no se leen, ni con force (torneos_sensibles).
+			const excluded = await loadExcluded(db, SOURCE)
+			const allowed = candidates.filter((c) => !excluded.has(c.id))
+			return selectTours(
+				allowed,
 				await loadLichessTours(
 					db,
-					candidates.map((c) => c.id)
+					allowed.map((c) => c.id)
 				),
 				params.force ?? false
 			)
-		)
+		})
 		console.log(`[lichess] ${candidates.length} retransmisiones, ${pending.length} pendientes`)
 
 		let saved = 0
@@ -593,6 +599,9 @@ async function saveOwnTournament(db: D1Database, input: OwnTournamentInput): Pro
 		url: tour.url,
 		syncedAt: now
 	})
+	// Si lo parece, se apunta para revisarlo, como en info64. Las que se enlazan
+	// a un torneo de info64 ya las apunta su pasada.
+	if (looksSensitive(tour.name)) await proposeSensitive(db, [{ source: SOURCE, key: tour.id, name: tour.name }])
 	// Primero las partidas: si la guarda de saveGames conserva las guardadas,
 	// los participantes tampoco cambian.
 	if (!(await saveGames(db, id, rows, now, { name: SOURCE, url: tour.url }))) {

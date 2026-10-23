@@ -622,6 +622,64 @@ export async function updatePairingPlayers(db: D1Database, rows: StoredPairingPl
 	)
 }
 
+// --- Torneos sensibles (tabla torneos_sensibles, migración 0012) ---
+
+/** Claves de los torneos de esa fuente que no se guardan (excluido = 1). La tabla es pequeña. */
+export async function loadExcluded(db: D1Database, source: string): Promise<Set<string>> {
+	const { results } = await db
+		.prepare('SELECT source_key AS key FROM torneos_sensibles WHERE source = ?1 AND excluido = 1')
+		.bind(source)
+		.all<{ key: string }>()
+	return new Set(results.map((r) => r.key))
+}
+
+/** Torneo que parece sensible, para apuntarlo. */
+export interface SensitiveCandidate {
+	source: string
+	key: string
+	name: string
+}
+
+/**
+ * Apunta esos torneos para revisarlos, sin decidir (excluido NULL). Uno ya
+ * apuntado o revisado no cambia. Devuelve cuántos son nuevos.
+ */
+export async function proposeSensitive(db: D1Database, tournaments: SensitiveCandidate[]): Promise<number> {
+	if (tournaments.length === 0) return 0
+	const now = new Date().toISOString()
+	const results = await db.batch(
+		chunkByJsonSize(tournaments).map((json) =>
+			db
+				.prepare(
+					`INSERT INTO torneos_sensibles (source, source_key, nombre, creado)
+					SELECT json_extract(value, '$.source'), json_extract(value, '$.key'), json_extract(value, '$.name'), ?1
+					FROM json_each(?2)
+					WHERE true
+					ON CONFLICT DO NOTHING`
+				)
+				.bind(now, json)
+		)
+	)
+	return results.reduce((n, r) => n + r.meta.changes, 0)
+}
+
+const EXCLUDED_IDS = `SELECT t.id FROM torneos_sensibles s
+	JOIN tournaments t ON t.source = s.source AND t.source_key = s.source_key
+	WHERE s.excluido = 1`
+
+/**
+ * Borra los torneos guardados que no se guardan (excluido = 1). Sus partidas,
+ * participantes, emparejamientos y clasificación se van en cascada, y las
+ * retransmisiones de lichess que lo enlazaban se quedan sin torneo (lichess_tours).
+ * Devuelve cuántos había.
+ */
+export async function deleteExcludedTournaments(db: D1Database): Promise<number> {
+	// Sin recuento por meta.changes: suma también las cascadas y los triggers del FTS.
+	const { results } = await db.prepare(EXCLUDED_IDS).all()
+	if (results.length > 0) await db.prepare(`DELETE FROM tournaments WHERE id IN (${EXCLUDED_IDS})`).run()
+	return results.length
+}
+
 /**
  * Guarda las columnas derivadas de las partidas indicadas. Las que no cambian
  * no se reescriben (ni se facturan como filas escritas); devuelve cuántas cambian.

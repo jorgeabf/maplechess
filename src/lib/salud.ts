@@ -2,7 +2,8 @@
 // acabó y cuántos torneos fueron bien o fallaron, y cuántos avisos dejaron las
 // guardas. /api/estado lo lee y .github/workflows/vigilancia.yml lo consulta dos
 // veces al día: si una pasada lleva demasiado sin terminar o falla en muchos
-// torneos, la acción falla y GitHub manda un correo.
+// torneos, la acción falla y GitHub manda un correo. También si queda algún
+// torneo que parece sensible por revisar (hasSensitivePending).
 //
 // Los Workflows escriben con saveHealth, también cuando no hay nada que hacer
 // (la lista FIDE sin cambios). Mientras una pasada no haya escrito nunca, su
@@ -104,6 +105,15 @@ export async function loadHealth(db: D1Database, now = new Date()): Promise<Reco
 	return Object.fromEntries(
 		HEALTH_RUNS.map((run) => [run, runStatus(run, values.get(healthKey(run)) ?? null, now)])
 	) as Record<HealthRun, HealthStatus>
+}
+
+/**
+ * ¿Queda algún torneo por revisar en torneos_sensibles? La ingesta y el
+ * reprocesado apuntan los que lo parecen por el nombre y, hasta que se decide a
+ * mano, se guardan como los demás: es una alarma.
+ */
+export async function hasSensitivePending(db: D1Database): Promise<boolean> {
+	return (await db.prepare('SELECT 1 FROM torneos_sensibles WHERE excluido IS NULL LIMIT 1').first()) !== null
 }
 
 /** Guarda la salud de una pasada al terminar. `fin` es ahora, salvo en los tests. */

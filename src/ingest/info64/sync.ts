@@ -15,11 +15,13 @@ import { fetchBroadcastPgn, gamesOfTournament, LICHESS_STEP, parseBroadcastUrl, 
 import {
 	deletePastPairings,
 	loadCheckedTournaments,
+	loadExcluded,
 	loadLinkedBroadcasts,
 	loadParticipants,
 	loadTournamentIds,
 	loadTournamentsStarting,
 	markGamesChecked,
+	proposeSensitive,
 	refreshTotals,
 	replacePairings,
 	replaceParticipations,
@@ -29,6 +31,7 @@ import {
 	type CheckedTournament,
 	type GamesSource
 } from '../repo'
+import { looksSensitive } from '../sensibles'
 import {
 	parseEvents,
 	parseGamesPage,
@@ -192,12 +195,15 @@ export class Info64SyncWorkflow extends WorkflowEntrypoint<Env, Info64SyncParams
 			: await step.do('calendario', FETCH_STEP, () => listTournaments(params.from, params.to))
 
 		const pending = await step.do('pendientes', async () => {
+			// Los sensibles no se leen ni a mano (torneos_sensibles).
+			const excluded = await loadExcluded(this.env.DB, SOURCE)
+			const allowed = candidates.filter((c) => !excluded.has(c.key))
 			const checked = await loadCheckedTournaments(
 				this.env.DB,
 				SOURCE,
-				candidates.map((c) => c.key)
+				allowed.map((c) => c.key)
 			)
-			return selectPending(candidates, checked, today, params.force ?? Boolean(params.keys))
+			return selectPending(allowed, checked, today, params.force ?? Boolean(params.keys))
 		})
 		console.log(`[info64] ${params.from}…${params.to}: ${candidates.length} torneos, ${pending.length} pendientes`)
 
@@ -256,7 +262,8 @@ export class Info64SyncWorkflow extends WorkflowEntrypoint<Env, Info64SyncParams
 	): Promise<{ added: number; health: HealthCounts }> {
 		const { now, rounds } = await step.do('próximas rondas', FETCH_STEP, () => listUpcomingRounds(new Date()))
 		const keys = params.keys?.map((k) => keyToCandidate(k).key)
-		const upcoming = keys ? rounds.filter((r) => keys.includes(r.key)) : rounds
+		const excluded = await step.do('torneos sensibles', async () => [...(await loadExcluded(this.env.DB, SOURCE))])
+		const upcoming = rounds.filter((r) => (!keys || keys.includes(r.key)) && !excluded.includes(r.key))
 		const ids = await step.do('torneos con ronda próxima', () =>
 			loadTournamentIds(
 				this.env.DB,
@@ -307,8 +314,13 @@ export class Info64SyncWorkflow extends WorkflowEntrypoint<Env, Info64SyncParams
 	/** Sólo la clasificación (standings: 'only') de los torneos guardados: los de keys o los que empiezan en la ventana. */
 	private async syncStoredStandings(params: Info64SyncParams, step: WorkflowStep): Promise<void> {
 		const tournaments = await step.do('torneos guardados', async () => {
-			if (!params.keys) return loadTournamentsStarting(this.env.DB, SOURCE, params.from, params.to, isoDate(new Date()))
-			const candidates = params.keys.map(keyToCandidate)
+			// Uno sensible aún guardado (marcado y sin reprocesar) no se lee.
+			const excluded = await loadExcluded(this.env.DB, SOURCE)
+			if (!params.keys) {
+				const stored = await loadTournamentsStarting(this.env.DB, SOURCE, params.from, params.to, isoDate(new Date()))
+				return stored.filter((t) => !excluded.has(t.key))
+			}
+			const candidates = params.keys.map(keyToCandidate).filter((c) => !excluded.has(c.key))
 			const ids = await loadTournamentIds(
 				this.env.DB,
 				SOURCE,
@@ -470,6 +482,8 @@ async function syncTournament(db: D1Database, candidate: EventTournament): Promi
 		url,
 		syncedAt: new Date().toISOString()
 	})
+	// Si lo parece, se apunta para revisarlo; hasta entonces se guarda como los demás.
+	if (looksSensitive(page.name)) await proposeSensitive(db, [{ source: SOURCE, key: candidate.key, name: page.name }])
 	// En los torneos por equipos la página principal no trae jugadores: la
 	// plantilla se guarda en su propio paso (syncTeamRoster).
 	const kept = candidate.type === 'individual' && !(await replaceParticipations(db, id, page.players))
