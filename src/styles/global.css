@@ -908,6 +908,47 @@
 		margin-top: var(--space-2);
 	}
 
+	/*
+	 * Filas de rótulo y dato: una <dl> con un <div> por pareja (el resumen y
+	 * los derechos de la política de privacidad, las licencias del aviso
+	 * legal). El rótulo, en gris como la cabecera de una tabla. En la misma
+	 * fila mientras quepan los 8rem del rótulo y 18 de dato y, si no, el
+	 * rótulo encima, sin punto de corte.
+	 */
+	.def-list {
+		margin: 0 0 var(--space-4);
+	}
+
+	.def-list > div {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: baseline;
+		gap: var(--space-1) var(--space-4);
+		padding-block: var(--space-2);
+		border-top: 1px solid var(--border);
+	}
+
+	.def-list dt {
+		flex: 0 0 8rem;
+		font-size: var(--text-s);
+		font-weight: var(--weight-strong);
+		color: var(--text-muted);
+	}
+
+	.def-list dd {
+		flex: 1 1 18rem;
+		margin: 0;
+	}
+
+	/* Al final de una tarjeta, sin hueco de más sobre su borde. */
+	.card > .def-list:last-child {
+		margin-bottom: 0;
+	}
+
+	.card > .def-list:last-child > div:last-child {
+		padding-bottom: 0;
+	}
+
 	/* Aviso breve dentro del contenido. */
 	.note {
 		padding: var(--space-2) var(--space-3);

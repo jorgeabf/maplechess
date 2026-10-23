@@ -9,64 +9,85 @@ import { CC_BY_SA, ENGINE_SOURCE, ENGINE_VERSION, SOURCE_CODE, SOURCE_LICENSE } 
 	description="Quién está detrás de MapleChess, qué es y qué no es, y las licencias del código y de los datos."
 >
 	<article class="prose">
-		<h1>Aviso legal</h1>
+		<header class="page-head">
+			<h1>Aviso legal</h1>
+		</header>
 
-		<h2>Titular</h2>
+		<h2 id="titular">Titular</h2>
 		<p>
-			MapleChess (maplechess.es) es de {OWNER}. Para cualquier cosa, escribe a{' '}
+			El titular de MapleChess (maplechess.es) es {OWNER}. Para cualquier asunto, escribe a{' '}
 			<a href={`mailto:${CONTACT}`}>{CONTACT}</a>.
 		</p>
 
-		<h2>Qué es</h2>
+		<h2 id="que-es">Qué es y qué no es</h2>
 		<p>
-			Un proyecto personal, gratuito, sin publicidad y sin ánimo de lucro. No es una web oficial y no tiene relación con
-			la Federación Española de Ajedrez, la FIDE ni lichess: reúne los datos que ellas publican y cita siempre de dónde
+			Un proyecto personal, gratuito, sin publicidad y sin ánimo de lucro. No es una web oficial ni tiene relación con la
+			Federación Española de Ajedrez, la FIDE ni lichess: reúne los datos que ellas publican y cita siempre de dónde
 			salen.
 		</p>
 
-		<h2>Exactitud de los datos</h2>
+		<h2 id="exactitud">Exactitud de los datos</h2>
 		<p>
-			Los datos se copian de las fuentes tal como las publican, y pueden tener errores: un resultado mal anotado, un ELO
-			equivocado, una partida asignada a quien no la jugó. No son oficiales: para lo que cuente, valen los de la
-			federación y la FIDE.
+			Los datos se copian tal como los publican las fuentes y pueden tener errores: un resultado mal anotado, un ELO
+			equivocado, una partida asignada a quien no la jugó. No son oficiales: los que cuentan son los de la federación y
+			la FIDE.
 		</p>
 		<p>
-			Si ves un error, escribe a <a href={`mailto:${CONTACT}`}>{CONTACT}</a>. Lo que más dura es corregirlo también en
-			la fuente (el árbitro del torneo, la retransmisión o la FIDE), porque las actualizaciones lo traen de allí. Si el
-			dato es tuyo, tienes además los derechos que explica la <a href="/privacidad#derechos">política de privacidad</a>.
+			Si ves un error, escribe a <a href={`mailto:${CONTACT}`}>{CONTACT}</a>. Para que no vuelva, corrígelo también en la
+			fuente (el árbitro del torneo, la retransmisión o la FIDE), de donde lo traen las actualizaciones. Si el dato es
+			tuyo, tienes además los derechos que explica la <a href="/privacidad#derechos">política de privacidad</a>.
 		</p>
 
-		<h2>Licencias</h2>
+		<h2 id="licencias">Propiedad intelectual y licencias</h2>
 		{/* Los avisos legales apropiados de la GPL-3.0 (secciones 0 y 5.d): copyright, sin garantía y dónde está la licencia. */}
 		<p>
-			© 2026 {OWNER}. MapleChess es software libre: puedes redistribuirlo y modificarlo según los
-			términos de la Licencia Pública General de GNU, tal como la publica la Free Software Foundation, en su versión 3 o,
-			a tu elección, cualquier versión posterior. Se distribuye con la esperanza de que sea útil, pero sin ninguna
-			garantía, ni siquiera la implícita de comerciabilidad o de idoneidad para un fin determinado. Los detalles, en el{' '}
+			© 2026 {OWNER}. MapleChess es software libre: puedes redistribuirlo y modificarlo según los términos de la Licencia
+			Pública General de GNU, tal como la publica la Free Software Foundation, en su versión 3 o, a tu elección,
+			cualquier versión posterior. Se distribuye con la esperanza de que sea útil, pero sin ninguna garantía, ni siquiera
+			la implícita de comerciabilidad o de idoneidad para un fin determinado. Los detalles, en el{' '}
 			<a href={SOURCE_LICENSE} rel="license noopener">texto de la licencia</a>. El{' '}
 			<a href={SOURCE_CODE} rel="noopener">código está en GitHub</a>.
 		</p>
-		<ul>
-			<li>
-				<strong>Lo que lleva dentro:</strong> el tablero y las reglas (chessground y chessops), las piezas (mpchess) y
-				el motor (Stockfish) también son GPL-3.0. El código del motor que se sirve es el de{' '}
-				<a href={ENGINE_SOURCE} rel="noopener">stockfish.js {ENGINE_VERSION}</a>. Todos, con sus enlaces, en{' '}
-				<a href="/acerca#software">Acerca de</a>.
-			</li>
-			<li>
-				<strong>Partidas de las retransmisiones de lichess:</strong> licencia{' '}
-				<a href={CC_BY_SA} rel="license noopener">CC BY-SA 4.0</a>, como las publica lichess. Aquí se han completado o
-				corregido sus cabeceras (nombres, FIDE ID, ELO y apertura) y se ofrecen con la misma licencia.
-			</li>
-			<li>
-				<strong>Nombres de aperturas:</strong>{' '}
-				<a href="https://github.com/lichess-org/chess-openings" rel="noopener">lichess-org/chess-openings</a>, de dominio
-				público (CC0).
-			</li>
-			<li>
-				<strong>Tipografía de los titulares:</strong> Source Serif 4 de Adobe, con la SIL Open Font License 1.1.{' '}
-				<a href="/fonts/OFL.txt">Texto de la licencia</a>.
-			</li>
-		</ul>
+		<p>Lo que lleva dentro y los datos que publica tienen sus propias licencias:</p>
+		<dl class="def-list">
+			<div>
+				<dt>Tablero y reglas</dt>
+				<dd>chessground y chessops, de lichess: GPL-3.0.</dd>
+			</div>
+			<div>
+				<dt>Piezas</dt>
+				<dd>mpchess, de Maxime Chupin: GPL-3.0.</dd>
+			</div>
+			<div>
+				<dt>Motor</dt>
+				<dd>
+					Stockfish: GPL-3.0. El código que se sirve es el de{' '}
+					<a href={ENGINE_SOURCE} rel="noopener">stockfish.js {ENGINE_VERSION}</a>.
+				</dd>
+			</div>
+			<div>
+				<dt>Partidas de lichess</dt>
+				<dd>
+					<a href={CC_BY_SA} rel="license noopener">CC BY-SA 4.0</a>, como las publica lichess en sus retransmisiones.
+					Aquí se han completado o corregido sus cabeceras (nombres, FIDE ID, ELO y apertura) y se ofrecen con la misma
+					licencia.
+				</dd>
+			</div>
+			<div>
+				<dt>Aperturas</dt>
+				<dd>
+					Los nombres, de <a href="https://github.com/lichess-org/chess-openings" rel="noopener">lichess-org/chess-openings</a>:
+					dominio público (CC0).
+				</dd>
+			</div>
+			<div>
+				<dt>Tipografía</dt>
+				<dd>
+					Source Serif 4 de Adobe, en los titulares: SIL Open Font License 1.1 (<a href="/fonts/OFL.txt">texto de la
+					licencia</a>).
+				</dd>
+			</div>
+		</dl>
+		<p>Todos, con sus enlaces, en <a href="/acerca#codigo">Acerca de</a>.</p>
 	</article>
 </Base>

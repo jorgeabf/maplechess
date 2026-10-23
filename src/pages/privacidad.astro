@@ -1,301 +1,445 @@
 ---
 import Base from '../layouts/Base.astro'
 import { CONTACT, OWNER } from '../lib/legal'
+
+const mail = `mailto:${CONTACT}`
+
+// Los apartados, en el orden de la página: de aquí salen el índice y los títulos.
+const sections = [
+	{ id: 'responsable', title: 'Quién es el responsable' },
+	{ id: 'jugadores', title: 'Datos de los jugadores' },
+	{ id: 'menores', title: 'Menores de edad' },
+	{ id: 'salud', title: 'Torneos que revelan un dato de salud' },
+	{ id: 'oposicion', title: 'Tu derecho a oponerte' },
+	{ id: 'derechos', title: 'Tus otros derechos' },
+	{ id: 'visitas', title: 'Si visitas la web' },
+	{ id: 'proveedores', title: 'Proveedores' }
+] as const
+const title = Object.fromEntries(sections.map((s) => [s.id, s.title])) as Record<(typeof sections)[number]['id'], string>
 ---
 
 <Base
 	title="Privacidad"
 	description="Quién trata los datos de los jugadores en MapleChess, de dónde salen, para qué y cómo pedir que se retiren los tuyos."
 >
-	<article class="prose">
-		<h1>Política de privacidad</h1>
+	<article class="legal">
+		<header class="page-head">
+			<h1>Política de privacidad</h1>
+			<p class="page-meta">Actualizada el 23 de octubre de 2026</p>
+		</header>
 
 		{/* La capa básica del art. 11 LOPDGDD: con datos que no vienen del interesado, lleva también las categorías y las fuentes. */}
-		<h2 id="resumen">En resumen</h2>
-		<dl class="summary">
-			<dt>Responsable</dt>
-			<dd>{OWNER}, <a href={`mailto:${CONTACT}`}>{CONTACT}</a>.</dd>
-			<dt>Qué datos</dt>
-			<dd>
-				De los jugadores de ajedrez de la federación española y de sus rivales en los torneos: nombre, FIDE ID, título,
-				ELO, sexo, año de nacimiento (nunca el de los menores), torneos, resultados y partidas, y los análisis que salen
-				de ellas.
-			</dd>
-			<dt>De dónde salen</dt>
-			<dd>De info64.org, de la Federación Española de Ajedrez; de la lista de jugadores de la FIDE, y de lichess.org.</dd>
-			<dt>Para qué</dt>
-			<dd>Para publicar los resultados y las partidas del ajedrez español y ayudar a preparar las partidas.</dd>
-			<dt>Por qué</dt>
-			<dd>Por interés legítimo (artículo 6.1.f del RGPD).</dd>
-			<dt>Quién los ve</dt>
-			<dd>Cualquiera que visite la web, y los buscadores.</dd>
-			<dt>Tus derechos</dt>
-			<dd>
-				Puedes <a href="#oposicion">oponerte y pedir que se te retire</a>, y ejercer <a href="#derechos">los demás
-				derechos</a>: acceso, rectificación, supresión y limitación.
-			</dd>
-		</dl>
+		<section class="card summary" aria-labelledby="resumen">
+			<h2 id="resumen">En resumen</h2>
+			<dl class="def-list">
+				<div>
+					<dt>Responsable</dt>
+					<dd>{OWNER}, <a href={mail}>{CONTACT}</a>.</dd>
+				</div>
+				<div>
+					<dt>Qué datos</dt>
+					<dd>
+						De los jugadores de la federación española y de sus rivales en los torneos: nombre, FIDE ID, título, ELO,
+						sexo, año de nacimiento (nunca el de los menores), torneos, resultados y partidas, y los análisis que se hacen
+						de ellas.
+					</dd>
+				</div>
+				<div>
+					<dt>De dónde salen</dt>
+					<dd>De info64.org, de la Federación Española de Ajedrez; de la lista de jugadores de la FIDE, y de lichess.org.</dd>
+				</div>
+				<div>
+					<dt>Para qué</dt>
+					<dd>Para publicar los resultados y las partidas del ajedrez español y ayudar a preparar las partidas.</dd>
+				</div>
+				<div>
+					<dt>Base legal</dt>
+					<dd>El interés legítimo (artículo 6.1.f del RGPD).</dd>
+				</div>
+				<div>
+					<dt>Quién los ve</dt>
+					<dd>Cualquiera que visite la web, y los buscadores.</dd>
+				</div>
+				<div>
+					<dt>Tus derechos</dt>
+					<dd>
+						Puedes <a href="#oposicion">oponerte y pedir que se te retire</a>, y ejercer los de{' '}
+						<a href="#derechos">acceso, rectificación, supresión y limitación</a>.
+					</dd>
+				</div>
+			</dl>
+		</section>
 
-		<h2 id="responsable">Quién es el responsable</h2>
-		<p>
-			MapleChess es un proyecto personal de {OWNER}, que es el responsable de los datos. Para cualquier cosa sobre
-			ellos, escribe a <a href={`mailto:${CONTACT}`}>{CONTACT}</a>.
-		</p>
+		<nav class="toc" aria-labelledby="indice">
+			<p class="field-label" id="indice">En esta página</p>
+			<ul>
+				{
+					sections.map((s) => (
+						<li>
+							<a href={`#${s.id}`}>{s.title}</a>
+						</li>
+					))
+				}
+			</ul>
+		</nav>
 
-		<h2 id="jugadores">Datos de los jugadores</h2>
-
-		<h3>Qué datos</h3>
-		<ul>
-			<li>
-				<strong>De la ficha:</strong> nombre, FIDE ID, título, ELO estándar, de rápidas y de blitz, si está inactivo,
-				sexo y año de nacimiento. Si puede ser menor de edad, mira <a href="#menores">Menores de edad</a>.
-			</li>
-			<li>
-				<strong>De los torneos:</strong> en cuáles ha jugado, con su equipo, su número inicial, sus puntos y
-				desempates, y sus próximas partidas (ronda, fecha, hora y mesa).
-			</li>
-			<li>
-				<strong>De las partidas:</strong> los jugadores y sus ELO, las jugadas, el tiempo que les quedaba en el reloj,
-				el resultado, la fecha, la ronda y la mesa. Se pueden descargar en PGN.
-			</li>
-			<li>
-				<strong>Lo que sale de sus partidas:</strong> el repertorio (qué aperturas juega con cada color) y el dossier
-				para preparar una partida contra él (sus líneas principales, cómo han cambiado en el último año, sus resultados
-				según el ELO del rival y sus apuros de tiempo). Analizan cómo juega una persona, lo que el RGPD llama elaborar
-				un perfil, pero no se usan para tomar decisiones sobre nadie. De quien puede ser menor, no hay ni uno ni otro.
-			</li>
-		</ul>
-
-		<h3>De dónde salen</h3>
-		<ul>
-			<li>
-				Torneos, clasificaciones, emparejamientos y partidas: <a href="https://info64.org" rel="noopener">info64.org</a>,
-				la plataforma de resultados de la Federación Española de Ajedrez.
-			</li>
-			<li>
-				Fichas y ELO: la <a href="https://ratings.fide.com/download_lists.phtml" rel="noopener">lista de jugadores de la
-				FIDE</a>, cada mes.
-			</li>
-			<li>
-				Partidas de retransmisiones: las <a href="https://lichess.org/broadcast" rel="noopener">retransmisiones
-				oficiales de lichess.org</a>.
-			</li>
-		</ul>
-		<p>
-			Más detalle, en <a href="/acerca#fuentes">Acerca de</a>. Las partidas de info64 se asignan a cada jugador por su
-			nombre en el torneo: si está mal escrito, la partida puede quedarse fuera de su ficha o, rara vez, acabar en la de
-			otro.
-		</p>
-
-		<h3>Para qué</h3>
-		<p>
-			Para publicar los resultados y las partidas del ajedrez español y ayudar a preparar las partidas: saber contra
-			quién te toca, qué aperturas juega y repasar sus partidas. El sexo y el año de nacimiento sirven para las
-			categorías oficiales de los rankings (femenino, sub-18, +50 y +65) y para buscar por sexo.
-		</p>
-
-		<h3>Por qué se pueden publicar</h3>
-		<p>
-			Por interés legítimo (artículo 6.1.f del RGPD): el de los jugadores, en conocer los resultados y preparar sus
-			partidas, como es costumbre en el ajedrez de competición; el de todos, en la información deportiva, y el de{' '}
-			{OWNER}, en ofrecer este servicio gratis.
-		</p>
-		<p>
-			Son datos que la FIDE y la federación ya publican, y quien juega un torneo valorado sabe que se publican. Para que
-			ese interés no pase por encima de los jugadores:
-		</p>
-		<ul>
-			<li>
-				de los menores no se muestra el año de nacimiento ni hay repertorio ni dossier, y sus fichas no salen en los
-				buscadores;
-			</li>
-			<li>no se publican los torneos de hasta Sub&nbsp;14, los escolares ni los que dicen algo de la salud de quien juega;</li>
-			<li>de nadie salen en los buscadores el repertorio, el dossier ni las descargas en PGN;</li>
-			<li>cualquiera puede pedir que se le retire.</li>
-		</ul>
-
-		<h3>Quién los ve</h3>
-		<p>
-			Cualquiera que visite la web, sin registrarse. Las fichas (salvo las de quien puede ser menor), los torneos y las
-			partidas salen en los buscadores; el repertorio, el dossier y las descargas, no. Cloudflare los trata por encargo para servir la web (ver{' '}
-			<a href="#ayuda">Quién ayuda</a>).
-		</p>
-
-		<h3>Cuánto tiempo</h3>
-		<ul>
-			<li>La ficha, mientras el jugador esté en la lista FIDE de España: la importación de cada mes borra a quien ya no está.</li>
-			<li>
-				Los torneos, las clasificaciones y las partidas, sin plazo, como archivo de resultados. Si pides la retirada, tu
-				nombre deja de salir en ellos.
-			</li>
-			<li>Las próximas partidas, hasta que se juega la ronda.</li>
-			<li>Las copias de seguridad de la base de datos y el registro de las actualizaciones, 30 días.</li>
-		</ul>
-
-		<h3 id="menores">Menores de edad</h3>
-		<p>
-			Cuenta como posible menor quien cumple 18 años o menos este año, según el año de nacimiento de la lista FIDE, que
-			no da el día. De quien puede serlo:
-		</p>
-		<ul>
-			<li>su año de nacimiento no sale en ninguna página, tampoco junto a su nombre;</li>
-			<li>su ficha no sale en los buscadores;</li>
-			<li>
-				su próxima partida sale en la página del torneo, como en la fuente, pero no en su ficha, salvo para quien ha
-				pulsado en ella «Soy yo»;
-			</li>
-			<li>no hay repertorio ni dossier, ni sus descargas.</li>
-		</ul>
-		<p>
-			Además, no se guardan los torneos de hasta Sub&nbsp;14 ni los escolares (los de un colegio y el deporte en edad
-			escolar), que dirían la edad o el colegio de quien juega.
-		</p>
-		<p>
-			Sí sale en el ranking sub-18, como en las listas de la FIDE y de la federación, y en los demás torneos y partidas
-			que ha jugado. Si en la lista FIDE no consta su año, o no tiene FIDE ID, no hay forma de saber que es menor. Su
-			padre, su madre o su tutor pueden pedir que se le retire (ver <a href="#oposicion">Tu derecho a oponerte</a>).
-		</p>
-
-		<h3 id="salud">Torneos que revelan un dato de salud</h3>
-		<p>
-			No se publican categorías especiales de datos (artículo 9 del RGPD), como la salud. Por eso no están los torneos en
-			los que participar dice algo de la salud de quien juega: los de ajedrecistas ciegos o sordos, con discapacidad
-			física o de ajedrez inclusivo, ni sus partidas, participantes y clasificaciones. Se revisan a mano, y la web avisa
-			de los nuevos que lo parecen por el nombre. Si ves alguno que se ha pasado, escribe a{' '}
-			<a href={`mailto:${CONTACT}`}>{CONTACT}</a> y se quita.
-		</p>
-
-		{/* El art. 21.4 RGPD pide el derecho de oposición explícito, claro y aparte de lo demás: por eso va en su tarjeta. */}
-		<section class="card" aria-labelledby="oposicion">
-			<h2 id="oposicion">Tu derecho a oponerte</h2>
+		<div class="prose">
+			<h2 id="responsable">{title.responsable}</h2>
 			<p>
-				Puedes oponerte a que MapleChess publique tus datos y analice tus partidas (el repertorio y el dossier). Basta
-				con pedirlo: no hace falta explicar por qué, y es gratis.
+				MapleChess es un proyecto personal de {OWNER}, que es el responsable de los datos. Para cualquier asunto sobre
+				ellos, escribe a <a href={mail}>{CONTACT}</a>.
+			</p>
+
+			<h2 id="jugadores">{title.jugadores}</h2>
+
+			<h3 id="datos">Qué datos</h3>
+			<ul>
+				<li>
+					<strong>De la ficha:</strong> nombre, FIDE ID, título, ELO estándar, de rápidas y de blitz, si está inactivo,
+					sexo y año de nacimiento.
+				</li>
+				<li>
+					<strong>De los torneos:</strong> en cuáles ha jugado, con su equipo, su número inicial, sus puntos y
+					desempates, y sus próximas partidas (ronda, fecha, hora y mesa).
+				</li>
+				<li>
+					<strong>De las partidas:</strong> los jugadores y sus ELO, las jugadas, el tiempo que les quedaba en el reloj,
+					el resultado, la fecha, la ronda y la mesa. Se pueden descargar en PGN.
+				</li>
+				<li>
+					<strong>Lo que sale de sus partidas:</strong> el repertorio (qué aperturas juega con cada color) y el dossier
+					para preparar una partida contra él (sus líneas principales, cómo han cambiado en el último año, sus resultados
+					según el ELO del rival y sus apuros de tiempo).
+				</li>
+			</ul>
+			<p>
+				El repertorio y el dossier analizan cómo juega una persona: es lo que el RGPD llama elaborar un perfil. No se
+				usan para tomar decisiones sobre nadie. Lo que cambia si el jugador puede ser menor, en{' '}
+				<a href="#menores">{title.menores}</a>.
+			</p>
+
+			<h3 id="fuentes">De dónde salen</h3>
+			<ul>
+				<li>
+					<a href="https://info64.org" rel="noopener">info64.org</a>, la plataforma de resultados de la Federación
+					Española de Ajedrez: torneos, clasificaciones, emparejamientos y partidas.
+				</li>
+				<li>
+					La <a href="https://ratings.fide.com/download_lists.phtml" rel="noopener">lista de jugadores de la FIDE</a>,
+					cada mes: fichas y ELO.
+				</li>
+				<li>
+					Las <a href="https://lichess.org/broadcast" rel="noopener">retransmisiones oficiales de lichess.org</a>:
+					partidas.
+				</li>
+			</ul>
+			<p>
+				Más detalle, en <a href="/acerca#fuentes">Acerca de</a>. Las partidas de info64 se asignan a cada jugador por su
+				nombre en el torneo: si está mal escrito, la partida puede quedarse fuera de su ficha o, rara vez, acabar en la de
+				otro.
+			</p>
+
+			<h3 id="finalidad">Para qué</h3>
+			<p>
+				Para publicar los resultados y las partidas del ajedrez español y ayudar a preparar las partidas: saber contra
+				quién te toca, qué aperturas juega y repasar sus partidas.
+			</p>
+			<p>
+				El sexo y el año de nacimiento sirven para las categorías oficiales de los rankings (femenino, sub-18, +50 y +65)
+				y para buscar por sexo.
+			</p>
+
+			<h3 id="base-legal">Base legal</h3>
+			<p>El interés legítimo (artículo 6.1.f del RGPD):</p>
+			<ul>
+				<li>
+					el de los jugadores, en conocer los resultados y preparar sus partidas, como es costumbre en el ajedrez de
+					competición;
+				</li>
+				<li>el de todos, en la información deportiva;</li>
+				<li>el de {OWNER}, en ofrecer este servicio gratis.</li>
+			</ul>
+			<p>
+				Son datos que la FIDE y la federación ya publican, y quien juega un torneo valorado sabe que se publican. Para que
+				ese interés no pase por encima de los derechos de los jugadores:
 			</p>
 			<ul>
 				<li>
-					<strong>Cómo:</strong> escribe a <a href={`mailto:${CONTACT}`}>{CONTACT}</a> con tu FIDE ID o, si no tienes,
-					con tu nombre tal como sale aquí y algún torneo que hayas jugado. Si es un menor, lo puede pedir su padre,
-					madre o tutor.
+					de quien puede ser menor no se muestra el año de nacimiento ni hay repertorio ni dossier, y su ficha no sale en
+					los buscadores;
+				</li>
+				<li>no se publican los torneos de hasta Sub&nbsp;14, los escolares ni los que dicen algo de la salud de quien juega;</li>
+				<li>de nadie salen en los buscadores el repertorio, el dossier ni las descargas en PGN;</li>
+				<li>cualquiera puede pedir que se le retire.</li>
+			</ul>
+
+			<h3 id="destinatarios">Quién los ve</h3>
+			<p>
+				Cualquiera que visite la web, sin registrarse. Los buscadores muestran las fichas (salvo las de quien puede ser
+				menor), los torneos y las partidas, pero no el repertorio, el dossier ni las descargas.
+			</p>
+			<p>
+				Cloudflare los trata por encargo, para servir la web (ver <a href="#proveedores">{title.proveedores}</a>).
+			</p>
+
+			<h3 id="plazos">Cuánto tiempo se guardan</h3>
+			<ul>
+				<li>
+					<strong>La ficha:</strong> mientras el jugador esté en la lista FIDE de España. La importación de cada mes borra
+					a quien ya no está.
 				</li>
 				<li>
-					<strong>Qué pasa:</strong> tu ficha desaparece y, en las partidas, los torneos y los emparejamientos, tu
-					nombre pasa a «Jugador retirado», sin FIDE ID ni título, también en las descargas en PGN. No vuelve a
-					aparecer con las siguientes actualizaciones de las fuentes.
+					<strong>Los torneos, las clasificaciones y las partidas:</strong> sin plazo, como archivo de resultados. Si
+					pides la retirada, tu nombre deja de salir en ellos.
 				</li>
+				<li><strong>Las próximas partidas:</strong> hasta que se juega la ronda.</li>
 				<li>
-					<strong>Qué se queda:</strong> las partidas, porque también son de tus rivales. Ya no llevan tu nombre, pero
-					siguen con su torneo, su ronda y su mesa, así que quien las compare con la fuente puede saber que eras tú.
-				</li>
-				<li>
-					<strong>Cuándo:</strong> en un mes como máximo, y se te contesta por correo con lo que se ha hecho. Las copias
-					de seguridad caducan solas en 30 días, y los buscadores quitan tu ficha cuando vuelven a pasar por ella.
+					<strong>Las copias de seguridad de la base de datos y el registro de las actualizaciones:</strong> 30 días.
 				</li>
 			</ul>
-		</section>
 
-		<h2 id="derechos">Tus otros derechos</h2>
-		<p>También puedes pedir, escribiendo a <a href={`mailto:${CONTACT}`}>{CONTACT}</a> y gratis:</p>
-		<ul>
-			<li><strong>Acceso:</strong> qué datos tuyos hay aquí.</li>
-			<li>
-				<strong>Rectificación:</strong> que se corrija un dato que está mal. Corrígelo también en la fuente (el árbitro
-				del torneo, la retransmisión o la FIDE): si no, la siguiente actualización podría volver a traerlo.
-			</li>
-			<li><strong>Supresión:</strong> que se borren tus datos. Se hace como la retirada.</li>
-			<li><strong>Limitación:</strong> que un dato no se muestre mientras se resuelve una corrección o una oposición.</li>
-		</ul>
-		<p>
-			Si el jugador ha fallecido, sus familiares o herederos pueden pedir el acceso, la rectificación o la supresión de
-			sus datos. La respuesta llega en un mes como máximo.
-		</p>
-		<p>
-			Si crees que no se han respetado tus derechos, puedes reclamar ante la Agencia Española de Protección de Datos,
-			desde la sede electrónica de su web, <a href="https://www.aepd.es" rel="noopener">aepd.es</a>.
-		</p>
+			<h2 id="menores">{title.menores}</h2>
+			<p>
+				Cuenta como posible menor quien cumple 18 años o menos este año, según el año de nacimiento de la lista FIDE, que
+				no da el día. De quien puede serlo:
+			</p>
+			<ul>
+				<li>su año de nacimiento no sale en ninguna página, tampoco junto a su nombre;</li>
+				<li>su ficha no sale en los buscadores;</li>
+				<li>no hay repertorio ni dossier, ni sus descargas;</li>
+				<li>
+					su próxima partida sale en la página del torneo, como en la fuente, pero no en su ficha, salvo para quien ha
+					pulsado en ella «Soy yo».
+				</li>
+			</ul>
+			<p>
+				Además, no se guardan los torneos de hasta Sub&nbsp;14 ni los escolares (los de un colegio y el deporte en edad
+				escolar), porque dirían la edad o el colegio de quien juega.
+			</p>
+			<p>
+				Sí sale en el ranking sub-18, como en las listas de la FIDE y de la federación, y en los demás torneos y partidas
+				que ha jugado.
+			</p>
+			<p>
+				Si en la lista FIDE no consta su año, o no tiene FIDE ID, no hay forma de saber que es menor. En cualquier caso,
+				su padre, su madre o su tutor pueden pedir que se le retire (ver <a href="#oposicion">{title.oposicion}</a>).
+			</p>
 
-		<h2 id="visitas">Si visitas la web</h2>
-		<ul>
-			<li>
-				<strong>Registros:</strong> Cloudflare, donde está alojada, registra las peticiones: la página pedida (con lo
-				que hayas buscado o escrito en un formulario), la hora y datos técnicos de la conexión, como la dirección IP y
-				el navegador. Sirven, por interés legítimo, para la seguridad y para diagnosticar errores, y no se usan para
-				nada más. Los del
-				servidor se guardan 7 días, y una muestra de las peticiones, para la seguridad, 31 días.
-			</li>
-			<li>
-				<strong>Cookie:</strong> sólo hay una, y sólo si la pides. Al preparar una partida puedes indicar tu FIDE ID
-				para cruzar tus partidas con las del rival, o pulsar «Soy yo» en tu ficha, y se guarda en la cookie{' '}
-				<code>yo</code> durante un año para no tener que repetirlo. Con ella, la portada te avisa también de tu próximo
-				emparejamiento. No comprueba que seas tú, así que no abre el dossier ni el repertorio de quien puede ser menor,
-				ni siquiera los tuyos. No se usa para nada más ni se comparte. «No soy yo» la borra.
-			</li>
-			<li>
-				<strong>Correo:</strong> si escribes a {CONTACT}, tu correo llega a un buzón de Outlook.com y se guarda
-				mientras haga falta para responderte. Los que piden ejercer un derecho se guardan aparte, sin otro uso, tres
-				años después de responder, por si hay que demostrar cómo se atendieron, y luego se borran. Cloudflare, que
-				reenvía el correo, guarda 31 días el remitente, el destinatario y el asunto.
-			</li>
-		</ul>
-		<p>
-			No hay analítica ni publicidad, y la web no carga nada de otros sitios: ni fuentes, ni scripts, ni imágenes. Sobre
-			estos datos tienes los mismos <a href="#derechos">derechos</a>.
-		</p>
+			<h2 id="salud">{title.salud}</h2>
+			<p>
+				No se publican datos de salud ni de las demás categorías especiales del artículo 9 del RGPD. Por eso no están los
+				torneos en los que participar ya dice algo de la salud de quien juega: los de ajedrecistas ciegos o sordos, con
+				discapacidad física o de ajedrez inclusivo. Tampoco sus partidas, participantes ni clasificaciones.
+			</p>
+			<p>
+				Se revisan a mano, con un aviso automático de los nuevos que lo parecen por el nombre. Si ves alguno que se ha
+				colado, escribe a <a href={mail}>{CONTACT}</a> y se quitará.
+			</p>
 
-		<h2 id="ayuda">Quién ayuda</h2>
-		<ul>
-			<li>
-				<strong>Cloudflare</strong> aloja la web y la base de datos y reenvía el correo. Trata los datos por encargo
-				del responsable, con su <a href="https://www.cloudflare.com/cloudflare-customer-dpa/" rel="noopener">acuerdo de
-				tratamiento de datos</a>. La base de datos está en la Unión Europea, pero la web se sirve desde centros de
-				datos de todo el mundo, así que puede tratar datos fuera de ella. Para eso aplica las cláusulas contractuales
-				tipo de la Comisión Europea y el Marco de Privacidad de Datos UE-EE. UU. Parte de lo que ve del tráfico (para
-				su seguridad y para mejorar sus servicios) lo trata como responsable, según{' '}
-				<a href="https://www.cloudflare.com/privacypolicy/" rel="noopener">su política de privacidad</a>.
-			</li>
-			<li>
-				<strong>Microsoft</strong> da el buzón de Outlook.com al que llega el correo, y lo trata según{' '}
-				<a href="https://privacy.microsoft.com/es-es/privacystatement" rel="noopener">su declaración de privacidad</a>.
-			</li>
-		</ul>
+			{/* El art. 21.4 RGPD pide el derecho de oposición explícito, claro y aparte de lo demás: por eso va en su tarjeta. */}
+			<section class="card" aria-labelledby="oposicion">
+				<h2 id="oposicion">{title.oposicion}</h2>
+				<p>
+					Puedes oponerte a que MapleChess publique tus datos y analice tus partidas (el repertorio y el dossier). Basta
+					con pedirlo: no tienes que explicar por qué, y es gratis.
+				</p>
+				<dl class="def-list">
+					<div>
+						<dt>Cómo</dt>
+						<dd>
+							Escribe a <a href={mail}>{CONTACT}</a> con tu FIDE ID o, si no tienes, con tu nombre tal como sale aquí y
+							algún torneo que hayas jugado. Si se trata de un menor, puede pedirlo su padre, su madre o su tutor.
+						</dd>
+					</div>
+					<div>
+						<dt>Qué cambia</dt>
+						<dd>
+							Tu ficha desaparece. En las partidas, los torneos y los emparejamientos, tu nombre pasa a «Jugador
+							retirado», sin FIDE ID ni título, también en las descargas en PGN. Las siguientes actualizaciones de las
+							fuentes no lo vuelven a traer.
+						</dd>
+					</div>
+					<div>
+						<dt>Qué se queda</dt>
+						<dd>
+							Las partidas, porque también son de tus rivales. Ya no llevan tu nombre, pero conservan su torneo, su
+							ronda y su mesa, así que quien las compare con la fuente puede saber que eras tú.
+						</dd>
+					</div>
+					<div>
+						<dt>Plazo</dt>
+						<dd>
+							Un mes como máximo, y se te contesta por correo con lo que se ha hecho. Las copias de seguridad caducan
+							solas en 30 días, y los buscadores quitan tu ficha cuando vuelven a pasar por ella.
+						</dd>
+					</div>
+				</dl>
+			</section>
 
-		<p class="updated">Actualizada el 23 de octubre de 2026.</p>
+			<h2 id="derechos">{title.derechos}</h2>
+			<p>Escribiendo a <a href={mail}>{CONTACT}</a> puedes pedir, gratis y con respuesta en un mes como máximo:</p>
+			<dl class="def-list">
+				<div>
+					<dt>Acceso</dt>
+					<dd>Saber qué datos tuyos hay aquí.</dd>
+				</div>
+				<div>
+					<dt>Rectificación</dt>
+					<dd>
+						Que se corrija un dato que está mal. Corrígelo también en la fuente (el árbitro del torneo, la retransmisión o
+						la FIDE): si no, la siguiente actualización podría volver a traerlo.
+					</dd>
+				</div>
+				<div>
+					<dt>Supresión</dt>
+					<dd>Que se borren tus datos. Se hace igual que la retirada.</dd>
+				</div>
+				<div>
+					<dt>Limitación</dt>
+					<dd>Que un dato deje de mostrarse mientras se resuelve una corrección o una oposición.</dd>
+				</div>
+			</dl>
+			<p>
+				Si el jugador ha fallecido, sus familiares o herederos pueden pedir el acceso, la rectificación o la supresión de
+				sus datos.
+			</p>
+			<p>
+				Si crees que no se han respetado tus derechos, puedes reclamar ante la Agencia Española de Protección de Datos, en
+				la sede electrónica de <a href="https://www.aepd.es" rel="noopener">aepd.es</a>.
+			</p>
+
+			<h2 id="visitas">{title.visitas}</h2>
+			<p>
+				No hay analítica ni publicidad, y la web no carga nada de otros sitios: ni fuentes, ni scripts, ni imágenes. Sobre
+				los datos de este apartado tienes los mismos <a href="#derechos">derechos</a>.
+			</p>
+
+			<h3 id="registros">Registros</h3>
+			<p>
+				Cloudflare, donde está alojada la web, registra cada petición: la página pedida (con lo que hayas buscado o escrito
+				en un formulario), la hora y datos técnicos de la conexión, como la dirección IP y el navegador. Se usan, por
+				interés legítimo (artículo 6.1.f del RGPD), para la seguridad y para diagnosticar errores, y para nada más. Los
+				del servidor se guardan 7 días, y una muestra de las peticiones, para la seguridad, 31 días.
+			</p>
+
+			<h3 id="cookies">Cookies</h3>
+			<p>
+				Sólo hay una, y sólo si la pides. Al preparar una partida puedes indicar tu FIDE ID para cruzar tus partidas con
+				las del rival, o pulsar «Soy yo» en tu ficha: se guarda en la cookie <code>yo</code> durante un año, para no tener
+				que repetirlo. Con ella, la portada te avisa también de tu próximo emparejamiento.
+			</p>
+			<p>
+				No comprueba que seas tú, así que no abre el dossier ni el repertorio de quien puede ser menor, ni siquiera los
+				tuyos. No se usa para nada más ni se comparte. «No soy yo» la borra.
+			</p>
+
+			<h3 id="correo">Correo</h3>
+			<p>
+				Si escribes a {CONTACT}, tu mensaje llega a un buzón de Outlook.com y se guarda mientras haga falta para
+				responderte, por interés legítimo (artículo 6.1.f del RGPD).
+			</p>
+			<p>
+				Los que piden ejercer un derecho se guardan aparte, sin otro uso, tres años desde la respuesta, y luego se borran:
+				la ley obliga a atender esas peticiones y a poder demostrar cómo se atendieron (artículo 6.1.c del RGPD).
+			</p>
+			<p>
+				Cloudflare, que reenvía el correo, guarda 31 días el remitente, el destinatario y el asunto.
+			</p>
+
+			<h2 id="proveedores">{title.proveedores}</h2>
+			<ul>
+				<li>
+					<strong>Cloudflare</strong> aloja la web y la base de datos, y reenvía el correo. Trata los datos por encargo del
+					responsable, con su <a href="https://www.cloudflare.com/cloudflare-customer-dpa/" rel="noopener">acuerdo de
+					tratamiento de datos</a>. La base de datos está en la Unión Europea, pero la web se sirve desde centros de datos
+					de todo el mundo, así que algunos datos pueden tratarse fuera de ella. Para esas transferencias aplica las
+					cláusulas contractuales tipo de la Comisión Europea y el Marco de Privacidad de Datos UE-EE. UU. Parte de lo que
+					ve del tráfico (para su seguridad y para mejorar sus servicios) lo trata como responsable, según{' '}
+					<a href="https://www.cloudflare.com/privacypolicy/" rel="noopener">su política de privacidad</a>.
+				</li>
+				<li>
+					<strong>Microsoft</strong> da el buzón de Outlook.com al que llega el correo, y lo trata según{' '}
+					<a href="https://privacy.microsoft.com/es-es/privacystatement" rel="noopener">su declaración de privacidad</a>.
+				</li>
+			</ul>
+		</div>
 	</article>
 </Base>
 
 <style>
-	.prose h3 {
-		margin-top: var(--space-5);
+	/*
+	 * Una columna de lectura y, cuando cabe a su lado (46rem de texto, 3 de
+	 * hueco y 14 de índice, más el margen de .page), el índice a la derecha,
+	 * fijo al bajar. Si no, va tras el resumen.
+	 */
+	.legal {
+		display: grid;
+		grid-template-columns: minmax(0, var(--reading-width));
+		column-gap: var(--space-7);
 	}
 
-	/* Cada rótulo encima de su dato: cabe a cualquier ancho, sin punto de corte. */
-	.summary {
-		margin: 0;
+	@media (width >= 66rem) {
+		.legal {
+			grid-template-columns: minmax(0, var(--reading-width)) 14rem;
+		}
+
+		.legal > :not(.toc) {
+			grid-column: 1;
+		}
+
+		.toc {
+			grid-column: 2;
+			grid-row: 1 / span 3;
+			align-self: start;
+			position: sticky;
+			top: var(--space-5);
+			margin-block: 0;
+		}
 	}
 
-	.summary dt {
-		font-weight: var(--weight-strong);
-	}
-
-	.summary dd {
-		margin: 0 0 var(--space-3);
-	}
-
-	.card {
-		margin-block: var(--space-6);
+	.legal :is(h2, h3)[id] {
+		scroll-margin-top: var(--space-4);
 	}
 
 	.card h2 {
 		margin-top: 0;
 	}
 
-	.card ul {
-		margin-bottom: 0;
+	.toc {
+		margin-block: var(--space-6) 0;
+		font-size: var(--text-s);
 	}
 
-	.updated {
-		margin-top: var(--space-6);
-		font-size: var(--text-s);
-		color: var(--text-muted);
+	.toc .field-label {
+		margin-bottom: var(--space-2);
+	}
+
+	.toc ul {
+		display: grid;
+		gap: var(--space-2);
+		margin: 0;
+		padding: 0 0 0 var(--space-3);
+		border-inline-start: 1px solid var(--border);
+		list-style: none;
+	}
+
+	.prose h3 {
+		margin-top: var(--space-5);
+	}
+
+	.card {
+		margin-block: var(--space-6);
+	}
+
+	/* Tras la cabecera de la página, que ya deja su hueco. */
+	.summary {
+		margin-block: 0;
+	}
+
+	/* En papel, los enlaces del índice no llevan a ninguna parte. */
+	@media print {
+		.toc {
+			display: none;
+		}
 	}
 </style>
