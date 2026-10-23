@@ -119,7 +119,7 @@ describe('isExpensive', () => {
 			'/partidas.pgn?eco=B',
 			'/jugadores/32060777.pgn',
 			'/torneos/12.pgn',
-			'/jugadores/32060777/preparar?yo=garcia',
+			'/jugadores/32060777/preparar',
 			'/jugadores/32060777/repertorio',
 			'/sitemap/jugadores-2.xml',
 			'/sitemap/torneos-1.xml',

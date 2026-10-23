@@ -4,8 +4,8 @@
 // según el rival y sus últimas partidas) en una página que se lee en el móvil
 // o se imprime. Una consulta: sus partidas con ese color, sin el PGN.
 //
-// Si quien prepara la partida dice quién es (parámetro yo, que se recuerda en
-// una cookie; ver lib/me.ts), se añaden vuestras partidas y el cruce de sus
+// Si quien prepara la partida dice quién es (campo yo de un formulario POST,
+// que se recuerda en una cookie; ver lib/me.ts), se añaden vuestras partidas y el cruce de sus
 // líneas con las tuyas: dónde te separas tú o dónde juega algo nuevo para ti.
 // Con tu nombre en vez de tu ID, lista los jugadores que casan para que elijas.
 // Si además estáis emparejados en una ronda próxima, lo avisa y abre con el
@@ -40,7 +40,17 @@ import {
 	formatPercent,
 	formatRoundTime
 } from '../../../lib/format'
-import { ME_COOKIE, ME_COOKIE_OPTIONS, ME_PARAM, dropMeParam, isOwn, meCookieAction, meHref, meName, resolveMe } from '../../../lib/me'
+import {
+	ME_COOKIE,
+	ME_COOKIE_OPTIONS,
+	ME_FIELD,
+	isOwn,
+	meCookieAction,
+	meName,
+	readMeField,
+	redirectsAfterForm,
+	resolveMe
+} from '../../../lib/me'
 import { PERIOD_OPTIONS, periodSummary, TIME_CLASS_OPTIONS, timeClassSummary } from '../../../lib/options'
 import { positiveInt, repertoireParams, withParams, type RepertoireSearch } from '../../../lib/params'
 
@@ -51,16 +61,17 @@ const search = repertoireParams(Astro.url.searchParams)
 const { period, timeClass } = search
 const today = isoDate(new Date())
 
-const me = resolveMe(Astro.url.searchParams.get(ME_PARAM), Astro.cookies.get(ME_COOKIE)?.value)
+const field = await readMeField(Astro.request)
+const me = resolveMe(field, Astro.cookies.get(ME_COOKIE)?.value)
 const meId = me.fideId !== fideId ? me.fideId : null
 // Tu nombre, si en vez de tu ID lo escribiste en «Tú contra…».
-const meSearch = meName(Astro.url.searchParams.get(ME_PARAM))
+const meSearch = meName(field)
 // Tu propio dossier (cookie yo): lo que ven tus rivales al prepararse contra
 // ti. Los textos te hablan a ti, el color es el tuyo y no hay «Tú contra».
 const own = isOwn(me, fideId)
 
 // Primero lo que cuesta poco (el rival, tú y tus próximas partidas): con eso se
-// decide la cookie y, si toca, se vuelve a la URL sin `yo` antes de leer las
+// decide la cookie y, si toca, se vuelve a la página por GET antes de leer las
 // partidas del rival.
 const [player, mePlayer, myUpcoming] = await Promise.all([
 	getPlayer(env.DB, fideId),
@@ -73,15 +84,15 @@ if (!player) return Astro.rewrite('/404')
 if (player.minor) return Astro.rewrite(`/jugadores/${fideId}/no-disponible`)
 
 // La cookie, sólo ahora que se sabe si tu ID existe (meCookieAction). Una vez
-// guardada o borrada, la URL no lleva `yo` (dropMeParam), para que no quede en
-// un enlace que se comparta; el navegador conserva el ancla (#tu).
+// guardada o borrada, la página vuelve a sí misma por GET (redirectsAfterForm);
+// el navegador conserva el ancla del formulario (#tu).
 const cookie = meCookieAction(me, fideId, me.fideId === fideId || mePlayer !== null)
 if (cookie === 'set') {
 	Astro.cookies.set(ME_COOKIE, String(me.fideId), ME_COOKIE_OPTIONS)
 } else if (cookie === 'delete') {
 	Astro.cookies.delete(ME_COOKIE, { path: '/' })
 }
-if (dropMeParam(me, cookie)) return Astro.redirect(withParams(Astro.url, { [ME_PARAM]: null }), 303)
+if (redirectsAfterForm(me, cookie)) return Astro.redirect(withParams(Astro.url, {}), 303)
 
 const pairing = myUpcoming.find((g) => g.opponent.fideId === fideId) ?? null
 // Color del rival si la URL no lo dice: el de vuestra partida o, si no la hay, blancas.
@@ -141,10 +152,7 @@ const latest = latestIds.map((id) => details.get(id)).filter((g): g is GameListR
 
 // Enlaces. El color por defecto (el de vuestra partida o blancas) y "todas"
 // no van en la URL. Tu ID queda en la cookie: los enlaces no lo arrastran.
-// Los de decir quién eres vuelven a «Tú contra…» (#tu), como su formulario.
-const link = (changes: Record<string, string | null>) => withParams(Astro.url, { ...changes, [ME_PARAM]: null })
-const forgetMeHref = `${meHref(link({}), null)}#tu`
-const chooseMeHref = (id: number) => `${meHref(link({}), id)}#tu`
+const link = (changes: Record<string, string | null>) => withParams(Astro.url, changes)
 const filters = { color: color === 'white' ? null : color, periodo: period || null, ritmo: timeClass }
 const repertoireHref = (moves: string[], file = 'repertorio') =>
 	withParams(new URL(`/jugadores/${fideId}/${file}`, Astro.url), { ...filters, jugadas: moves.join(' ') || null })
@@ -283,12 +291,12 @@ alternatives.push({
 						<h2 id="tu">Tú contra {name}</h2>
 						{mePlayer ? (
 							<>
-								<p class="muted">
+								<form method="post" action="#tu" class="me-line muted">
 									Tú: {myName} (FIDE {meId}) ·{' '}
-									<a href={forgetMeHref} rel="nofollow">
+									<button class="link" type="submit" name={ME_FIELD} value="">
 										No soy yo
-									</a>
-								</p>
+									</button>
+								</form>
 								<h3>Vuestras partidas</h3>
 								{headToHead.length > 0 ? (
 									<>
@@ -325,13 +333,10 @@ alternatives.push({
 								{me.fideId !== null && me.fideId !== fideId && (
 									<p class="muted">No encontramos el ID FIDE {me.fideId}.</p>
 								)}
-								<form method="get" class="me-form form-row" action="#tu">
-									{color !== 'white' && <input type="hidden" name="color" value={color} />}
-									{period && <input type="hidden" name="periodo" value={period} />}
-									{timeClass && <input type="hidden" name="ritmo" value={timeClass} />}
+								<form method="post" class="me-form form-row" action="#tu">
 									<label>
 										Tu nombre o ID FIDE
-										<input name={ME_PARAM} value={meSearch} required autocomplete="name" />
+										<input name={ME_FIELD} value={meSearch} required autocomplete="name" />
 									</label>
 									<button class="button secondary" type="submit">
 										Cruzar con mis partidas
@@ -342,12 +347,14 @@ alternatives.push({
 										{meChoices.rows.length > 0 ? (
 											<>
 												<p>¿Cuál eres tú?</p>
+												{/* Un formulario para todos: cada nombre envía su ID. */}
+												<form method="post" action="#tu">
 												<ul>
 													{meChoices.rows.map((p) => (
 														<li>
-															<a href={chooseMeHref(p.fideId)} rel="nofollow">
+															<button class="link" type="submit" name={ME_FIELD} value={p.fideId}>
 																{displayName(p.name)}
-															</a>
+															</button>
 															{p.title && <span class="tag">{p.title}</span>}
 															{(p.ratingStd || p.birthYear) && (
 																<span class="muted">
@@ -359,6 +366,7 @@ alternatives.push({
 														</li>
 													))}
 												</ul>
+												</form>
 												{meChoices.more && (
 													<p class="muted small">
 														Hay más con ese nombre: añade otra palabra (el segundo apellido o el nombre) o escribe tu ID
@@ -614,6 +622,11 @@ alternatives.push({
 
 	.me-form {
 		margin-bottom: var(--space-2);
+	}
+
+	/* «Tú: … · No soy yo» es un formulario y no un párrafo: el mismo margen que tendría. */
+	.me-line {
+		margin-bottom: var(--space-4);
 	}
 
 	/*

@@ -12,7 +12,7 @@ import { searchGames } from '../../lib/db/games'
 import { getUpcomingGames } from '../../lib/db/pairings'
 import { getPlayer, getPlayerSummary, getPlayerTournaments } from '../../lib/db/players'
 import { displayName, formatNumber, formatPercent, formatPoints, formatRange } from '../../lib/format'
-import { ME_COOKIE, ME_COOKIE_OPTIONS, ME_PARAM, claimCookieAction, isOwn, meHref, resolveMe } from '../../lib/me'
+import { ME_COOKIE, ME_COOKIE_OPTIONS, ME_FIELD, claimCookieAction, isOwn, readMeField, resolveMe } from '../../lib/me'
 import { dossierHref, gameFilters, positiveInt, withParams } from '../../lib/params'
 
 const fideId = positiveInt(Astro.params.fideId)
@@ -20,16 +20,16 @@ const player = fideId === null ? null : await getPlayer(env.DB, fideId)
 if (fideId === null || !player) return Astro.rewrite('/404')
 
 const params = Astro.url.searchParams
-// «Soy yo» y «No soy yo» (lib/me.ts): guarda o borra la cookie y vuelve a la
-// misma URL sin `yo`, para que no quede en un enlace que se comparta.
-const me = resolveMe(params.get(ME_PARAM), Astro.cookies.get(ME_COOKIE)?.value)
-if (params.has(ME_PARAM)) {
+// «Soy yo» y «No soy yo» (lib/me.ts), por POST: guarda o borra la cookie y
+// vuelve a la misma página por GET.
+const field = await readMeField(Astro.request)
+const me = resolveMe(field, Astro.cookies.get(ME_COOKIE)?.value)
+if (field !== null) {
 	const cookie = claimCookieAction(me, fideId)
 	if (cookie === 'set') Astro.cookies.set(ME_COOKIE, String(fideId), ME_COOKIE_OPTIONS)
 	else if (cookie === 'delete') Astro.cookies.delete(ME_COOKIE, { path: '/' })
-	return Astro.redirect(withParams(Astro.url, { [ME_PARAM]: null }), 303)
+	return Astro.redirect(withParams(Astro.url, {}), 303)
 }
-const here = withParams(Astro.url, {})
 // En tu ficha (cookie yo), los textos te hablan a ti.
 const own = isOwn(me, fideId)
 const { color, result, eco, timeClass, page } = gameFilters(params)
@@ -109,26 +109,26 @@ const upcomingPrepares = own
 				{player.birthYear && ` · nacido en ${player.birthYear}`}
 				{player.inactive ? ' · inactivo' : ''}
 			</p>
-			<p class="page-meta me">
+			<form method="post" class="page-meta me">
 				{
 					own ? (
 						<>
 							Es tu ficha ·{' '}
-							<a href={meHref(here, null)} rel="nofollow">
+							<button class="link" type="submit" name={ME_FIELD} value="">
 								No soy yo
-							</a>
+							</button>
 						</>
 					) : (
 						<>
 							¿Es tu ficha?{' '}
-							<a href={meHref(here, fideId)} rel="nofollow">
+							<button class="link" type="submit" name={ME_FIELD} value={fideId}>
 								Soy yo
-							</a>
+							</button>
 							: la portada te avisará de tu próxima partida y el dossier cruzará tus partidas con las del rival.
 						</>
 					)
 				}
-			</p>
+			</form>
 			{
 				!player.inFideList && (
 					<p class="note">

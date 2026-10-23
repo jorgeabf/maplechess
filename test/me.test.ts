@@ -1,12 +1,29 @@
 import { describe, expect, it } from 'vitest'
-import { claimCookieAction, dropMeParam, isOwn, meCookieAction, meHref, meName, resolveMe } from '../src/lib/me'
+import { claimCookieAction, isOwn, meCookieAction, meName, readMeField, redirectsAfterForm, resolveMe } from '../src/lib/me'
 
-describe('resolveMe', () => {
-	it('el parámetro manda sobre la cookie', () => {
-		expect(resolveMe('9228291', '123')).toEqual({ fideId: 9228291, source: 'param' })
+describe('readMeField', () => {
+	const post = (body: string, type = 'application/x-www-form-urlencoded') =>
+		new Request('https://maplechess.test/jugadores/9228291', { method: 'POST', headers: { 'content-type': type }, body })
+
+	it('lee el campo yo de un formulario enviado por POST, también vacío', async () => {
+		expect(await readMeField(post('yo=9228291'))).toBe('9228291')
+		expect(await readMeField(post('yo='))).toBe('')
+		expect(await readMeField(post('yo=Garcia+Lopez'))).toBe('Garcia Lopez')
 	})
 
-	it('sin parámetro sigue la cookie', () => {
+	it('null en un GET, aunque lleve ?yo=, o en un POST sin el campo o que no es un formulario', async () => {
+		expect(await readMeField(new Request('https://maplechess.test/jugadores/9228291?yo=9228291'))).toBeNull()
+		expect(await readMeField(post('otro=1'))).toBeNull()
+		expect(await readMeField(post('{"yo":"9228291"}', 'application/json'))).toBeNull()
+	})
+})
+
+describe('resolveMe', () => {
+	it('el formulario manda sobre la cookie', () => {
+		expect(resolveMe('9228291', '123')).toEqual({ fideId: 9228291, source: 'form' })
+	})
+
+	it('sin formulario sigue la cookie', () => {
 		expect(resolveMe(null, '9228291')).toEqual({ fideId: 9228291, source: 'cookie' })
 		expect(resolveMe(null, undefined)).toEqual({ fideId: null, source: 'cookie' })
 	})
@@ -47,16 +64,16 @@ describe('meName', () => {
 describe('meCookieAction', () => {
 	const rival = 32057652
 
-	it('guarda un ID del parámetro que existe', () => {
-		expect(meCookieAction({ fideId: 9228291, source: 'param' }, rival, true)).toBe('set')
+	it('guarda un ID del formulario que existe', () => {
+		expect(meCookieAction({ fideId: 9228291, source: 'form' }, rival, true)).toBe('set')
 	})
 
 	it('no guarda el ID del rival ni uno que no existe', () => {
-		expect(meCookieAction({ fideId: rival, source: 'param' }, rival, true)).toBe('keep')
-		expect(meCookieAction({ fideId: 99999999, source: 'param' }, rival, false)).toBe('keep')
+		expect(meCookieAction({ fideId: rival, source: 'form' }, rival, true)).toBe('keep')
+		expect(meCookieAction({ fideId: 99999999, source: 'form' }, rival, false)).toBe('keep')
 	})
 
-	it('yo= vacío la borra', () => {
+	it('yo vacío la borra', () => {
 		expect(meCookieAction({ fideId: null, source: 'forget' }, rival, false)).toBe('delete')
 	})
 
@@ -78,7 +95,7 @@ describe('claimCookieAction', () => {
 	const own = 9228291
 
 	it('«Soy yo» guarda el ID de la ficha', () => {
-		expect(claimCookieAction({ fideId: own, source: 'param' }, own)).toBe('set')
+		expect(claimCookieAction({ fideId: own, source: 'form' }, own)).toBe('set')
 	})
 
 	it('«No soy yo» la borra', () => {
@@ -86,44 +103,37 @@ describe('claimCookieAction', () => {
 	})
 
 	it('otro ID o uno que no vale no tocan la cookie', () => {
-		expect(claimCookieAction({ fideId: 32057652, source: 'param' }, own)).toBe('keep')
+		expect(claimCookieAction({ fideId: 32057652, source: 'form' }, own)).toBe('keep')
 		expect(claimCookieAction(resolveMe('abc', '32057652'), own)).toBe('keep')
 		expect(claimCookieAction(resolveMe('abc', String(own)), own)).toBe('keep')
 	})
 })
 
-describe('dropMeParam', () => {
+describe('redirectsAfterForm', () => {
 	const rival = 32057652
 
-	it('vuelve a la URL sin yo cuando ya está en la cookie: guardado o borrado', () => {
+	it('vuelve a la página por GET cuando ya está en la cookie: guardado o borrado', () => {
 		const me = resolveMe('9228291', null)
-		expect(dropMeParam(me, meCookieAction(me, rival, true))).toBe(true)
+		expect(redirectsAfterForm(me, meCookieAction(me, rival, true))).toBe(true)
 		const forget = resolveMe('', '9228291')
-		expect(dropMeParam(forget, meCookieAction(forget, rival, true))).toBe(true)
+		expect(redirectsAfterForm(forget, meCookieAction(forget, rival, true))).toBe(true)
 	})
 
-	it('se queda con yo si no se guarda: ID que no existe o el del rival', () => {
+	it('responde al POST si no se guarda: ID que no existe o el del rival', () => {
 		const missing = resolveMe('99999999', null)
-		expect(dropMeParam(missing, meCookieAction(missing, rival, false))).toBe(false)
+		expect(redirectsAfterForm(missing, meCookieAction(missing, rival, false))).toBe(false)
 		const self = resolveMe(String(rival), null)
-		expect(dropMeParam(self, meCookieAction(self, rival, true))).toBe(false)
+		expect(redirectsAfterForm(self, meCookieAction(self, rival, true))).toBe(false)
 	})
 
-	it('se queda con yo si es un nombre, aunque se borre una cookie que ya no vale', () => {
+	it('responde al POST si es un nombre, aunque se borre una cookie que ya no vale', () => {
 		const name = resolveMe('Garcia', '99999999')
 		expect(meCookieAction(name, rival, false)).toBe('delete')
-		expect(dropMeParam(name, 'delete')).toBe(false)
+		expect(redirectsAfterForm(name, 'delete')).toBe(false)
 	})
 
-	it('sin yo no hay nada que quitar', () => {
-		expect(dropMeParam(resolveMe(null, '9228291'), 'keep')).toBe(false)
-	})
-})
-
-describe('meHref', () => {
-	it('añade tu ID o yo= vacío, con ? o con &', () => {
-		expect(meHref('/jugadores/9228291', 9228291)).toBe('/jugadores/9228291?yo=9228291')
-		expect(meHref('/jugadores/9228291?color=white', null)).toBe('/jugadores/9228291?color=white&yo=')
+	it('sin formulario no hay a dónde volver', () => {
+		expect(redirectsAfterForm(resolveMe(null, '9228291'), 'keep')).toBe(false)
 	})
 })
 
@@ -136,7 +146,7 @@ describe('isOwn', () => {
 		expect(isOwn(resolveMe(null, undefined), own)).toBe(false)
 	})
 
-	it('no por llevar su ID en la URL', () => {
+	it('no por llevar su ID en el formulario', () => {
 		expect(isOwn(resolveMe(String(own), null), own)).toBe(false)
 	})
 })
