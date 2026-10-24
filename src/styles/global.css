@@ -619,12 +619,27 @@
 		box-shadow: var(--shadow-m);
 	}
 
-	/* Tablas de datos */
+	/*
+	 * Tablas de datos. Si la tabla no cabe (en el móvil, los desempates de la
+	 * clasificación), una sombra en el borde dice que sigue por ese lado. Las
+	 * sombras van fijas en los bordes y, encima, dos tapas del color de la
+	 * superficie se desplazan con la tabla (local) y las cubren al llegar a cada
+	 * extremo; si la tabla cabe, las dos. Safari lo hace bien desde la 15.4: de
+	 * la 13 a la 15.3 la sombra no seguía el desplazamiento. Es de
+	 * --border-strong, 3:1 sobre la superficie, como el borde de un campo. Va
+	 * debajo de las celdas, así que una con fondo (la fila de un equipo) la tapa.
+	 * En alto contraste el sistema quita los degradados.
+	 */
 	.table-wrap {
 		overflow-x: auto;
 		border: 1px solid var(--border);
 		border-radius: var(--radius-l);
-		background: var(--surface);
+		background:
+			linear-gradient(to right, var(--surface) var(--space-3), transparent) left / var(--space-6) 100% no-repeat local,
+			linear-gradient(to left, var(--surface) var(--space-3), transparent) right / var(--space-6) 100% no-repeat local,
+			linear-gradient(to right, var(--border-strong), transparent) left / var(--space-3) 100% no-repeat,
+			linear-gradient(to left, var(--border-strong), transparent) right / var(--space-3) 100% no-repeat,
+			var(--surface);
 	}
 
 	.data-table {
