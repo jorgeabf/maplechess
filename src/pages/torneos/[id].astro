@@ -267,7 +267,7 @@ const standingsNote =
 				{fromLichess && <p class="muted">Los de las partidas de arriba, numerados por ELO.</p>}
 				{
 					participants.length > 0 ? (
-						<div class="table-wrap compact">
+						<div class="table-wrap compact participants">
 							<table class="data-table">
 								<thead>
 									<tr>
@@ -289,7 +289,8 @@ const standingsNote =
 										)}
 										{players.map((p) => (
 											<tr>
-												<td class="end num">{p.startRank}</td>
+												{/* Apilada en una pantalla muy estrecha: cada cifra lleva su rótulo, sólo si la hay. */}
+												<td class="end num"><span class="cell-label" aria-hidden="true">{isTeam ? 'Tablero ' : 'Nº '}</span>{p.startRank}</td>
 												<td class="name">
 													<PlayerName name={p.name} title={p.title} fideId={p.fideId} />
 													{p.fideId && p.hasDossier === 1 && (
@@ -303,8 +304,8 @@ const standingsNote =
 													)}
 												</td>
 												<td>{p.fed}</td>
-												<td class="end num">{p.rating}</td>
-												<td class="end num">{p.fideId}</td>
+												<td class="end num">{p.rating && <><span class="cell-label" aria-hidden="true">ELO </span>{p.rating}</>}</td>
+												<td class="end num">{p.fideId && <><span class="cell-label" aria-hidden="true">FIDE ID </span>{p.fideId}</>}</td>
 											</tr>
 										))}
 									</tbody>
@@ -331,7 +332,8 @@ const standingsNote =
 	 * parte línea (su mínimo es la palabra más larga) y, en un hueco de menos de
 	 * 26rem, el relleno se estrecha. A 375 px la de participantes pedía 544 px
 	 * de 342 y el ELO quedaba fuera; así se ven el número, el nombre, la
-	 * federación y el ELO, y sólo el FIDE ID puede quedar tras el scroll. En la
+	 * federación y el ELO, y sólo el FIDE ID puede quedar tras el scroll (más
+	 * estrecho, la de participantes se apila: ver abajo). En la
 	 * clasificación, el puesto, el nombre y los puntos; los desempates, detrás.
 	 */
 	.compact {
@@ -359,6 +361,72 @@ const standingsNote =
 	@container (width < 30rem) {
 		.standings td.name {
 			min-width: min(10rem, 45cqi);
+		}
+	}
+
+	/*
+	 * Participantes en una pantalla muy estrecha (250 px, o 375 con la letra al
+	 * 150 %): ni sin el FIDE ID cabían el número, el nombre, la federación y el
+	 * ELO, que piden de 190 a 279 px (30 torneos medidos el 24-oct-2026), y el
+	 * ELO quedaba tras el scroll. Por debajo de 17,5rem cada jugador pasa a un
+	 * bloque, como en los listados apilados (.stack): el nombre a todo el ancho
+	 * y, debajo y en pequeño, las demás celdas, cada cifra con su rótulo. La
+	 * fila de cada equipo también pasa a bloque: como fila de tabla, su colspan
+	 * daría cinco columnas a la tabla y los jugadores irían en la primera.
+	 */
+	@container (width < 17.5rem) {
+		.participants thead {
+			position: absolute;
+			inline-size: 1px;
+			block-size: 1px;
+			overflow: hidden;
+			clip-path: inset(50%);
+			white-space: nowrap;
+		}
+
+		.participants tr,
+		.participants .group-row > th {
+			display: block;
+		}
+
+		.participants tr:not(.group-row) {
+			display: flex;
+			flex-wrap: wrap;
+			align-items: baseline;
+			gap: var(--space-1) var(--space-3);
+			padding: var(--space-2);
+			border-bottom: 1px solid var(--border);
+		}
+
+		.participants tbody:last-child > tr:last-child {
+			border-bottom: 0;
+		}
+
+		.participants td {
+			padding: 0;
+			border-bottom: 0;
+			font-size: var(--text-xs);
+			white-space: normal;
+		}
+
+		.participants td.name {
+			order: -1;
+			flex-basis: 100%;
+			font-size: var(--text-s);
+		}
+
+		/* La federación no lleva rótulo: en gris, como las fechas en .stack. */
+		.participants td:not(.name, :has(.cell-label)) {
+			color: var(--text-muted);
+		}
+
+		.participants td:empty {
+			display: none;
+		}
+
+		.participants .cell-label {
+			display: inline;
+			color: var(--text-muted);
 		}
 	}
 </style>
