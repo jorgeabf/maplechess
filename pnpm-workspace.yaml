@@ -2,3 +2,16 @@ allowBuilds:
   # Comprueban/enlazan el binario de su plataforma; los usan wrangler y Vite.
   esbuild: true
   workerd: true
+
+# Versiones con avisos de seguridad que traen fijadas las herramientas de
+# Cloudflare, sin una versión publicada que las suba (24-oct-2026). Sólo llegan
+# a wrangler, a `pnpm dev` y a los tests, no al Worker. Cada regla casa sólo con
+# las versiones vulnerables, así que deja de aplicarse sola cuando el paquete
+# sube la suya: entonces se quita.
+overrides:
+  # miniflare 5.20261019.2-beta y anteriores fijan undici 7.29.1
+  # (GHSA-xjj6-f33q-929c, GHSA-4qv8-2p9j-2685, GHSA-f72v-6w45-q472).
+  'miniflare>undici@<7.30.1': 7.30.1
+  # @cloudflare/vitest-plugin 1.4.7 y anteriores fijan zod 4.6.5
+  # (GHSA-mrhx-c7xc-m3w5). La 4.6.7 es la que ya trae Astro.
+  '@cloudflare/vitest-plugin>zod@<4.6.6': 4.6.7
