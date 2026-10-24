@@ -248,8 +248,11 @@
 		--chart-rapid: light-dark(#a0612a, #e3a46b);
 		--chart-blitz: light-dark(#7a3f8f, #c99ae0);
 
-		/* Sombra: sólo para lo que flota sobre la página (el buscador, el aviso de copiado). */
+		/* Sombra: sólo para lo que flota sobre la página (el buscador, el aviso de copiado, el diálogo de coronar). */
 		--shadow-m: 0 4px 16px light-dark(rgb(40 30 10 / 0.1), rgb(0 0 0 / 0.45));
+
+		/* La página atenuada tras un diálogo modal (el de coronar), del tono de la sombra. */
+		--backdrop: light-dark(rgb(40 30 10 / 0.35), rgb(0 0 0 / 0.6));
 
 		font-family: var(--font-sans);
 		font-size: 100%;

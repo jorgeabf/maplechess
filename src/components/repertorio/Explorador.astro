@@ -7,6 +7,7 @@ import '../visor/board.css'
 import { OPENING_MOVES_PLIES } from '../../lib/chess/pgn'
 import type { Color, Exploration, Line } from '../../lib/chess/repertoire'
 import { formatDate, formatMove, formatNumber, formatPercent } from '../../lib/format'
+import Coronacion from '../visor/Coronacion.astro'
 import PanelMotor from '../visor/PanelMotor.astro'
 import ScriptTableros from '../visor/ScriptTableros.astro'
 import ScoreBar from './ScoreBar.astro'
@@ -145,6 +146,7 @@ const positionHref = (moves: string[]) => `${lineHref(moves)}#${ANCHOR}`
 	    bajo el tablero. Se ordena en el DOM y no con order, para que el
 	    tabulador siga el orden visual. */}
 	<PanelMotor />
+	<Coronacion />
 </explorador-repertorio>
 
 <ScriptTableros />

@@ -43,8 +43,13 @@ describe('playLine', () => {
 })
 
 describe('boardMove', () => {
-	it('corona dama al llegar a la última fila', () => {
-		expect(boardMove(CASTLE, 'a7', 'a8')).toMatchObject({ san: 'a8=Q+', uci: 'a7a8q' })
+	it('corona a la pieza elegida', () => {
+		expect(boardMove(CASTLE, 'a7', 'a8', 'queen')).toMatchObject({ san: 'a8=Q+', uci: 'a7a8q' })
+		expect(boardMove(CASTLE, 'a7', 'a8', 'knight')).toMatchObject({ san: 'a8=N', uci: 'a7a8n' })
+	})
+
+	it('sin pieza, la coronación no es legal', () => {
+		expect(boardMove(CASTLE, 'a7', 'a8')).toBeNull()
 	})
 
 	it('null si la jugada no es legal', () => {

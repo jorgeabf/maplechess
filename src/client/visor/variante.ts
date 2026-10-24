@@ -5,8 +5,9 @@
 import { normalizeMove } from 'chessops/chess'
 import { makeFen } from 'chessops/fen'
 import { makeSan } from 'chessops/san'
-import { parseSquare, parseUci } from 'chessops/util'
+import { parseUci, roleToChar } from 'chessops/util'
 import { positionOf, standardUci } from '../../lib/chess/uci'
+import type { PromotionRole } from './coronacion'
 
 /** Una jugada y la posición que deja, con lo que necesitan la lista y el tablero. */
 export interface LineMove {
@@ -44,13 +45,11 @@ export function playLine(fen: string, ucis: string[]): LineMove[] {
 
 /**
  * La jugada hecha en el tablero, de la casilla `orig` a `dest`, o null si no es
- * legal. Un peón que llega a la última fila corona dama: para probar una idea
- * basta, como en el explorador del repertorio.
+ * legal. Un peón que llega a la última fila corona a `promotion`, la pieza que
+ * se ha elegido en el diálogo (coronacion.ts); sin ella, la jugada no es legal.
  */
-export function boardMove(fen: string, orig: string, dest: string): LineMove | null {
-	const from = parseSquare(orig)
-	const promotes = from !== undefined && positionOf(fen)?.board.getRole(from) === 'pawn' && /[18]$/.test(dest)
-	return playLine(fen, [`${orig}${dest}${promotes ? 'q' : ''}`])[0] ?? null
+export function boardMove(fen: string, orig: string, dest: string, promotion?: PromotionRole): LineMove | null {
+	return playLine(fen, [`${orig}${dest}${promotion ? roleToChar(promotion) : ''}`])[0] ?? null
 }
 
 /**
