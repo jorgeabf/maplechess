@@ -246,38 +246,67 @@ function erosionar(mascara, ancho, alto) {
 
 /**
  * Una pieza pintada a `px` píxeles de lado, lista para medirla sobre
- * cualquier casilla: los píxeles, la silueta (lo que cubre al menos la mitad
- * del píxel) y el cuerpo, la silueta sin el anillo exterior del grosor del
- * contorno.
+ * cualquier casilla:
+ * - los píxeles;
+ * - la silueta: lo que cubre al menos la mitad del píxel;
+ * - su orilla: los píxeles de la silueta que tocan el exterior;
+ * - el cuerpo: la silueta sin un anillo del grosor del contorno;
+ * - ese grosor en píxeles, redondeado hacia arriba (el radio en que se busca
+ *   el borde).
  */
 function pintar(svg, px, contorno) {
-	const imagen = new Resvg(svg, { fitTo: { mode: 'width', value: px } }).render()
-	const { width: ancho, height: alto, pixels } = imagen
+	const { width: ancho, height: alto, pixels } = new Resvg(svg, { fitTo: { mode: 'width', value: px } }).render()
 	const silueta = new Uint8Array(ancho * alto)
 	for (let i = 0; i < silueta.length; i++) silueta[i] = pixels[i * 4 + 3] >= 128 ? 1 : 0
 	let cuerpo = silueta
-	const anillo = Math.max(1, Math.round((contorno * px) / LADO))
-	for (let i = 0; i < anillo; i++) cuerpo = erosionar(cuerpo, ancho, alto)
-	return { pixels, silueta, cuerpo }
+	for (let i = 0; i < Math.max(1, Math.round((contorno * px) / LADO)); i++) cuerpo = erosionar(cuerpo, ancho, alto)
+	const fuera = (x, y) => x < 0 || y < 0 || x >= ancho || y >= alto || !silueta[y * ancho + x]
+	const orilla = []
+	for (let y = 0; y < alto; y++) {
+		for (let x = 0; x < ancho; x++) {
+			if (silueta[y * ancho + x] && (fuera(x - 1, y) || fuera(x + 1, y) || fuera(x, y - 1) || fuera(x, y + 1))) orilla.push(y * ancho + x)
+		}
+	}
+	const radio = Math.max(1, Math.ceil((contorno * px) / LADO))
+	return { pixels, ancho, alto, silueta, cuerpo, orilla, radio }
 }
 
 /**
- * Contraste de una pieza pintada sobre una casilla: la mediana del borde (el
- * anillo exterior) y la del cuerpo frente a la casilla. Una pieza se ve si
- * destaca su borde o su cuerpo: una blanca sobre el nogal se ve por el
- * relleno, no por el contorno de tinta. Los píxeles se componen sobre la
- * casilla como hace el navegador, en sRGB.
+ * Contraste de una pieza pintada sobre una casilla: el del borde y el del
+ * cuerpo frente a la casilla. Una pieza se ve si destaca su borde o su
+ * cuerpo: una blanca sobre el nogal se ve por el relleno, no por el contorno
+ * de tinta.
+ * - El borde: en cada punto de la orilla, el mejor contraste a menos de un
+ *   grosor de contorno; luego, la mediana a lo largo de la silueta. Dice si
+ *   hay una línea que destaca alrededor de la pieza, caiga donde caiga en la
+ *   rejilla de píxeles: medir un anillo fijo recogía tinta por dentro y
+ *   suavizado por fuera, y el resultado dependía de dónde cayera cada borde.
+ * - El cuerpo: la mediana de lo que queda dentro del anillo.
+ * Los píxeles se componen sobre la casilla como hace el navegador, en sRGB.
+ * resvg los da premultiplicados (un blanco que cubre medio píxel sale 128,
+ * 128, 128, 128): el color ya lleva el alfa, y sólo la casilla se multiplica
+ * por lo que queda.
  */
-function medirSobre({ pixels, silueta, cuerpo }, casilla) {
+function medirSobre({ pixels, ancho, alto, silueta, cuerpo, orilla, radio }, casilla) {
 	const fondo = rgba(casilla)
-	const borde = []
+	const valores = new Float32Array(silueta.length)
 	const dentro = []
 	for (let i = 0; i < silueta.length; i++) {
 		if (!silueta[i]) continue
 		const a = pixels[i * 4 + 3] / 255
-		const color = [0, 1, 2].map((k) => pixels[i * 4 + k] * a + fondo[k] * (1 - a))
-		;(cuerpo[i] ? dentro : borde).push(contraste(color, fondo))
+		valores[i] = contraste([0, 1, 2].map((k) => pixels[i * 4 + k] + fondo[k] * (1 - a)), fondo)
+		if (cuerpo[i]) dentro.push(valores[i])
 	}
+	const borde = orilla.map((i) => {
+		const [x0, y0] = [i % ancho, Math.floor(i / ancho)]
+		let mejor = 0
+		for (let y = Math.max(0, y0 - radio); y <= Math.min(alto - 1, y0 + radio); y++) {
+			for (let x = Math.max(0, x0 - radio); x <= Math.min(ancho - 1, x0 + radio); x++) {
+				if (silueta[y * ancho + x] && valores[y * ancho + x] > mejor) mejor = valores[y * ancho + x]
+			}
+		}
+		return mejor
+	})
 	return { borde: mediana(borde), cuerpo: mediana(dentro) }
 }
 
