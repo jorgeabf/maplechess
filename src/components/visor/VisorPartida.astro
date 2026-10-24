@@ -455,12 +455,14 @@ const hasVariations = tree.nodes.some((n) => n.children.length > 1)
 	/*
 	 * En dos columnas la lista acaba donde el tablero: si no, bajaba más que él
 	 * y la jugada actual (al cargar, la última) quedaba bajo el pliegue. Con
-	 * block-size: 0 ni el recuadro ni la lista aportan su alto a la fila, que
-	 * mide lo que la columna del tablero o, si es más, el motor, el gráfico y
-	 * 12rem de lista (el mínimo automático del recuadro, que no recorta). La
-	 * columna lateral se estira hasta ahí y la lista llena lo que quede. Al
-	 * encender el motor, su panel crece y la lista encoge lo mismo. Sin
-	 * JavaScript no hay tablero y queda la de arriba.
+	 * block-size: 0 la lista no aporta su alto a la fila, que mide lo que la
+	 * columna del tablero o, si es más, el motor, el gráfico y 12rem de lista:
+	 * el mínimo automático del recuadro, que es su contenido porque parte de
+	 * flex-basis: 0 y no de block-size: 0 (con block-size, su mínimo era 0 y,
+	 * con el motor encendido, la lista se salía del recuadro: 17 px a 1280×720
+	 * y 135 a 864×600). La columna lateral se estira hasta ahí y la lista
+	 * llena lo que quede. Al encender el motor, su panel crece y la lista
+	 * encoge lo mismo. Sin JavaScript no hay tablero y queda la de arriba.
 	 */
 	@media (width >= 54rem) and (scripting: enabled), (width >= 40rem) and (orientation: landscape) and (scripting: enabled) {
 		.side {
@@ -468,8 +470,7 @@ const hasVariations = tree.nodes.some((n) => n.children.length > 1)
 		}
 
 		.analysis {
-			flex-grow: 1;
-			block-size: 0;
+			flex: 1 1 0;
 		}
 
 		.moves {
