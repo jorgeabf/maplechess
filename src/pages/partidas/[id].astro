@@ -7,7 +7,7 @@ import Base from '../../layouts/Base.astro'
 import { buildTree } from '../../lib/chess/movetree'
 import { getAdjacentGames, getGame } from '../../lib/db/games'
 import { displayName, formatDate, formatResult } from '../../lib/format'
-import { CC_BY_SA, licensedPgn } from '../../lib/licenses'
+import { CC_BY_SA, licensedPgn, lichessUrl } from '../../lib/licenses'
 import { ME_COOKIE, isOwn, resolveMe } from '../../lib/me'
 import { backTarget, boardColor, positiveInt, type BackKind } from '../../lib/params'
 import { sourceUrl } from '../../lib/urls'
@@ -30,16 +30,15 @@ const black = {
 	elo: game.blackElo,
 	title: headers.BlackTitle ?? null
 }
-// Página de la partida en su fuente, para el crédito de debajo: en lichess la
-// da la cabecera GameURL; en info64 cada partida tiene su página
-// /{torneo}/{ronda}/{tablero}. La cabecera viene de fuera: sólo si es de lichess.
-// Y sólo se enlaza si es de una fuente (sourceUrl).
+// Página de la partida en sus fuentes, para el crédito de debajo. La de lichess
+// sale de sus cabeceras (lichessUrl), que también dicen si la partida es de
+// lichess, como en el PGN que se descarga: también la de info64 que viene de
+// lichess. En info64 cada partida tiene su página /{torneo}/{ronda}/{tablero}.
+// Sólo se enlaza si es de una fuente (sourceUrl).
+const fromLichess = lichessUrl(game.pgn)
+const lichessHref = sourceUrl(fromLichess)
 const sourceHref = sourceUrl(
-	game.gamesSource === 'lichess' && headers.GameURL?.startsWith('https://lichess.org/')
-		? headers.GameURL
-		: game.tournamentSource === 'info64'
-			? `${game.tournamentUrl}/${game.round}/${game.board}`
-			: game.tournamentUrl
+	game.tournamentSource === 'info64' ? `${game.tournamentUrl}/${game.round}/${game.board}` : game.tournamentUrl
 )
 const title = `${displayName(game.whiteName)} – ${displayName(game.blackName)}`
 // Lado del tablero: el que pide el enlace (desde la ficha, el dossier o el
@@ -148,12 +147,17 @@ const backLabel = back && `← Volver ${(ownBack && OWN_BACK_LABELS[back.kind]) 
 	</VisorPartida>
 	<p class="muted credit">
 		{
-			game.gamesSource === 'lichess' ? (
+			fromLichess ? (
 				<>
-					Partida de una {sourceHref ? <a href={sourceHref}>retransmisión de lichess</a> : 'retransmisión de lichess'}, con
-					licencia{' '}
-					<a href={CC_BY_SA} rel="license noopener">CC BY-SA 4.0</a>. Aquí se han completado sus cabeceras
-					(nombres, FIDE ID, ELO y apertura).
+					Partida de una {lichessHref ? <a href={lichessHref}>retransmisión de lichess</a> : 'retransmisión de lichess'}
+					{game.gamesSource === 'info64' && (
+						<>
+							{' '}
+							publicada en {sourceHref ? <a href={sourceHref}>info64</a> : 'info64'} (FEDA)
+						</>
+					)}
+					, con licencia <a href={CC_BY_SA} rel="license noopener">CC BY-SA 4.0</a>. Aquí se han completado sus
+					cabeceras (nombres, FIDE ID, ELO y apertura).
 				</>
 			) : game.tournamentSource === 'info64' ? (
 				<>
