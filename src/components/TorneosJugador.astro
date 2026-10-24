@@ -1,0 +1,95 @@
+---
+// Tabla de torneos de la ficha. La ficha la usa dos veces: los más recientes
+// a la vista y los anteriores plegados.
+import type { ParticipationRow, TournamentScore } from '../lib/db/players'
+import { formatNumber, formatPoints, formatRange } from '../lib/format'
+
+interface Props {
+	tournaments: ParticipationRow[]
+	/** Partidas con PGN y puntos en cada torneo (getPlayerSummary). */
+	scores: Map<number, TournamentScore>
+}
+
+const { tournaments, scores } = Astro.props
+---
+
+<div class="table-wrap stack tournaments">
+	<table class="data-table">
+		<thead>
+			<tr>
+				<th scope="col">Torneo</th>
+				<th scope="col">Fechas</th>
+				<th scope="col">Lugar</th>
+				<th scope="col" class="end">ELO</th>
+				<th scope="col" class="end">Nº<br />inicial</th>
+				<th scope="col" class="end">Partidas<br />con PGN</th>
+				<th scope="col" class="end">Puntos</th>
+			</tr>
+		</thead>
+		<tbody>
+			{
+				tournaments.map((t) => {
+					const score = scores.get(t.tournamentId)
+					return (
+						<tr>
+							<td class="wrap">
+								<a href={`/torneos/${t.tournamentId}`}>{t.tournamentName}</a>
+								{/* En los torneos por equipos, el número es el tablero: va con el equipo. */}
+								{t.team && (
+									<span class="team">
+										<span class="tag">Equipos</span>{' '}
+										<span class="muted">
+											{t.team}
+											{t.startRank ? ` · tablero ${t.startRank}` : null}
+										</span>
+									</span>
+								)}
+							</td>
+							<td class="num">{formatRange(t.startDate, t.endDate)}</td>
+							<td>{t.city}</td>
+							{/* Apilada en el móvil (.stack): cada cifra lleva su rótulo, sólo si la hay. */}
+							<td class="end num stat">{t.rating && <><span class="cell-label" aria-hidden="true">ELO </span>{t.rating}</>}</td>
+							<td class="end num stat">{!t.team && t.startRank ? <><span class="cell-label" aria-hidden="true">Nº inicial </span>{t.startRank}</> : null}</td>
+							<td class="end num stat">{score ? <><span class="cell-label" aria-hidden="true">Partidas con PGN </span>{formatNumber(score.games)}</> : null}</td>
+							<td class="end num stat">{score?.decided ? <><span class="cell-label" aria-hidden="true">Puntos </span>{`${formatPoints(score.points)} / ${score.decided}`}</> : null}</td>
+						</tr>
+					)
+				})
+			}
+		</tbody>
+	</table>
+</div>
+
+<style>
+	/*
+	 * «Nº inicial» y «Partidas con PGN» van en dos líneas (br): en una, le
+	 * quitaban unos 100 px a la columna del torneo, que partía más nombres. El
+	 * lector de pantalla los oye igual. Todos los rótulos se apoyan en la raya.
+	 */
+	.tournaments thead th {
+		vertical-align: bottom;
+	}
+
+	/* En los torneos por equipos, debajo del nombre del torneo: con qué equipo jugó. */
+	.team {
+		display: block;
+	}
+
+	/*
+	 * Torneos apilados en el móvil (.stack, en global.css): sus cifras (ELO,
+	 * número, partidas y puntos) van en su propia línea, debajo de las fechas y
+	 * el lugar. El salto es el ::after de la fila, un elemento de todo el ancho
+	 * que order pone entre los dos grupos; el orden de lectura no cambia.
+	 */
+	@container (width < 60rem) {
+		.tournaments tr::after {
+			content: '';
+			flex-basis: 100%;
+			order: 1;
+		}
+
+		.tournaments .stat {
+			order: 2;
+		}
+	}
+</style>
