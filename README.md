@@ -142,7 +142,7 @@ La ingesta es educada con las fuentes: como mucho una petición por segundo a in
 - [Astro 7](https://astro.build) con renderizado en servidor sobre **Cloudflare Workers**; **D1**, **Workflows** y **Cron Triggers**.
 - [chessops](https://github.com/niklasf/chessops) (reglas, PGN y SAN), [chessground](https://github.com/lichess-org/chessground) (tablero, con piezas propias) y [Stockfish](https://stockfishchess.org) 19.
 - TypeScript, vitest dentro de workerd y eslint.
-- Tipografía: las fuentes del sistema, salvo en los titulares, que usan [Source Serif 4](https://github.com/adobe-fonts/source-serif) (OFL), recortada a 17 KB y servida desde el propio sitio.
+- Tipografía: las fuentes del sistema, salvo en los titulares, que usan [Source Serif 4](https://github.com/adobe-fonts/source-serif) (OFL), recortada a 17 KB y servida desde el propio sitio. Las figuras de la notación (♘f3 en lugar de Nf3) son una fuente propia de 1,2 KB, hecha con las piezas del tablero.
 
 ## Desarrollo
 
