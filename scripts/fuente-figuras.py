@@ -51,18 +51,21 @@ FAMILY = "Figuras"
 # texto. Igual que el unicode-range del @font-face.
 UNICODES = "U+0042,U+004B,U+004E,U+0051,U+0052"
 UPM = 1000
-# Alto de la figura más alta, en milésimas de em: algo más que las mayúsculas
-# de las fuentes de texto (700 en Segoe UI, 670 en Titulares), como el rey en
-# los libros. Lo que deja a cada lado, lo justo para que «Nf3» o «exf8=Q+» se
-# lean como una palabra. Elegidos con Jorge el 24-oct-2026, sobre una lista
-# de jugadas real, entre 700, 760 y 820 de alto con 30, 40 y 55 de margen: con
-# 700, a 14 px las figuras se empastaban, y con 820 pesaban más que la jugada.
+# Alto de la figura más alta, en milésimas de em: bastante más que las
+# mayúsculas de las fuentes de texto (700 en Segoe UI, 670 en Titulares), como
+# el rey en los libros. Lo que deja a cada lado, lo justo para que «Nf3» o
+# «exf8=Q+» se lean como una palabra. Elegidos con Jorge el 24-oct-2026 sobre
+# una lista de jugadas real: primero 760 de alto y 40 de margen, entre 700, 760
+# y 820 con 30, 40 y 55; y, con las figuras definitivas, que a 760 se quedaban
+# pequeñas en el escritorio (el rey del motor, a unos 10 px), 880 entre 760,
+# 820, 880 y 940. Ninguno sube la altura de la línea: el hueco más justo sobre
+# la línea base, el de las líneas del dossier, es de 1,1 em.
 # Las demás miden HEIGHT por la raíz cuadrada de su alto entre el de la más
 # alta, medidos en la tinta: guardan el orden de alturas del tablero con menos
 # diferencia, y la torre, que con una escala común se quedaba en unos tres
 # cuartos del rey, pasa a un 85 %. Elegido por Jorge el 24-oct-2026 entre esa
 # escala común, ésta (la intermedia) y todas a HEIGHT.
-HEIGHT = 760
+HEIGHT = 880
 SIDE = 40
 # Altura sobre y bajo la línea base. No mueven nada: la altura de la línea la
 # da la fuente de texto (ver UNICODES).
