@@ -2,8 +2,9 @@
 // distingue a los homónimos con su año de nacimiento («Apellidos, Nombre
 // 2009»): info64 en el ranking, las plantillas y los emparejamientos, y de ahí
 // las partidas; lichess en sus jugadores y cabeceras. El año de quien puede ser
-// menor no se guarda en ningún nombre, venga de donde venga. Y de quien ha
-// pedido que se le retire no se guarda ni el nombre (RETIRED_NAME).
+// menor no se guarda en ningún nombre, venga de donde venga, ni el de quien ha
+// pedido ocultarlo (tabla ocultaciones). Y de quien ha pedido que se le retire
+// no se guarda ni el nombre (RETIRED_NAME).
 import { normalizeName } from '../lib/chess/names'
 import { setPgnTags } from '../lib/chess/pgn'
 import { madridYear } from '../lib/dates'
@@ -77,4 +78,35 @@ export function isRetired(retired: Retired, fideId: number | null, name: string)
  */
 export function anonymizePgn(pgn: string, color: 'White' | 'Black'): string {
 	return setPgnTags(pgn, { [color]: RETIRED_NAME, [`${color}FideId`]: null, [`${color}Title`]: null })
+}
+
+// --- Ocultar el año (tabla ocultaciones, migración 0015) ---
+
+/**
+ * Quien ha pedido ocultar su año de nacimiento: sus FIDE ID y, para
+ * reconocerle donde va sin él, su nombre con el año (yearKey).
+ */
+export interface HiddenYears {
+	ids: ReadonlySet<number>
+	names: ReadonlySet<string>
+}
+
+/**
+ * Un homónimo: su nombre sin el año (nameKey) y el año, que es el de
+ * nacimiento. Es lo que la FIDE usa para distinguirlo.
+ */
+export function yearKey(name: string, birthYear: number): string {
+	return `${nameKey(name)} ${birthYear}`
+}
+
+/**
+ * El nombre sin el año de homónimo si es de quien ha pedido ocultarlo; si no,
+ * el mismo. Como la retirada: con FIDE ID, sólo por él; sin él, por el nombre
+ * y el año que lleva. Va después de cruzar, como publicName.
+ */
+export function withoutHiddenYear(hidden: HiddenYears, fideId: number | null, name: string): string {
+	const year = homonymYear(name)
+	if (year === null) return name
+	const isHidden = fideId !== null ? hidden.ids.has(fideId) : hidden.names.has(yearKey(name, year))
+	return isHidden ? withoutHomonymYear(name) : name
 }

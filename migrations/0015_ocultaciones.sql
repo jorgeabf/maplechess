@@ -1,9 +1,10 @@
 -- Jugadores que han pedido que no se vea su sexo o su año de nacimiento
 -- (oposición, art. 21 RGPD). La FIDE los publica y la lista los trae, así que
 -- la importación los aplica al escribir cada jugador: el sexo se guarda NULL y
--- el año, tal cual pero marcado en birth_year_hidden. GAMES_REPROCESS aplica
--- la tabla a lo ya guardado. Se rellena a mano (ver CLAUDE.md, «Ocultar el
--- sexo o el año»).
+-- el año, tal cual pero marcado en birth_year_hidden. El año de homónimo del
+-- nombre («…, Nombre 1980») se quita de todo nombre que se guarda, como el de
+-- los menores. GAMES_REPROCESS aplica la tabla a lo ya guardado. Se rellena a
+-- mano (ver CLAUDE.md, «Ocultar el sexo o el año»).
 CREATE TABLE ocultaciones (
 	id INTEGER PRIMARY KEY,
 	-- La petición en el registro de la guía de operación (P-AAAA-NNN).
