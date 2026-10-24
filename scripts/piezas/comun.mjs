@@ -43,6 +43,15 @@ export const LINEA = 3
 export const SOMBRA = 2
 
 /*
+ * Con el perfil, la negra asoma 4 unidades por fuera de su forma (medio
+ * filete y el perfil) y la blanca, 2 (medio contorno): la negra salía un 7 %
+ * más ancha y un 5 % más alta. Se encoge sobre el centro de la línea base lo
+ * que crece una pieza típica de la familia, de unos 70 de lado: con el
+ * perfil de 2, al 94,6 %. Así las dos ocupan lo mismo en la casilla.
+ */
+const TIPICA = 70
+
+/*
  * Esquinas que ocupan las coordenadas (9 px fijos, chessground.base.css, con
  * los ajustes de board.css): el número arriba a la izquierda (x < .., y < ..)
  * y la letra abajo a la derecha (x > .., y > ..). La pieza se pinta encima y
@@ -195,22 +204,28 @@ export function poligono(...vertices) {
  * Las negras son las blancas con los colores cambiados: el borde claro queda
  * fuera, que es lo que las separa del nogal. Con `sombra`, las negras llevan
  * además el perfil de tinta: una capa bajo toda la silueta, más ancha que el
- * filete, que sólo asoma por fuera y no se ve en las juntas.
+ * filete, que sólo asoma por fuera y no se ve en las juntas. Y van encogidas
+ * (ver TIPICA, o `escala`) para ocupar lo mismo que las blancas.
  */
-export function svgPieza(pieza, color, { contorno = CONTORNO, linea = LINEA, sombra = SOMBRA } = {}) {
+export function svgPieza(pieza, color, { contorno = CONTORNO, linea = LINEA, sombra = SOMBRA, escala } = {}) {
 	const [relleno, borde] = color === 'w' ? [COLORES.claro, COLORES.tinta] : [COLORES.tinta, COLORES.claro]
 	const partes = pieza.partes.map((d) => `<path d="${d}"/>`).join('')
 	const lineas = pieza.lineas ? `<path fill="none" stroke-width="${linea}" d="${pieza.lineas}"/>` : ''
 	const marcas = pieza.marcas ? `<path fill="${borde}" stroke="none" d="${pieza.marcas}"/>` : ''
-	const perfil =
-		color === 'b' && sombra
-			? `<g fill="${COLORES.tinta}" stroke="${COLORES.tinta}" stroke-width="${contorno + 2 * sombra}" stroke-linejoin="round">${partes}</g>`
-			: ''
-	return (
-		`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${LADO} ${LADO}">${perfil}` +
-		`<g fill="${relleno}" stroke="${borde}" stroke-width="${contorno}" stroke-linejoin="round" stroke-linecap="round">` +
-		`${partes}${lineas}${marcas}</g></svg>`
-	)
+	const conPerfil = color === 'b' && sombra > 0
+	const perfil = conPerfil
+		? `<g fill="${COLORES.tinta}" stroke="${COLORES.tinta}" stroke-width="${contorno + 2 * sombra}" stroke-linejoin="round">${partes}</g>`
+		: ''
+	const dibujo =
+		`${perfil}<g fill="${relleno}" stroke="${borde}" stroke-width="${contorno}" stroke-linejoin="round" stroke-linecap="round">` +
+		`${partes}${lineas}${marcas}</g>`
+	const k = conPerfil ? (escala ?? TIPICA / (TIPICA + 2 * sombra)) : 1
+	// Encogida sobre el centro de la línea base y subida lo que el perfil
+	// asoma por debajo de la peana, para que apoye donde la blanca.
+	const sube = (contorno / 2 + sombra) * k - contorno / 2
+	const contenido =
+		k === 1 ? dibujo : `<g transform="translate(${CENTRO} ${n(BASE - sube)}) scale(${+k.toFixed(3)}) translate(-${CENTRO} -${BASE})">${dibujo}</g>`
+	return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${LADO} ${LADO}">${contenido}</svg>`
 }
 
 /**
