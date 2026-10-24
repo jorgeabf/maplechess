@@ -15,10 +15,10 @@ import { getUpcomingRound } from '../../lib/db/pairings'
 import { getTournamentStandings, standingsHeading } from '../../lib/db/standings'
 import { getTournament, getTournamentParticipants, isIndexableTournament } from '../../lib/db/tournaments'
 import { formatCount, formatNumber, formatPoints, formatRange, formatRoundTime } from '../../lib/format'
-import { CC_BY_SA } from '../../lib/licenses'
+import { CC_BY, CC_BY_SA } from '../../lib/licenses'
 import { ME_COOKIE, resolveMe } from '../../lib/me'
 import { dossierHref, pageParam, positiveInt, roundParam, withParams } from '../../lib/params'
-import { sourceUrl } from '../../lib/urls'
+import { sourceName, sourceUrl } from '../../lib/urls'
 
 const id = positiveInt(Astro.params.id)
 const tournament = id === null ? null : await getTournament(env.DB, id)
@@ -29,6 +29,8 @@ const round = roundParam(Astro.url.searchParams)
 const isTeam = tournament.type === 'team'
 // Torneo que no está en info64, sacado de su retransmisión (ingest/lichess/sync.ts).
 const fromLichess = tournament.source === 'lichess'
+// Del archivo de la Federación Cántabra (ingest/fca), con licencia CC BY 4.0.
+const fromFca = tournament.source === 'fca'
 // En un torneo individual la clasificación sustituye a los participantes en
 // cuanto la hay; en uno por equipos va encima de las plantillas. Los propios
 // de lichess no tienen.
@@ -129,7 +131,7 @@ const standingsNote =
 			{
 				tournamentUrl && (
 					<a class="button secondary" href={tournamentUrl} rel="noopener">
-						Ver en {tournament.source}
+						Ver en {sourceName(tournament.source)}
 					</a>
 				)
 			}
@@ -175,6 +177,17 @@ const standingsNote =
 					)}
 					, que suele cubrir sólo las mesas con tablero electrónico. Licencia{' '}
 					<a href={CC_BY_SA} rel="license noopener">CC BY-SA 4.0</a>.
+				</p>
+			) : fromFca ? (
+				<p class="muted">
+					Sus partidas son del{' '}
+					{tournamentUrl ? (
+						<a href={tournamentUrl} rel="noopener">archivo de la Federación Cántabra de Ajedrez</a>
+					) : (
+						'archivo de la Federación Cántabra de Ajedrez'
+					)}
+					, con licencia <a href={CC_BY} rel="license noopener">CC BY 4.0</a>. Aquí se han separado por torneo y cada
+					jugador se ha enlazado con su ficha FIDE por el nombre, sólo cuando casa con uno solo.
 				</p>
 			) : (
 				lichessShare && (

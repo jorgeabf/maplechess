@@ -4,7 +4,7 @@ import titularesUrl from '../assets/fonts/titulares-600.woff2'
 import BuscadorJugadores from '../components/BuscadorJugadores.astro'
 import Icon from '../components/Icon.astro'
 import Logo from '../components/Logo.astro'
-import { CC_BY_SA, SOURCE_CODE } from '../lib/licenses'
+import { CC_BY, CC_BY_SA, SOURCE_CODE } from '../lib/licenses'
 import { THEME_COLOR } from '../lib/theme-color'
 import { canonicalHref } from '../lib/urls'
 import '../styles/global.css'
@@ -165,9 +165,11 @@ const nav = [
 				{/* {' '} explícitos: Astro, como JSX, quita el espacio con salto de línea entre texto y etiqueta. */}
 				<p class="credits">
 					Datos de <a href="https://info64.org" rel="noopener">info64</a> (FEDA), de la{' '}
-					<a href="https://ratings.fide.com" rel="noopener">lista FIDE</a> y de las{' '}
+					<a href="https://ratings.fide.com" rel="noopener">lista FIDE</a>, de las{' '}
 					<a href="https://lichess.org/broadcast" rel="noopener">retransmisiones de lichess</a> (
-					<a class="license" href={CC_BY_SA} rel="license noopener">CC BY-SA 4.0</a>). Motor{' '}
+					<a class="license" href={CC_BY_SA} rel="license noopener">CC BY-SA 4.0</a>) y del{' '}
+					<a href="https://www.fcajedrez.es/partidas/" rel="noopener">archivo de la Federación Cántabra</a> (
+					<a class="license" href={CC_BY} rel="license noopener">CC BY 4.0</a>). Motor{' '}
 					<a href="https://stockfishchess.org" rel="noopener">Stockfish</a>.{' '}
 					<a href={SOURCE_CODE} rel="noopener">Código libre</a> bajo <span class="license">GPL-3.0</span>.
 				</p>

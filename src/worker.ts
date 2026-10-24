@@ -3,6 +3,7 @@
 import { handle } from '@astrojs/cloudflare/handler'
 import { runScheduled } from './ingest/schedule'
 
+export { FcaImportWorkflow } from './ingest/fca/sync'
 export { FideSyncWorkflow } from './ingest/fide/sync'
 export { Info64SyncWorkflow } from './ingest/info64/sync'
 export { LichessSyncWorkflow } from './ingest/lichess/sync'

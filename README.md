@@ -76,7 +76,7 @@ De quien puede ser menor de edad (cumple 18 años o menos este año, según la l
 ### Partidas y torneos
 
 - **Partidas:** búsqueda por jugador, rival, color, resultado, ECO, ritmo, fechas y torneo. Antes de buscar, las partidas de más nivel de la semana.
-- **Torneos:** búsqueda por nombre, fechas y modalidad, en la que una provincia o una comunidad se encuentra por cualquiera de sus nombres («Álava», «alavesa» o «Araba»). De cada torneo, clasificación con los desempates del torneo, cada uno explicado (la final o la de la última ronda jugada), participantes, plantillas de los torneos por equipos, ritmo, partidas por ronda y emparejamientos de la próxima. También están los torneos con españoles que no están en info64 pero sí en las retransmisiones oficiales de lichess, en España y en el extranjero; de esos sólo se guardan las partidas de los jugadores españoles.
+- **Torneos:** búsqueda por nombre, fechas y modalidad, en la que una provincia o una comunidad se encuentra por cualquiera de sus nombres («Álava», «alavesa» o «Araba»). De cada torneo, clasificación con los desempates del torneo, cada uno explicado (la final o la de la última ronda jugada), participantes, plantillas de los torneos por equipos, ritmo, partidas por ronda y emparejamientos de la próxima. También están los torneos con españoles que no están en info64 pero sí en las retransmisiones oficiales de lichess, en España y en el extranjero; de esos sólo se guardan las partidas de los jugadores españoles. Y los de Cantabria de 2007 a 2021, del archivo de su federación.
 - **Visor:** tablero con variantes, comentarios y tiempos de reloj, que se maneja con el teclado y, en el móvil, deslizando sobre el tablero. En el móvil, el comentario de cada jugada sale bajo el tablero.
   - **Variante propia:** mueve las piezas para probar una idea o pulsa una línea del motor para recorrerla. La partida no cambia, y «Volver a la partida» te lleva a donde estabas.
   - **Stockfish 19** funciona en el propio navegador: las 3 mejores líneas, que se pueden pulsar, la barra de evaluación y la mejor jugada como flecha. Analiza cada posición hasta 10 s o hasta la profundidad 22, para no agotar la batería del móvil; «Seguir analizando» continúa sin límite. Con la pestaña oculta se para y, al volver, sigue.
@@ -99,12 +99,13 @@ flowchart LR
     info64["info64.org<br/>(FEDA)"]
     fide["Lista FIDE"]
     lichess["Retransmisiones<br/>de lichess"]
+    fca["Archivo de la<br/>Federación Cántabra"]
   end
 
   subgraph cloudflare["Un Worker de Cloudflare"]
     cron(["Cron Triggers"])
     admin(["/api/admin/sync"])
-    workflows["Workflows<br/>INFO64_SYNC · LICHESS_SYNC<br/>FIDE_SYNC · GAMES_REPROCESS"]
+    workflows["Workflows<br/>INFO64_SYNC · LICHESS_SYNC<br/>FIDE_SYNC · GAMES_REPROCESS<br/>FCA_IMPORT"]
     d1[("D1<br/>SQLite + FTS5")]
     astro["Astro SSR<br/>páginas y PGN"]
   end
@@ -114,6 +115,7 @@ flowchart LR
   info64 --> workflows
   fide --> workflows
   lichess --> workflows
+  fca --> workflows
   cron --> workflows
   admin --> workflows
   workflows --> d1
@@ -133,6 +135,7 @@ flowchart LR
 | [info64.org](https://info64.org) (FEDA) | Torneos desde 2014, participantes con FIDE ID, plantillas de equipos, clasificaciones, partidas y emparejamientos de la próxima ronda | Cada día a las 05:00 UTC (rondas de los últimos 60 días y emparejamientos de los próximos 8) y a las 15:00 y las 22:00, hora de Madrid (emparejamientos y clasificación de los torneos en curso) |
 | [Lista FIDE](https://ratings.fide.com/download_lists.phtml) | Jugadores de la federación española: título, ELO estándar, rápido y blitz, sexo, año de nacimiento (no se muestra el de los menores ni el de quien pide ocultarlo) y si está activo. También el ELO estándar de la lista anterior, para ver quién sube | El día 3 de cada mes |
 | [Retransmisiones de lichess](https://lichess.org/broadcast) (CC BY-SA 4.0) | Partidas de los torneos que info64 enlaza a una retransmisión y no publica en PGN, y de las retransmisiones oficiales con jugadores españoles, en España y en el extranjero | Con info64 y cada día a las 06:30 UTC |
+| [Archivo de la Federación Cántabra](https://www.fcajedrez.es/partidas/) (CC BY 4.0) | Partidas de la Liga Regional y de los campeonatos regionales de Cantabria de 2007 a 2010, de 2012 y de 2021, sin las categorías hasta Sub 14. No traen FIDE ID: cada jugador se cruza por el nombre con la lista FIDE, sólo si casa con uno solo y su año de nacimiento le deja haber jugado | A mano (`{"workflow":"fca"}`): el archivo no cambia |
 | [lichess-org/chess-openings](https://github.com/lichess-org/chess-openings) | Códigos ECO y nombres de las aperturas (CC0) | A mano (`pnpm openings`) |
 
 La ingesta es educada con las fuentes: como mucho una petición por segundo a info64 y, a lichess, una cada vez, con pausa entre una y otra y con un token de sólo lectura, como pide su API. Siempre con un User-Agent que la identifica.
@@ -240,7 +243,7 @@ migrations/        Esquema de D1
 data/openings/     Aperturas de lichess (TSV, CC0)
 scripts/           Copia del motor, aperturas, iconos y tarjeta para compartir, rondas de lichess, piezas del tablero y fuentes de los titulares y de las figuras
 src/worker.ts      Entrypoint: web, crons y Workflows
-src/ingest/        Ingesta: info64, lista FIDE, lichess y escritura en D1
+src/ingest/        Ingesta: info64, lista FIDE, lichess, el archivo de Cantabria y escritura en D1
 src/lib/chess/     PGN, nombres, ECO, árbol de jugadas, UCI, ritmo, reloj, repertorio y dossier
 src/lib/db/        Consultas de la web
 src/pages/         Páginas y descargas .pgn
@@ -286,5 +289,6 @@ Necesita una cuenta de Cloudflare con **Workers Paid**: la importación de la li
 - **Aperturas:** nombres de dominio público (CC0).
 - **Datos de jugadores, torneos y partidas:** pertenecen a sus fuentes y se muestran tal como ellas los publican. La [política de privacidad](https://maplechess.es/privacidad#oposicion) explica cómo pedir que se retire alguno.
 - **Partidas de las retransmisiones de lichess:** licencia [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/deed.es); aquí se ofrecen con la misma licencia, y cada una lo dice en su PGN y en su página. También las que info64 publica tal como salen de lichess; la página del torneo dice cuántas son.
+- **Partidas del archivo de la Federación Cántabra de Ajedrez:** licencia [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/deed.es), como las publica la federación; cada una lo dice en su PGN y en su página.
 - **Tipografía de los titulares:** Source Serif 4 de Adobe ([SIL Open Font License 1.1](public/fonts/OFL.txt)), modificada y renombrada «Titulares».
 - **Piezas del tablero** (`src/assets/pieces/maple/`, generadas por `scripts/piezas.mjs`): propias, con la licencia del proyecto.

@@ -46,7 +46,10 @@ const title = Object.fromEntries(sections.map((s) => [s.id, s.title])) as Record
 				</div>
 				<div>
 					<dt>De dónde salen</dt>
-					<dd>De info64.org, de la Federación Española de Ajedrez; de la lista de jugadores de la FIDE, y de lichess.org.</dd>
+					<dd>
+						De info64.org, de la Federación Española de Ajedrez; de la lista de jugadores de la FIDE; de lichess.org, y del
+						archivo de partidas de la Federación Cántabra de Ajedrez.
+					</dd>
 				</div>
 				<div>
 					<dt>Para qué</dt>
@@ -132,11 +135,17 @@ const title = Object.fromEntries(sections.map((s) => [s.id, s.title])) as Record
 					Las <a href="https://lichess.org/broadcast" rel="noopener">retransmisiones oficiales de lichess.org</a>:
 					partidas.
 				</li>
+				<li>
+					El <a href="https://www.fcajedrez.es/partidas/" rel="noopener">archivo de la Federación Cántabra de Ajedrez</a>:
+					torneos y partidas de Cantabria de 2007 a 2021, sin las categorías hasta Sub 14.
+				</li>
 			</ul>
 			<p>
 				Más detalle, en <a href="/acerca#fuentes">Acerca de</a>. Las partidas de info64 se asignan a cada jugador por su
 				nombre en el torneo: si está mal escrito, la partida puede quedarse fuera de su ficha o, rara vez, acabar en la de
-				otro.
+				otro. Las del archivo de Cantabria no traen FIDE ID: se asignan por el nombre con la lista FIDE, sólo cuando casa
+				con un único jugador y su año de nacimiento le deja haber jugado la partida. Si una no es tuya, o falta alguna, se
+				corrige como cuenta <a href="#derechos">{title.derechos}</a>.
 			</p>
 
 			<h3 id="finalidad">Para qué</h3>

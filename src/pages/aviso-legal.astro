@@ -1,7 +1,7 @@
 ---
 import Base from '../layouts/Base.astro'
 import { CONTACT, OWNERS } from '../lib/legal'
-import { CC_BY_SA, ENGINE_SOURCE, ENGINE_VERSION, SOURCE_CODE, SOURCE_LICENSE } from '../lib/licenses'
+import { CC_BY, CC_BY_SA, ENGINE_SOURCE, ENGINE_VERSION, SOURCE_CODE, SOURCE_LICENSE } from '../lib/licenses'
 ---
 
 <Base
@@ -71,6 +71,15 @@ import { CC_BY_SA, ENGINE_SOURCE, ENGINE_VERSION, SOURCE_CODE, SOURCE_LICENSE } 
 					<a href={CC_BY_SA} rel="license noopener">CC BY-SA 4.0</a>, como las publica lichess en sus retransmisiones.
 					Aquí se han completado o corregido sus cabeceras (nombres, FIDE ID, ELO y apertura) y se ofrecen con la misma
 					licencia.
+				</dd>
+			</div>
+			<div>
+				<dt>Partidas de la Federación Cántabra</dt>
+				<dd>
+					<a href={CC_BY} rel="license noopener">CC BY 4.0</a>, como publica la{' '}
+					<a href="https://www.fcajedrez.es/partidas/" rel="noopener">Federación Cántabra de Ajedrez</a> su archivo. Aquí
+					se ha separado por torneo, se han completado sus cabeceras y cada jugador se ha enlazado con su FIDE ID por el
+					nombre.
 				</dd>
 			</div>
 			<div>

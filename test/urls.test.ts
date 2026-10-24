@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { canonicalHref, sourceUrl } from '../src/lib/urls'
+import { canonicalHref, sourceName, sourceUrl } from '../src/lib/urls'
 
 describe('canonicalHref', () => {
 	const site = new URL('https://maplechess.es')
@@ -18,12 +18,13 @@ describe('canonicalHref', () => {
 })
 
 describe('sourceUrl', () => {
-	it('las páginas de info64 y lichess, por https', () => {
+	it('las páginas de info64, lichess y la FCA, por https', () => {
 		for (const url of [
 			'https://info64.org/ce-individual-absoluto-2025',
 			'https://info64.org/ce-individual-absoluto-2025/3/12',
 			'https://lichess.org/broadcast/campeonato/ronda-1/zK5CoVvF',
-			'https://lichess.org/@evil.com'
+			'https://lichess.org/@evil.com',
+			'https://www.fcajedrez.es/partidas/index.html?pgn=/assets/partidas/2008/liga_2008.pgn'
 		])
 			expect(sourceUrl(url), url).toBe(url)
 	})
@@ -40,10 +41,20 @@ describe('sourceUrl', () => {
 			'//lichess.org/x',
 			' https://lichess.org/x',
 			'https://info64.org',
+			'https://www.fcajedrez.es.evil.com/x',
+			'http://www.fcajedrez.es/partidas/',
 			''
 		])
 			expect(sourceUrl(url), url).toBeNull()
 		expect(sourceUrl(null)).toBeNull()
 		expect(sourceUrl(undefined)).toBeNull()
+	})
+})
+
+describe('sourceName', () => {
+	it('la FCA, por su web; las demás, por su nombre', () => {
+		expect(sourceName('fca')).toBe('fcajedrez.es')
+		expect(sourceName('info64')).toBe('info64')
+		expect(sourceName('lichess')).toBe('lichess')
 	})
 })

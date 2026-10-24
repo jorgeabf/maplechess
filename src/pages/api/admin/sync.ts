@@ -9,6 +9,8 @@
 //   POST /api/admin/sync  {"workflow":"lichess","params":{"rounds":["jQucOFAV"]}}
 //   POST /api/admin/sync  {"workflow":"fide","params":{"force":true}}
 //   POST /api/admin/sync  {"workflow":"reprocess"}
+//   POST /api/admin/sync  {"workflow":"fca"}
+//   POST /api/admin/sync  {"workflow":"fca","params":{"files":["2021/regional_absoluto_2021"]}}
 //   GET  /api/admin/sync?workflow=info64&id=<instancia>
 import type { APIRoute } from 'astro'
 import { env } from 'cloudflare:workers'
@@ -18,7 +20,8 @@ const WORKFLOWS = {
 	info64: () => env.INFO64_SYNC,
 	lichess: () => env.LICHESS_SYNC,
 	fide: () => env.FIDE_SYNC,
-	reprocess: () => env.GAMES_REPROCESS
+	reprocess: () => env.GAMES_REPROCESS,
+	fca: () => env.FCA_IMPORT
 } as const
 
 type WorkflowName = keyof typeof WORKFLOWS
