@@ -141,12 +141,14 @@ MapleChess es un buscador de jugadores españoles (lista FIDE, federación ESP),
   - Las URL de las fuentes que se enlazan pasan por `sourceUrl` (`src/lib/urls.ts`): sólo `https://info64.org/` y `https://lichess.org/`.
 - `src/client/`: código de navegador (`<visor-partida>`, motor, `<explorador-repertorio>` y el cierre del panel de búsqueda). Tiene **su propio `tsconfig`** y se incluye con `<script src>`; ver «Trampas».
   - `visor/panel-motor.ts` (`EnginePanel`) y `components/visor/PanelMotor.astro`: el panel de Stockfish que comparten el visor y el explorador.
+  - **Los dos tableros, en un solo script:** `src/client/tableros.ts`, que carga `components/visor/ScriptTableros.astro` en el visor y en el explorador. Con un script por componente, Vite sacaba lo común (chessground, chessops, el panel del motor) a otro archivo que el navegador sólo pedía tras leer el primero, y Astro no emite `modulepreload`. Cada página trae así el código del otro elemento: 1,8 KB comprimidos más en el repertorio.
   - **Teclado del visor:**
     - ← y → valen en toda la página.
     - ↑, ↓, Inicio, Fin y F (girar), sólo con el foco en el visor: un atajo de una letra en toda la página incumple WCAG 2.1.4.
     - De la lista de jugadas sólo la actual está en el tabulador (`tabindex` itinerante, `markCurrent`), y el foco la sigue. En la posición inicial, la primera jugada.
     - Los botones de navegación van en un `role="group"`, no `toolbar`: una barra de herramientas promete moverse con las flechas entre sus botones.
     - El tablero lleva `aria-hidden`: chessground pinta las coordenadas como texto.
+  - **Comentario de la jugada en el móvil:** en una columna, el de la jugada actual sale bajo los botones (`.move-note`), sólo en las partidas con comentarios y con su línea reservada, para que el motor no salte. En dos columnas, no. Se anuncia con la jugada: va oculto a la vista dentro de la región viva (`showCurrent`), y la línea lleva `aria-hidden`.
   - **Lo que puede fallar o limitarse va después del estado:** la URL, el portapapeles, el almacenamiento. Safari lanza un `SecurityError` tras 100 `history.replaceState` en 10 s (en 30 s hasta Safari 16), así que el visor escribe `#j` 300 ms después de la última jugada, en un `try/catch`.
   - `panel-busqueda.ts`: el popover de la cabecera se cierra cuando el foco sale de él hacia otro elemento; si no, quedaba encima del elemento enfocado. Sin `relatedTarget` no se cierra: Safari no enfoca el botón «Buscar» al pulsarlo. También se cierra en `pagehide`, al buscar: si no, al volver con Atrás bfcache lo enseñaba abierto.
   - **bfcache:** todas las páginas entran (salvo la respuesta a un POST del dossier, ver `me.ts`), también la partida con el motor (su Worker se congela y sigue al volver). Comprobado el 23-oct-2026 en Chrome, con el evento `Page.backForwardCacheNotUsed` de CDP: `notRestoredReasons` sólo dice «masked», y Playwright arranca Chromium sin bfcache.
