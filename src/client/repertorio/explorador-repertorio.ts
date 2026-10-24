@@ -2,7 +2,8 @@
 // JavaScript (cada jugada es un enlace); esto añade el tablero con la
 // posición, una flecha al pasar por una jugada de la tabla y la posibilidad
 // de mover piezas para ir a cualquier otra posición, también por transposición,
-// y el análisis de Stockfish de la posición.
+// y el análisis de Stockfish de la posición. Pulsar una de sus líneas juega su
+// primera jugada, como moverla en el tablero.
 import { Chessground } from '@lichess-org/chessground'
 import type { Api } from '@lichess-org/chessground/api'
 import type { DrawShape } from '@lichess-org/chessground/draw'
@@ -37,6 +38,8 @@ class ExploradorRepertorio extends HTMLElement {
 		if (created.isErr) return
 		const pos = created.value
 		const lastMove = this.dataset.lastMove
+		// Al llegar a la última jugada del repertorio ya no se mueve (ni se pulsan las líneas del motor).
+		const movable = this.dataset.movable !== 'false'
 		const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)')
 
 		this.cg = Chessground(this.querySelector<HTMLElement>('.board')!, {
@@ -49,7 +52,7 @@ class ExploradorRepertorio extends HTMLElement {
 			coordinates: true,
 			movable: {
 				free: false,
-				color: this.dataset.movable === 'false' ? undefined : pos.turn,
+				color: movable ? pos.turn : undefined,
 				dests: chessgroundDests(pos),
 				showDests: true,
 				events: { after: (orig, dest) => this.play(pos, orig, dest) }
@@ -74,7 +77,10 @@ class ExploradorRepertorio extends HTMLElement {
 				onAnalysis: (view) => {
 					this.engineShape = view?.best ? { ...arrow(view.best), brush: 'paleBlue' } : null
 					this.drawShapes()
-				}
+				},
+				// Las líneas llevan su primera jugada en data-uci: al señalarlas, la
+				// flecha gris de showArrow, como las jugadas de la tabla.
+				onLine: movable ? (_fen, moves) => this.go(pos, moves[0].uci) : undefined
 			},
 			signal
 		)
@@ -104,12 +110,17 @@ class ExploradorRepertorio extends HTMLElement {
 		this.cg?.setAutoShapes([this.engineShape, this.hoverShape].filter((s): s is DrawShape => s !== null))
 	}
 
-	/** Jugada hecha en el tablero: se va a la página de la posición resultante. */
+	/** Jugada hecha en el tablero. */
 	private play(pos: Chess, orig: Key, dest: Key): void {
 		// Un peón que llega a la última fila corona dama: para explorar basta.
 		const from = parseSquare(orig)
 		const promotes = from !== undefined && pos.board.getRole(from) === 'pawn' && /[18]$/.test(dest)
-		const parsed = parseUci(`${orig}${dest}${promotes ? 'q' : ''}`)
+		this.go(pos, `${orig}${dest}${promotes ? 'q' : ''}`)
+	}
+
+	/** Se va a la página de la posición tras la jugada (UCI), si es legal. */
+	private go(pos: Chess, uci: string): void {
+		const parsed = parseUci(uci)
 		if (!parsed) return
 		const move = normalizeMove(pos, parsed)
 		if (!pos.isLegal(move)) return

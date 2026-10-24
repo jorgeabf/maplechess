@@ -1,17 +1,21 @@
 // <visor-partida>: tablero, navegación por jugadas y variantes, gráfico de la
 // evaluación anotada y análisis con Stockfish. El árbol de jugadas (FEN de
 // cada nodo, UCI, reloj…) llega ya calculado del servidor en un
-// <script type="application/json">.
+// <script type="application/json">. En el tablero se pueden mover las piezas
+// para probar una idea, y pulsar una línea del motor para recorrerla: las dos
+// cosas hacen una variante propia, que no se guarda ni cambia el PGN.
 import { Chessground } from '@lichess-org/chessground'
 import type { Api } from '@lichess-org/chessground/api'
 import type { DrawShape } from '@lichess-org/chessground/draw'
 import type { Key } from '@lichess-org/chessground/types'
+import { chessgroundDests } from 'chessops/compat'
 import { makeSquare } from 'chessops/util'
 import type { ViewerNode } from '../../lib/chess/movetree'
-import { annotatedScore, formatScore, sideToMove } from '../../lib/chess/uci'
+import { annotatedScore, formatScore, positionOf, sideToMove } from '../../lib/chess/uci'
 import { enterVariation, exitVariation } from '../../lib/chess/variations'
 import { formatMove } from '../../lib/format'
 import { EnginePanel, type EngineView } from './panel-motor'
+import { boardMove, extendVariant, type LineMove } from './variante'
 
 /** "1:23:05" o "4:07" a partir de segundos. */
 function formatClock(seconds: number): string {
@@ -37,10 +41,21 @@ function hashNode(): number | null {
  */
 const URL_DELAY_MS = 300
 
+/** Lo que se ve en el tablero: un nodo de la partida o una jugada de la variante propia. */
+type Shown = Pick<ViewerNode, 'ply' | 'san' | 'uci' | 'fen' | 'check' | 'comment'>
+
 class VisorPartida extends HTMLElement {
 	private nodes: ViewerNode[] = []
 	private pgn = ''
+	/** Nodo de la partida; dentro de la variante propia, del que sale. */
 	private current = 0
+	/** La variante propia: sale de `current`. Vacía fuera de ella. */
+	private variant: LineMove[] = []
+	/**
+	 * Dónde se está en la variante: 0, la posición de la partida de la que
+	 * sale; k, tras su jugada k. null fuera de ella.
+	 */
+	private step: number | null = null
 	private cg?: Api
 	private panel?: EnginePanel
 	private movesResize?: ResizeObserver
@@ -48,10 +63,20 @@ class VisorPartida extends HTMLElement {
 	/** Escritura pendiente de la jugada en la URL (URL_DELAY_MS). */
 	private urlTimer?: ReturnType<typeof setTimeout>
 	private engineShape: DrawShape | null = null
+	/** Flecha de la primera jugada de la línea del motor señalada. */
+	private previewShape: DrawShape | null = null
 	private abort = new AbortController()
 
 	private get movesBox(): HTMLElement {
 		return this.querySelector('.moves')!
+	}
+
+	private get variantBox(): HTMLElement {
+		return this.querySelector('[data-variant]')!
+	}
+
+	private get shown(): Shown {
+		return this.step ? this.variant[this.step - 1] : this.nodes[this.current]
 	}
 
 	connectedCallback(): void {
@@ -64,13 +89,16 @@ class VisorPartida extends HTMLElement {
 		if (this.nodes.length === 0) return
 
 		const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)')
+		// Las piezas del bando que mueve se mueven (showPosition pone sus destinos):
+		// como en el explorador del repertorio, se arrastran o se pulsan pieza y casilla.
 		this.cg = Chessground(this.querySelector<HTMLElement>('.board')!, {
 			fen: this.nodes[0].fen,
 			// El servidor ya ha ordenado las barras de los jugadores con este lado.
 			orientation: this.dataset.orientation === 'black' ? 'black' : 'white',
-			viewOnly: true,
 			coordinates: true,
 			animation: { enabled: !reducedMotion.matches, duration: 180 },
+			movable: { free: false, showDests: true, events: { after: (orig, dest) => this.onBoardMove(orig, dest) } },
+			premovable: { enabled: false },
 			drawable: { enabled: false, visible: true }
 		})
 
@@ -79,6 +107,11 @@ class VisorPartida extends HTMLElement {
 			signal
 		})
 		this.addEventListener('click', (event) => this.onClick(event), { signal })
+		// La flecha de la línea del motor señalada, como la de las jugadas del explorador.
+		this.addEventListener('pointerover', (event) => this.showPreview(event), { signal })
+		this.addEventListener('focusin', (event) => this.showPreview(event), { signal })
+		this.addEventListener('pointerleave', () => this.setPreview(null), { signal })
+		this.addEventListener('focusout', () => this.setPreview(null), { signal })
 		document.addEventListener('click', (event) => this.onBack(event), { signal })
 		document.addEventListener('keydown', (event) => this.onKey(event), { signal })
 		this.listenSwipe(this.querySelector<HTMLElement>('.board-box')!, signal)
@@ -106,7 +139,11 @@ class VisorPartida extends HTMLElement {
 			this.querySelector<HTMLElement>('.engine')!,
 			{
 				onToggle: (on) => (this.dataset.engine = on ? 'on' : 'off'),
-				onAnalysis: (view) => this.showAnalysis(view)
+				onAnalysis: (view) => this.showAnalysis(view),
+				// Una línea de la posición que se ve (si llega tarde, de otra, nada).
+				onLine: (fen, moves) => {
+					if (fen === this.shown.fen) this.play(moves)
+				}
 			},
 			signal
 		)
@@ -142,6 +179,13 @@ class VisorPartida extends HTMLElement {
 			this.goTo(Number(move.dataset.node))
 			return
 		}
+		// Las jugadas de la variante propia, en su franja.
+		const step = target.closest<HTMLElement>('[data-step]')
+		if (step) {
+			step.focus({ preventScroll: true })
+			this.stepTo(Number(step.dataset.step))
+			return
+		}
 		const action = target.closest<HTMLElement>('[data-action]')?.dataset.action
 		if (action) this.run(action)
 	}
@@ -167,14 +211,14 @@ class VisorPartida extends HTMLElement {
 	/**
 	 * Atajos. ← y → valen en toda la página, que no los usa para nada; con
 	 * Mayús, entran en la variante que sale de la posición y salen de la que se
-	 * está, como en lichess. ↑, ↓, Inicio y Fin desplazan la página, así que
-	 * sólo se toman con el foco en el tablero o la lista (tras pulsar una
-	 * jugada o un botón), no en la barra de acciones de debajo. F también, y
-	 * por otra razón: un atajo de una sola letra en toda la página lo puede
-	 * disparar sin querer quien navega por voz o con un lector de pantalla
-	 * (WCAG 2.1.4). En los campos las teclas son suyas; no en una casilla (el
-	 * interruptor del motor), donde las flechas no hacen nada y el foco se
-	 * queda al pulsarla.
+	 * está, como en lichess (de la propia, a la partida: run). ↑, ↓, Inicio y
+	 * Fin desplazan la página, así que sólo se toman con el foco en el tablero
+	 * o la lista (tras pulsar una jugada o un botón), no en la barra de
+	 * acciones de debajo. F también, y por otra razón: un atajo de una sola
+	 * letra en toda la página lo puede disparar sin querer quien navega por
+	 * voz o con un lector de pantalla (WCAG 2.1.4). En los campos las teclas
+	 * son suyas; no en una casilla (el interruptor del motor), donde las
+	 * flechas no hacen nada y el foco se queda al pulsarla.
 	 */
 	private onKey(event: KeyboardEvent): void {
 		if (event.altKey || event.ctrlKey || event.metaKey) return
@@ -197,7 +241,9 @@ class VisorPartida extends HTMLElement {
 	 * Deslizar el dedo sobre el tablero: hacia la izquierda, la jugada
 	 * siguiente (como al pasar página); hacia la derecha, la anterior. Una
 	 * jugada por gesto. El gesto vertical es del navegador (touch-action:
-	 * pan-y), que lo anula con pointercancel; un segundo dedo también.
+	 * pan-y), que lo anula con pointercancel; un segundo dedo también. El que
+	 * empieza en una pieza que se puede mover, o con una ya elegida, es de
+	 * chessground: arrastra la pieza o la juega (onlyBoard).
 	 */
 	private listenSwipe(box: HTMLElement, signal: AbortSignal): void {
 		let start: { id: number; x: number; y: number } | null = null
@@ -205,7 +251,7 @@ class VisorPartida extends HTMLElement {
 			'pointerdown',
 			(event) => {
 				start =
-					event.pointerType === 'touch' && event.isPrimary
+					event.pointerType === 'touch' && event.isPrimary && !this.onlyBoard(event)
 						? { id: event.pointerId, x: event.clientX, y: event.clientY }
 						: null
 			},
@@ -226,7 +272,27 @@ class VisorPartida extends HTMLElement {
 		box.addEventListener('pointercancel', () => (start = null), { signal })
 	}
 
+	/**
+	 * El gesto es para mover: empieza en una pieza del bando que mueve o con
+	 * una pieza elegida (tocar una casilla de destino la juega). Medido en
+	 * 1.405 posiciones de 15 partidas, deslizar sigue valiendo en el 76 % del
+	 * tablero en la apertura, el 82 % en el medio juego y el 92 % en el final.
+	 */
+	private onlyBoard(event: PointerEvent): boolean {
+		const state = this.cg?.state
+		if (!this.cg || !state) return false
+		if (state.selected) return true
+		const key = this.cg.getKeyAtDomPos([event.clientX, event.clientY])
+		const piece = key ? state.pieces.get(key) : undefined
+		return piece !== undefined && piece.color === state.movable.color
+	}
+
+	/**
+	 * Botones y atajos. Dentro de la variante propia, la navegación la recorre
+	 * (runInVariant); girar y copiar, igual que en la partida.
+	 */
 	private run(action: string): void {
+		if (this.step !== null && this.runInVariant(action, this.step)) return
 		const node = this.nodes[this.current]
 		switch (action) {
 			case 'first':
@@ -247,13 +313,39 @@ class VisorPartida extends HTMLElement {
 				return this.goTo(this.lastOf(this.current))
 			case 'flip':
 				return this.flip()
+			// La posición del tablero, también la de la variante propia. El PGN es
+			// el de la partida, sin ella, y el enlace, el de la jugada de la que sale.
 			case 'copy-fen':
-				return void this.copy(action, node.fen, 'FEN copiado')
+				return void this.copy(action, this.shown.fen, 'FEN copiado')
 			case 'copy-pgn':
 				return void this.copy(action, this.pgn, 'PGN copiado')
 			case 'copy-link':
 				return void this.copy(action, this.currentLink(), 'Enlace copiado')
 		}
+	}
+
+	/**
+	 * La navegación dentro de la variante propia: del principio (la posición
+	 * de la partida de la que sale) a su última jugada. Mayús+← y «Volver a la
+	 * partida» salen a esa posición, y Mayús+→ no hace nada. false si la
+	 * acción no es de navegar.
+	 */
+	private runInVariant(action: string, step: number): boolean {
+		const steps: Record<string, number> = {
+			first: 0,
+			prev: Math.max(0, step - 1),
+			next: Math.min(this.variant.length, step + 1),
+			last: this.variant.length
+		}
+		if (action in steps) {
+			if (steps[action] !== step) this.stepTo(steps[action])
+			return true
+		}
+		if (action === 'exit' || action === 'leave-variant') {
+			this.goTo(this.current)
+			return true
+		}
+		return action === 'enter'
 	}
 
 	/** Último nodo siguiendo la línea en la que se está. */
@@ -264,7 +356,8 @@ class VisorPartida extends HTMLElement {
 	}
 
 	/**
-	 * Muestra un nodo: tablero, lista, gráfico, relojes y motor. La URL va
+	 * Muestra un nodo de la partida (y sale de la variante propia, si se estaba
+	 * en ella): lista, gráfico, relojes y la posición (showPosition). La URL va
 	 * después y con retardo (URL_DELAY_MS): si fallara antes, el motor seguiría
 	 * con la posición anterior y pintaría su flecha en esta.
 	 */
@@ -272,23 +365,94 @@ class VisorPartida extends HTMLElement {
 		const node = this.nodes[id]
 		if (!node || !this.cg) return
 		this.cancelUrl()
+		// La franja de la variante se oculta: si el foco estaba en ella, a la lista.
+		const inVariant = this.variantBox.contains(document.activeElement)
 		this.current = id
-		const turn = sideToMove(node.fen)
-		this.cg.set({
-			fen: node.fen,
-			turnColor: turn,
-			check: node.check,
-			lastMove: node.uci ? [node.uci.slice(0, 2) as Key, node.uci.slice(2, 4) as Key] : undefined
-		})
-		this.engineShape = null
-		this.drawShapes()
+		this.variant = []
+		this.step = null
+		this.renderVariant()
 		this.markCurrent(id)
-		this.showCurrent()
-		this.markEnds(node)
+		if (inVariant) this.focusCurrent()
 		this.markChart(node)
 		this.showClocks(node)
-		this.panel?.show(node.fen)
+		this.showPosition()
 		if (updateHash) this.urlTimer = setTimeout(() => this.writeUrl(), URL_DELAY_MS)
+	}
+
+	/**
+	 * Va a la jugada `step` de la variante propia (0, la posición de la partida
+	 * de la que sale). La lista, el gráfico, los relojes y la URL se quedan en
+	 * esa posición de la partida.
+	 */
+	private stepTo(step: number): void {
+		this.step = step
+		this.markStep()
+		this.showPosition()
+	}
+
+	/**
+	 * Jugadas nuevas desde lo que se ve: una, hecha en el tablero, o una línea
+	 * del motor. Si la primera es la de la partida (o una variante del PGN),
+	 * se sigue la partida. Si no, entran en la variante propia, que empieza o
+	 * cambia desde aquí, y se va a la primera. Con el foco en la línea del
+	 * motor pulsada o en las jugadas de la franja, que se rehacen, el foco
+	 * pasa a la jugada actual: si no, se perdería con ellas.
+	 */
+	private play(moves: LineMove[]): void {
+		const [first] = moves
+		if (!first) return
+		const active = document.activeElement
+		const follow = active instanceof Element && active.closest('.engine-lines, [data-variant-moves]') !== null
+		const step = this.step ?? 0
+		const child =
+			step === 0 ? this.nodes[this.current].children.find((id) => this.nodes[id].uci === first.uci) : undefined
+		if (child !== undefined) {
+			this.goTo(child)
+		} else {
+			this.variant = extendVariant(this.variant, step, moves)
+			this.renderVariant()
+			this.stepTo(step + 1)
+		}
+		if (follow) this.focusCurrent()
+	}
+
+	/**
+	 * Jugada hecha en el tablero. Los destinos ya son los legales: si aun así
+	 * no lo fuera, el tablero vuelve a la posición.
+	 */
+	private onBoardMove(orig: Key, dest: Key): void {
+		const move = boardMove(this.shown.fen, orig, dest)
+		if (move) this.play([move])
+		else this.cg?.set({ fen: this.shown.fen })
+	}
+
+	/** El foco, en la jugada actual: la de la franja dentro de la variante y, si no, la de la lista. */
+	private focusCurrent(): void {
+		const box = this.step === null ? this.movesBox : this.variantBox
+		box.querySelector<HTMLElement>('.move[tabindex="0"]')?.focus({ preventScroll: true })
+	}
+
+	/**
+	 * La posición que se ve en el tablero, sus destinos (se mueve el bando al
+	 * que le toca), la jugada actual, los extremos de los botones y el motor.
+	 */
+	private showPosition(): void {
+		const shown = this.shown
+		const pos = positionOf(shown.fen)
+		const turn = sideToMove(shown.fen)
+		this.cg?.set({
+			fen: shown.fen,
+			turnColor: turn,
+			check: shown.check,
+			lastMove: shown.uci ? [shown.uci.slice(0, 2) as Key, shown.uci.slice(2, 4) as Key] : undefined,
+			movable: { color: pos ? turn : undefined, dests: pos ? chessgroundDests(pos) : new Map() }
+		})
+		this.engineShape = null
+		this.previewShape = null
+		this.drawShapes()
+		this.showCurrent()
+		this.markEnds()
+		this.panel?.show(shown.fen)
 	}
 
 	/**
@@ -332,12 +496,14 @@ class VisorPartida extends HTMLElement {
 
 	/**
 	 * Inicio y anterior, inactivos en la posición inicial; siguiente y final, al
-	 * acabar la línea en la que se está. aria-disabled y no disabled: el foco
-	 * se queda en el botón (run() ya no hace nada en el extremo).
+	 * acabar la línea en la que se está. Dentro de la variante propia, en sus
+	 * extremos. aria-disabled y no disabled: el foco se queda en el botón
+	 * (run() ya no hace nada en el extremo).
 	 */
-	private markEnds(node: ViewerNode): void {
-		const atStart = node.parent < 0
-		const atEnd = node.children.length === 0
+	private markEnds(): void {
+		const node = this.nodes[this.current]
+		const atStart = this.step === null ? node.parent < 0 : this.step === 0
+		const atEnd = this.step === null ? node.children.length === 0 : this.step === this.variant.length
 		const ends: Record<string, boolean> = { first: atStart, prev: atStart, next: atEnd, last: atEnd }
 		for (const [action, end] of Object.entries(ends)) {
 			const button = this.querySelector(`.controls [data-action="${action}"]`)
@@ -393,16 +559,34 @@ class VisorPartida extends HTMLElement {
 		}
 	}
 
+	/** Las flechas del PGN (en una jugada de la variante propia, ninguna), la del motor y la de la línea señalada. */
 	private drawShapes(): void {
-		const node = this.nodes[this.current]
-		const shapes: DrawShape[] = node.shapes.map((s) => ({
+		const annotated = this.step ? [] : this.nodes[this.current].shapes
+		const shapes: DrawShape[] = annotated.map((s) => ({
 			orig: makeSquare(s.from) as Key,
 			dest: s.from === s.to ? undefined : (makeSquare(s.to) as Key),
 			// Los colores de las flechas del PGN son pinceles de chessground con el mismo nombre.
 			brush: s.color
 		}))
 		if (this.engineShape) shapes.push(this.engineShape)
+		if (this.previewShape) shapes.push(this.previewShape)
 		this.cg?.setAutoShapes(shapes)
+	}
+
+	/** Flecha de la línea del motor sobre la que está el puntero o el foco (data-uci, panel-motor.ts). */
+	private showPreview(event: Event): void {
+		const line = event.target instanceof Element ? event.target.closest<HTMLElement>('[data-uci]') : null
+		this.setPreview(line?.dataset.uci ?? null)
+	}
+
+	/** En gris, como la vista previa del explorador: el azul es la mejor jugada. */
+	private setPreview(uci: string | null): void {
+		const shape: DrawShape | null = uci
+			? { orig: uci.slice(0, 2) as Key, dest: uci.slice(2, 4) as Key, brush: 'paleGrey' }
+			: null
+		if (shape?.orig === this.previewShape?.orig && shape?.dest === this.previewShape?.dest) return
+		this.previewShape = shape
+		this.drawShapes()
 	}
 
 	private flip(): void {
@@ -417,17 +601,65 @@ class VisorPartida extends HTMLElement {
 	 * ancho, y la línea de debajo queda fuera del árbol de accesibilidad.
 	 */
 	private showCurrent(): void {
-		const node = this.nodes[this.current]
+		const shown = this.shown
 		const current = this.querySelector('[data-current]')!
-		current.textContent = node.id === 0 ? 'Inicio' : formatMove(node.ply, node.san)
-		if (node.comment) {
-			const spoken = document.createElement('span')
-			spoken.className = 'visually-hidden'
-			spoken.textContent = `. ${node.comment}`
-			current.append(spoken)
+		current.textContent = shown.uci ? formatMove(shown.ply, shown.san) : 'Inicio'
+		// Las jugadas de la variante propia también dicen que no son de la partida.
+		const spoken = this.step ? 'Variante propia' : shown.comment
+		if (spoken) {
+			const hidden = document.createElement('span')
+			hidden.className = 'visually-hidden'
+			hidden.textContent = `. ${spoken}`
+			current.append(hidden)
 		}
 		const note = this.querySelector('[data-note]')
-		if (note) note.textContent = node.comment ?? ''
+		if (note) note.textContent = shown.comment ?? ''
+	}
+
+	/**
+	 * La franja de la variante propia, con sus jugadas: se pinta al empezarla o
+	 * cambiarla (play), y se oculta fuera de ella. Los números, como en la
+	 * lista: el de cada jugada de las blancas y, si empieza por una de las
+	 * negras, el suyo («16…»).
+	 */
+	private renderVariant(): void {
+		const box = this.variantBox
+		box.hidden = this.variant.length === 0
+		const items: HTMLElement[] = []
+		this.variant.forEach((move, i) => {
+			if (move.ply % 2 === 1 || i === 0) {
+				const label = document.createElement('span')
+				label.className = 'num-label'
+				label.textContent = formatMove(move.ply, '')
+				items.push(label)
+			}
+			const button = document.createElement('button')
+			button.type = 'button'
+			button.className = 'move'
+			button.dataset.step = String(i + 1)
+			button.tabIndex = -1
+			button.textContent = move.san
+			items.push(button)
+		})
+		box.querySelector('[data-variant-moves]')!.replaceChildren(...items)
+	}
+
+	/**
+	 * Marca la jugada actual de la variante en su franja, con el mismo tabindex
+	 * itinerante que la lista (markCurrent): sólo ella está en el tabulador y,
+	 * si el foco estaba en las jugadas, la sigue. En la posición de la que
+	 * sale, la parada es la primera.
+	 */
+	private markStep(): void {
+		const box = this.variantBox.querySelector<HTMLElement>('[data-variant-moves]')!
+		const focused = box.contains(document.activeElement)
+		box.querySelector('[aria-current]')?.removeAttribute('aria-current')
+		box.querySelector('.move[tabindex="0"]')?.setAttribute('tabindex', '-1')
+		const button = box.querySelector<HTMLElement>(`[data-step="${this.step}"]`)
+		button?.setAttribute('aria-current', 'true')
+		const stop = button ?? box.querySelector<HTMLElement>('.move')
+		stop?.setAttribute('tabindex', '0')
+		if (focused) stop?.focus({ preventScroll: true })
 	}
 
 	/**
