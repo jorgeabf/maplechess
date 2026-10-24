@@ -3,34 +3,39 @@
 // collar y se cierra en una cúpula, con el filete de taracea donde es más
 // ancha. Encima, una cruz de palo grueso, separada de la cúpula para que se
 // lea entera.
+//
+// La cruz llega a y = 5,5, no a 2: más alto, en el tablero casi se salía de
+// la casilla.
 import { filetePeana, peana, poligono, torno } from './comun.mjs'
 
 const cruz = poligono(
-	[45, 2],
-	[55, 2],
-	[55, 6.5],
-	[62.5, 6.5],
-	[62.5, 13],
-	[55, 13],
-	[55, 21],
-	[45, 21],
-	[45, 13],
-	[37.5, 13],
-	[37.5, 6.5],
-	[45, 6.5]
+	[45, 5.5],
+	[55, 5.5],
+	[55, 10],
+	[62.5, 10],
+	[62.5, 16.5],
+	[55, 16.5],
+	[55, 24.5],
+	[45, 24.5],
+	[45, 16.5],
+	[37.5, 16.5],
+	[37.5, 10],
+	[45, 10]
 )
 
 export default {
 	letra: 'K',
 	partes: [
-		torno([50, 48], ['L', 65, 48], ['C', 63, 54, 62.5, 59, 63.2, 64.5], ['C', 64, 71.5, 67, 75.5, 74, 78], ...peana(27)),
+		torno([50, 49.5], ['L', 65, 49.5], ['C', 63, 55.2, 62.5, 60, 63.2, 65.2], ['C', 64, 71.8, 67, 75.6, 74, 78], ...peana(27)),
 		cruz,
-		torno([50, 18], ['C', 59, 18, 68.5, 21, 69.3, 27], ['C', 69, 32.5, 65, 37, 63.8, 43], ['L', 50, 43]),
-		torno([50, 42], ['L', 68.5, 42], ['Q', 72, 42, 72, 45.5], ['Q', 72, 49, 68.5, 49], ['L', 50, 49])
+		torno([50, 21.5], ['C', 59, 21.5, 68.5, 24.3, 69.3, 30], ['C', 69, 35.3, 65, 39.7, 63.8, 45.5], ['L', 50, 45.5]),
+		torno([50, 44], ['L', 68.5, 44], ['Q', 72, 44, 72, 47.25], ['Q', 72, 50.5, 68.5, 50.5], ['L', 50, 50.5])
 	],
-	lineas: `${filetePeana(27)}M34 28H66`,
-	// La silueta que se ve en el tablero, sin juntas: las partes con medio
-	// contorno más por los lados y por arriba, y la peana en la línea base.
+	lineas: `${filetePeana(27)}M34 31H66`,
+	// La silueta del rey que llegaba a y = 2, con medio contorno más por los
+	// lados y por arriba, sin juntas y con la peana en la línea base. No baja
+	// con la pieza: es la figura más alta y fija la escala de todas en la
+	// notación, que se quedó así.
 	figura: torno(
 		[50, 0],
 		['L', 57, 0],
