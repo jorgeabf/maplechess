@@ -45,7 +45,8 @@ const nodes = toViewerNodes(tree)
 const data = JSON.stringify({ nodes, pgn: pgn.trim() }).replace(/</g, '\\u003c')
 const hasComments = nodes.some((n) => n.comment !== undefined)
 const lastPly = tree.nodes.reduce((max, n) => Math.max(max, n.ply), 0)
-// Los atajos de las variantes (Mayús+← y Mayús+→), sólo donde las hay.
+// Mayús+→ entra en las variantes del PGN: sólo se dice donde las hay. Mayús+←
+// sale también de la propia, que se puede hacer en cualquiera.
 const hasVariations = tree.nodes.some((n) => n.children.length > 1)
 ---
 
@@ -78,7 +79,7 @@ const hasVariations = tree.nodes.some((n) => n.children.length > 1)
 				type="button"
 				class="button secondary square"
 				data-action="prev"
-				title={hasVariations ? 'Anterior (←). Mayús+←: salir de la variante' : 'Anterior (←)'}
+				title="Anterior (←). Mayús+←: salir de la variante"
 				aria-label="Jugada anterior"
 			>
 				<Icon name="prev" />
@@ -110,6 +111,15 @@ const hasVariations = tree.nodes.some((n) => n.children.length > 1)
 	</div>
 
 	<div class="side">
+		{/* La variante propia (visor-partida.ts), oculta hasta que se mueve una
+		    pieza. Va primero: en dos columnas,
+		    arriba junto al tablero; en una, justo debajo de sus botones. */}
+		<section class="variant panel" aria-labelledby="variante-propia" data-variant hidden>
+			<span class="variant-label" id="variante-propia">Variante propia</span>
+			<button type="button" class="button secondary" data-action="leave-variant">Volver a la partida</button>
+			<span class="variant-moves" data-variant-moves></span>
+		</section>
+
 		<PanelMotor />
 
 		{/* El gráfico y la lista son la misma partida jugada a jugada (pulsar en el
@@ -293,7 +303,9 @@ const hasVariations = tree.nodes.some((n) => n.children.length > 1)
 	 * Deslizar sobre el tablero cambia de jugada (visor-partida.ts). El
 	 * navegador se queda con el desplazamiento vertical y el zoom; un gesto
 	 * horizontal ya no es suyo y llega entero como eventos de puntero, sin
-	 * pointercancel. Chessground no escucha el tacto: el tablero es viewOnly.
+	 * pointercancel. Al tocar una pieza (o a menos de 0,7 casillas de una), o
+	 * con una elegida, chessground cancela el desplazamiento para moverla, como
+	 * en el explorador del repertorio: el vertical sólo empieza fuera de ellas.
 	 */
 	.board-box {
 		grid-column: 2;
@@ -416,6 +428,31 @@ const hasVariations = tree.nodes.some((n) => n.children.length > 1)
 		min-inline-size: 0;
 	}
 
+	/*
+	 * La franja de la variante propia: el rótulo, «Volver a la partida» y sus
+	 * jugadas, en una fila si caben y, si no (en el móvil), las jugadas
+	 * debajo. Alineados por la base: con una línea larga del motor las jugadas
+	 * parten en varias, y el rótulo y el botón van con la primera. Sólo sin
+	 * hidden: con display, el atributo ya no la ocultaría.
+	 */
+	.variant:not([hidden]) {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: baseline;
+		gap: var(--space-2) var(--space-3);
+	}
+
+	.variant-label {
+		font-size: var(--text-s);
+		font-weight: var(--weight-strong);
+	}
+
+	.variant-moves {
+		flex: 1 1 12rem;
+		font-size: var(--text-s);
+		line-height: 2;
+	}
+
 	.analysis {
 		display: flex;
 		flex-direction: column;
@@ -456,13 +493,14 @@ const hasVariations = tree.nodes.some((n) => n.children.length > 1)
 	 * En dos columnas la lista acaba donde el tablero: si no, bajaba más que él
 	 * y la jugada actual (al cargar, la última) quedaba bajo el pliegue. Con
 	 * block-size: 0 la lista no aporta su alto a la fila, que mide lo que la
-	 * columna del tablero o, si es más, el motor, el gráfico y 12rem de lista:
-	 * el mínimo automático del recuadro, que es su contenido porque parte de
-	 * flex-basis: 0 y no de block-size: 0 (con block-size, su mínimo era 0 y,
-	 * con el motor encendido, la lista se salía del recuadro: 17 px a 1280×720
-	 * y 135 a 864×600). La columna lateral se estira hasta ahí y la lista
-	 * llena lo que quede. Al encender el motor, su panel crece y la lista
-	 * encoge lo mismo. Sin JavaScript no hay tablero y queda la de arriba.
+	 * columna del tablero o, si es más, la variante propia, el motor, el
+	 * gráfico y 12rem de lista: el mínimo automático del recuadro, que es su
+	 * contenido porque parte de flex-basis: 0 y no de block-size: 0 (con
+	 * block-size, su mínimo era 0 y, con el motor encendido, la lista se salía
+	 * del recuadro: 17 px a 1280×720 y 135 a 864×600). La columna lateral se
+	 * estira hasta ahí y la lista llena lo que quede. Al encender el motor o
+	 * empezar una variante, la lista encoge lo que crecen. Sin JavaScript no
+	 * hay tablero y queda la de arriba.
 	 */
 	@media (width >= 54rem) and (scripting: enabled), (width >= 40rem) and (orientation: landscape) and (scripting: enabled) {
 		.side {
@@ -481,7 +519,8 @@ const hasVariations = tree.nodes.some((n) => n.children.length > 1)
 		}
 	}
 
-	.moves :global(.num-label) {
+	.moves :global(.num-label),
+	.variant-moves :global(.num-label) {
 		margin-inline: var(--space-1) 0;
 		color: var(--text-muted);
 		font-variant-numeric: tabular-nums;
@@ -490,9 +529,11 @@ const hasVariations = tree.nodes.some((n) => n.children.length > 1)
 	/*
 	 * Zona táctil de 24 px de ancho como mínimo (WCAG 2.5.8): «f3» medía 22 y
 	 * va pegada a la siguiente. En rem, para que las variantes, más pequeñas,
-	 * también lleguen. Alto ya tienen: el de la línea.
+	 * también lleguen. Alto ya tienen: el de la línea. Las de la variante
+	 * propia, en su franja, igual.
 	 */
-	.moves :global(.move) {
+	.moves :global(.move),
+	.variant-moves :global(.move) {
 		min-inline-size: 1.5rem;
 		padding: 0 var(--space-1);
 		border: 0;
@@ -503,11 +544,13 @@ const hasVariations = tree.nodes.some((n) => n.children.length > 1)
 		cursor: pointer;
 	}
 
-	.moves :global(.move:hover) {
+	.moves :global(.move:hover),
+	.variant-moves :global(.move:hover) {
 		background: var(--surface-hover);
 	}
 
-	.moves :global(.move[aria-current='true']) {
+	.moves :global(.move[aria-current='true']),
+	.variant-moves :global(.move[aria-current='true']) {
 		background: var(--accent);
 		color: var(--text-inverse);
 	}
@@ -516,7 +559,8 @@ const hasVariations = tree.nodes.some((n) => n.children.length > 1)
 	/* En alto contraste el fondo de acento desaparece: los colores de selección
 	   del sistema, sin ajuste (como en Segmented.astro). */
 	@media (forced-colors: active) {
-		.moves :global(.move[aria-current='true']) {
+		.moves :global(.move[aria-current='true']),
+		.variant-moves :global(.move[aria-current='true']) {
 			forced-color-adjust: none;
 			background: Highlight;
 			color: HighlightText;
