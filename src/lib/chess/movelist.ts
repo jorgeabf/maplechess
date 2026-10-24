@@ -7,7 +7,7 @@ import { NAG_SYMBOLS, type GameTree } from './movetree'
 export type MoveItem =
 	| { kind: 'number'; text: string }
 	| { kind: 'move'; id: number; san: string; glyphs: string }
-	| { kind: 'comment'; text: string }
+	| { kind: 'comment'; text: string; advice?: true }
 	| { kind: 'variation'; items: MoveItem[] }
 
 function glyphs(nags: number[]): string {
@@ -19,8 +19,8 @@ function line(tree: GameTree, firstId: number): MoveItem[] {
 	let needNumber = true
 	let node = tree.nodes[firstId]
 	while (node) {
-		for (const text of node.startingComments) {
-			items.push({ kind: 'comment', text })
+		for (const comment of node.startingComments) {
+			items.push({ kind: 'comment', ...comment })
 			needNumber = true
 		}
 		const moveNumber = Math.ceil(node.ply / 2)
@@ -29,8 +29,8 @@ function line(tree: GameTree, firstId: number): MoveItem[] {
 		items.push({ kind: 'move', id: node.id, san: node.san, glyphs: glyphs(node.nags) })
 		needNumber = false
 
-		for (const text of node.comments) {
-			items.push({ kind: 'comment', text })
+		for (const comment of node.comments) {
+			items.push({ kind: 'comment', ...comment })
 			needNumber = true
 		}
 

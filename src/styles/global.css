@@ -67,6 +67,33 @@
 	line-gap-override: 0%;
 }
 
+/*
+ * Notación con figuras: una fuente propia que sólo tiene el rey, la dama, la
+ * torre, el alfil y el caballo, dibujados en las mayúsculas K, Q, R, B y N.
+ * La ponen --font-moves y --font-moves-serif, sólo en los elementos que
+ * muestran jugadas. El texto sigue diciendo «Nf3»: al copiar, en el PGN y
+ * para los lectores de pantalla no cambia nada, y si la fuente no carga se
+ * ven las letras. Los caracteres de ajedrez (♘) no valen: iOS y Android los
+ * pintan como emoji. La genera scripts/fuente-figuras.py.
+ *
+ * unicode-range, sólo esas cinco letras (el UNICODES del script; un test los
+ * compara): el resto sale de la fuente siguiente. Sin el espacio, la primera
+ * fuente disponible, la que da la altura de la línea, sigue siendo la de
+ * texto. Los pesos, todos: la figura es la misma en las jugadas, en negrita,
+ * y en las variantes, que no lo van, y el navegador no la engorda.
+ *
+ * Pesa menos de 4 KB, así que Vite la incrusta en este CSS como data: (de ahí
+ * el font-src de la CSP, en astro.config.mjs). Está desde el primer pintado, y
+ * con block no asoma la letra mientras se lee.
+ */
+@font-face {
+	font-family: 'Figuras';
+	src: url('../assets/fonts/figuras.woff2') format('woff2');
+	font-weight: 100 900;
+	font-display: block;
+	unicode-range: U+0042, U+004B, U+004E, U+0051, U+0052;
+}
+
 @layer base {
 	:root {
 		color-scheme: light dark;
@@ -77,6 +104,9 @@
 			'Titulares', 'Titulares Georgia', 'Titulares Noto', 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia,
 			serif;
 		--font-mono: ui-monospace, 'Cascadia Mono', 'SF Mono', Consolas, monospace;
+		/* Jugadas: las figuras (Figuras, arriba) en K, Q, R, B y N, y lo demás con la fuente de al lado. */
+		--font-moves: 'Figuras', var(--font-sans);
+		--font-moves-serif: 'Figuras', var(--font-serif);
 		--text-xs: 0.75rem;
 		--text-s: 0.875rem;
 		--text-m: 1rem;

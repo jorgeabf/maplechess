@@ -42,7 +42,7 @@ function hashNode(): number | null {
 const URL_DELAY_MS = 300
 
 /** Lo que se ve en el tablero: un nodo de la partida o una jugada de la variante propia. */
-type Shown = Pick<ViewerNode, 'ply' | 'san' | 'uci' | 'fen' | 'check' | 'comment'>
+type Shown = Pick<ViewerNode, 'ply' | 'san' | 'uci' | 'fen' | 'check' | 'comments'>
 
 class VisorPartida extends HTMLElement {
 	private nodes: ViewerNode[] = []
@@ -605,15 +605,21 @@ class VisorPartida extends HTMLElement {
 		const current = this.querySelector('[data-current]')!
 		current.textContent = shown.uci ? formatMove(shown.ply, shown.san) : 'Inicio'
 		// Las jugadas de la variante propia también dicen que no son de la partida.
-		const spoken = this.step ? 'Variante propia' : shown.comment
+		const comments = shown.comments ?? []
+		const spoken = this.step ? 'Variante propia' : comments.map((c) => c.text).join(' ')
 		if (spoken) {
 			const hidden = document.createElement('span')
 			hidden.className = 'visually-hidden'
 			hidden.textContent = `. ${spoken}`
 			current.append(hidden)
 		}
-		const note = this.querySelector('[data-note]')
-		if (note) note.textContent = shown.comment ?? ''
+		// Los consejos de lichess, con las figuras (.advice), como en la lista.
+		this.querySelector('[data-note]')?.replaceChildren(
+			...comments.flatMap((c, i) => {
+				const text = c.advice ? Object.assign(document.createElement('span'), { className: 'advice', textContent: c.text }) : c.text
+				return i > 0 ? [' ', text] : [text]
+			})
+		)
 	}
 
 	/**

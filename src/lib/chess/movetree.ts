@@ -18,6 +18,17 @@ import { makeSanAndPlay, parseSan } from 'chessops/san'
 import { separateGames } from './pgn'
 import { standardUci } from './uci'
 
+/**
+ * Un comentario de la partida. `advice`, si es un consejo del análisis de
+ * lichess que ha traducido la web («Mejor Qxc3.»): sólo ésos se pintan con las
+ * figuras, porque sus palabras no llevan K, Q, R, B ni N mayúsculas. Los del
+ * PGN no: sus nombres («Kasparov») saldrían con piezas.
+ */
+export interface GameComment {
+	text: string
+	advice?: true
+}
+
 export interface TreeNode {
 	id: number
 	/** id del nodo padre; 0 es la posición inicial. */
@@ -31,8 +42,8 @@ export interface TreeNode {
 	uci: string
 	fen: string
 	check: boolean
-	comments: string[]
-	startingComments: string[]
+	comments: GameComment[]
+	startingComments: GameComment[]
 	nags: number[]
 	/** Reloj restante en segundos (%clk). */
 	clock?: number
@@ -44,7 +55,7 @@ export interface TreeNode {
 export interface GameTree {
 	headers: Record<string, string>
 	/** Comentarios previos a la primera jugada. */
-	comments: string[]
+	comments: GameComment[]
 	/**
 	 * nodes[0] es la raíz (posición inicial, sin jugada). La línea principal
 	 * se numera antes que cualquier variante, así que su nodo en la media
@@ -58,9 +69,11 @@ export interface GameTree {
 // Comentarios automáticos del análisis de lichess en sus retransmisiones
 // («Inaccuracy. Bc5 was best.»). Se traducen al pintarlos, nunca al
 // guardarlos: el PGN guardado, la descarga y «Copiar PGN» siguen siendo los
-// de lichess. La gravedad ya la dice el signo de la jugada (?!, ?, ??).
+// de lichess. La gravedad ya la dice el signo de la jugada (?!, ?, ??). Las
+// frases van con las figuras (GameComment): ninguna puede llevar K, Q, R, B ni
+// N mayúsculas, y un test lo comprueba.
 const LICHESS_ADVICE = /^([^.]+)\. (\S+) was best\.$/
-const LICHESS_JUDGMENTS = new Map([
+export const LICHESS_JUDGMENTS = new Map([
 	['Inaccuracy', 'Mejor'],
 	['Mistake', 'Mejor'],
 	['Blunder', 'Mejor'],
@@ -68,15 +81,14 @@ const LICHESS_JUDGMENTS = new Map([
 	['Lost forced checkmate sequence', 'Deja escapar el mate; mejor']
 ])
 
-function translateAdvice(text: string): string {
+function translateAdvice(text: string): GameComment {
 	const match = LICHESS_ADVICE.exec(text)
-	if (!match) return text
-	const start = LICHESS_JUDGMENTS.get(match[1])
-	return start ? `${start} ${match[2]}.` : text
+	const start = match && LICHESS_JUDGMENTS.get(match[1])
+	return start ? { text: `${start} ${match[2]}.`, advice: true } : { text }
 }
 
 function readComments(raw: string[] | undefined) {
-	const texts: string[] = []
+	const texts: GameComment[] = []
 	const shapes: CommentShape[] = []
 	let clock: number | undefined
 	let evaluation: TreeNode['eval']
@@ -167,15 +179,15 @@ export function buildTree(pgn: string): GameTree {
 /**
  * Lo que necesita el visor de cada nodo. Los comentarios ya van pintados en la
  * lista; además, los de cada jugada (los de antes y los de después; en la
- * raíz, los de la partida) en un solo texto, para enseñarlos bajo los botones
- * y anunciarlos con la jugada. Sin comentarios, sin el campo.
+ * raíz, los de la partida) juntos, para enseñarlos bajo los botones y
+ * anunciarlos con la jugada. Sin comentarios, sin el campo.
  */
-export type ViewerNode = Omit<TreeNode, 'comments' | 'startingComments' | 'nags'> & { comment?: string }
+export type ViewerNode = Omit<TreeNode, 'comments' | 'startingComments' | 'nags'> & { comments?: GameComment[] }
 
 export function toViewerNodes(tree: GameTree): ViewerNode[] {
 	return tree.nodes.map(({ comments, startingComments, nags: _n, ...node }) => {
-		const texts = node.id === 0 ? tree.comments : [...startingComments, ...comments]
-		return texts.length > 0 ? { ...node, comment: texts.join(' ') } : node
+		const all = node.id === 0 ? tree.comments : [...startingComments, ...comments]
+		return all.length > 0 ? { ...node, comments: all } : node
 	})
 }
 

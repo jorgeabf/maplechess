@@ -21,7 +21,9 @@ function label(moves: string[], uci: string): string {
 	return move ? formatMove(move.ply, move.san) : uci
 }
 
-const where = prefix.length ? `Tras ${formatLine(prefix)}` : 'Desde la primera jugada'
+// La línea, aparte de «Tras»: las jugadas van con las figuras (.moves) y la
+// prosa no, porque las mayúsculas de los nombres saldrían como piezas.
+const after = prefix.length ? formatLine(prefix) : null
 const list = (moves: string[], counts: MoveCount[]) =>
 	counts.map((c) => `${label(moves, c.uci)} (${formatNumber(c.stats.games)})`).join(', ')
 const yourMain = cross.yourMoves[0]
@@ -39,8 +41,9 @@ const yourMain = cross.yourMoves[0]
 	{
 		cross.kind === 'new-for-you' && (
 			<>
-				<span class="tag new">Nueva para ti</span> {where}, {name} juega {label(cross.moves, cross.lineMove!)} y a ti
-				nunca te lo han jugado: prepáralo.
+				<span class="tag new">Nueva para ti</span>{' '}
+				{after ? <>Tras <span class="moves">{after}</span></> : 'Desde la primera jugada'}, {name} juega{' '}
+				<span class="moves">{label(cross.moves, cross.lineMove!)}</span> y a ti nunca te lo han jugado: prepáralo.
 			</>
 		)
 	}
@@ -48,23 +51,33 @@ const yourMain = cross.yourMoves[0]
 		cross.kind === 'you-deviate' &&
 			(yourMain ? (
 				<>
-					<span class="tag deviate">Te desvías</span> {where}, tú sueles jugar {list(cross.moves, cross.yourMoves)} y no{' '}
-					{label(cross.moves, cross.lineMove!)}.{' '}
+					<span class="tag deviate">Te desvías</span>{' '}
+					{after ? <>Tras <span class="moves">{after}</span></> : 'Desde la primera jugada'}, tú sueles jugar{' '}
+					<span class="moves">{list(cross.moves, cross.yourMoves)}</span> y no{' '}
+					<span class="moves">{label(cross.moves, cross.lineMove!)}</span>.{' '}
 					{cross.rivalAfter ? (
 						<>
-							Contra {label(cross.moves, yourMain.uci)}, {name} tiene {formatGames(cross.rivalAfter.stats.games)}
-							{cross.rivalAfter.replies.length > 0 &&
-								`: ${list([...cross.moves, yourMain.uci], cross.rivalAfter.replies)}`}
+							Contra <span class="moves">{label(cross.moves, yourMain.uci)}</span>, {name} tiene{' '}
+							{formatGames(cross.rivalAfter.stats.games)}
+							{cross.rivalAfter.replies.length > 0 && (
+								<>
+									: <span class="moves">{list([...cross.moves, yourMain.uci], cross.rivalAfter.replies)}</span>
+								</>
+							)}
 							.
 						</>
 					) : (
-						<>{name} nunca se ha encontrado {label(cross.moves, yourMain.uci)} en estas partidas.</>
+						<>
+							{name} nunca se ha encontrado <span class="moves">{label(cross.moves, yourMain.uci)}</span> en estas
+							partidas.
+						</>
 					)}
 				</>
 			) : (
 				<>
-					<span class="tag deviate">Hasta aquí</span> {where}, acaban tus partidas; {name} sigue con{' '}
-					{label(cross.moves, cross.lineMove!)}.
+					<span class="tag deviate">Hasta aquí</span>{' '}
+					{after ? <>Tras <span class="moves">{after}</span></> : 'Desde la primera jugada'}, acaban tus partidas;{' '}
+					{name} sigue con <span class="moves">{label(cross.moves, cross.lineMove!)}</span>.
 				</>
 			))
 	}
@@ -74,6 +87,10 @@ const yourMain = cross.yourMoves[0]
 	.cross {
 		margin: 0;
 		font-size: var(--text-s);
+	}
+
+	.moves {
+		font-family: var(--font-moves);
 	}
 
 	/* La etiqueta (.tag, global) con el color de lo que dice: los de los resultados. */

@@ -35,6 +35,8 @@ export default defineConfig({
 				"default-src 'self'",
 				// Las piezas van dentro del CSS como data:.
 				"img-src 'self' data:",
+				// La fuente de las figuras va dentro del CSS como data:.
+				"font-src 'self' data:",
 				"object-src 'none'",
 				"base-uri 'self'",
 				"form-action 'self'",
