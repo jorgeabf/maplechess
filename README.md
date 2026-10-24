@@ -32,8 +32,8 @@ Saber contra quién te toca en la próxima ronda, ver qué aperturas juega y dó
 | --- | --- |
 | **Busca** | Unos 98.000 jugadores españoles de la lista FIDE, unos 8.500 torneos de info64 desde 2014 y sus partidas. |
 | **Mira quién te toca** | Los emparejamientos de la próxima ronda, en cuanto info64 los publica, con un enlace para preparar a cada rival. |
-| **Prepara al rival** | Un dossier por color: sus líneas principales, qué ha cambiado este año, cómo puntúa según el rival, sus apuros de tiempo y dónde te separas tú. |
-| **Analiza** | Visor con variantes, comentarios y relojes, y Stockfish 19 en el propio navegador. |
+| **Prepara al rival** | Un dossier por color: su primera jugada, sus líneas principales, qué ha cambiado este año, cómo puntúa según el rival, sus apuros de tiempo y dónde te separas tú. |
+| **Analiza** | Visor con variantes, comentarios y relojes, en el que puedes probar tus propias jugadas, y Stockfish 19 en el propio navegador. |
 | **Descarga** | PGN completos, con ELO, FIDE ID, ECO y apertura, de una partida, un torneo, un jugador o una búsqueda. |
 
 ## Qué ofrece
@@ -45,7 +45,7 @@ Saber contra quién te toca en la próxima ronda, ver qué aperturas juega y dó
 - **Ficha del jugador:** ELO, enlace a su perfil FIDE y puntuación con blancas y con negras. Además:
   - su próxima partida, si ya está emparejado;
   - aperturas más jugadas;
-  - historial de torneos, con sus partidas y puntos en cada uno y un gráfico de su ELO por ritmo;
+  - historial de torneos, con su número inicial y sus partidas y puntos en cada uno, y un gráfico de su ELO por ritmo. Se ven los 20 más recientes y los anteriores, plegados;
   - sus partidas, con filtros de color, resultado, ritmo y ECO.
 
 ### Próximas partidas
@@ -62,13 +62,14 @@ info64 publica los emparejamientos antes de cada ronda. La web los lee varias ve
 
 El **dossier** es una página por color, para leer en el móvil o imprimir:
 
+- Su **primera jugada:** con blancas, qué juega y en qué porcentaje de sus partidas; con negras, qué le juegan y qué responde a cada cosa. Cada jugada lleva al repertorio en esa posición.
 - Sus **líneas principales**, con partidas, puntuación y última vez que las jugó.
 - Qué aperturas ha **empezado a jugar o ha dejado** en el último año.
 - Cómo puntúa contra rivales más fuertes, de su nivel o más débiles, y sus últimas partidas.
 - **Apuros de tiempo:** en las partidas que traen el reloj, en cuántas baja del 5 % de su tiempo, hacia qué jugada, cómo puntúa entonces y cuánto tiempo le queda tras la apertura. No mezcla ritmos.
 - **Tú contra tu rival:** con tu nombre o tu FIDE ID, vuestras partidas y, en cada una de sus líneas, dónde te desvías tú o dónde juega algo que nunca te han jugado. Si estáis emparejados, lo avisa y abre con tu color. Tu ID se recuerda en una cookie, la única del sitio; también se puede indicar con «Soy yo» en tu ficha. Va en un formulario, así que no queda en la dirección ni en los registros.
 
-El **repertorio** es el árbol de aperturas del jugador con cada color. En cada posición se ve qué jugadas ha hecho él o sus rivales, cuántas veces, con qué resultado y cuándo fue la última. Junta las transposiciones, filtra por periodo (2 o 5 años), ritmo y ELO del rival, y se recorre pulsando en la tabla o moviendo las piezas en el tablero, con Stockfish en la posición y la descarga en PGN de las partidas que pasan por ella.
+El **repertorio** es el árbol de aperturas del jugador con cada color. En cada posición se ve qué jugadas ha hecho él o sus rivales, cuántas veces, con qué resultado y cuándo fue la última. Junta las transposiciones, filtra por periodo (2 o 5 años), ritmo y ELO del rival, y se recorre pulsando en la tabla, moviendo las piezas en el tablero o pulsando una línea de Stockfish, con el motor en la posición y la descarga en PGN de las partidas que pasan por ella.
 
 De quien puede ser menor de edad (cumple 18 años o menos este año, según la lista FIDE) no hay dossier ni repertorio, y su ficha no sale en los buscadores. La [política de privacidad](https://maplechess.es/privacidad#menores) lo explica.
 
@@ -76,8 +77,9 @@ De quien puede ser menor de edad (cumple 18 años o menos este año, según la l
 
 - **Partidas:** búsqueda por jugador, rival, color, resultado, ECO, ritmo, fechas y torneo. Antes de buscar, las partidas de más nivel de la semana.
 - **Torneos:** búsqueda por nombre, fechas y modalidad, en la que una provincia o una comunidad se encuentra por cualquiera de sus nombres («Álava», «alavesa» o «Araba»). De cada torneo, clasificación con los desempates del torneo, cada uno explicado (la final o la de la última ronda jugada), participantes, plantillas de los torneos por equipos, ritmo, partidas por ronda y emparejamientos de la próxima. También están los torneos con españoles que no están en info64 pero sí en las retransmisiones oficiales de lichess, en España y en el extranjero; de esos sólo se guardan las partidas de los jugadores españoles.
-- **Visor:** tablero con variantes, comentarios y tiempos de reloj, que se maneja con el teclado y, en el móvil, deslizando sobre el tablero.
-  - **Stockfish 19** funciona en el propio navegador: las 3 mejores líneas, la barra de evaluación y la mejor jugada como flecha. Analiza cada posición hasta 10 s o hasta la profundidad 22, para no agotar la batería del móvil; «Seguir analizando» continúa sin límite. Con la pestaña oculta se para y, al volver, sigue.
+- **Visor:** tablero con variantes, comentarios y tiempos de reloj, que se maneja con el teclado y, en el móvil, deslizando sobre el tablero. En el móvil, el comentario de cada jugada sale bajo el tablero.
+  - **Variante propia:** mueve las piezas para probar una idea o pulsa una línea del motor para recorrerla. La partida no cambia, y «Volver a la partida» te lleva a donde estabas.
+  - **Stockfish 19** funciona en el propio navegador: las 3 mejores líneas, que se pueden pulsar, la barra de evaluación y la mejor jugada como flecha. Analiza cada posición hasta 10 s o hasta la profundidad 22, para no agotar la batería del móvil; «Seguir analizando» continúa sin límite. Con la pestaña oculta se para y, al volver, sigue.
   - Si la fuente anota evaluaciones, un gráfico las muestra jugada a jugada.
 - **Descargas en PGN:** de una partida, de un torneo, de todas las de un jugador o de una posición del repertorio (hasta 5.000 partidas), o del resultado de una búsqueda (las que enseña, hasta 1.000).
 
