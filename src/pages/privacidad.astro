@@ -286,8 +286,10 @@ const title = Object.fromEntries(sections.map((s) => [s.id, s.title])) as Record
 				<div>
 					<dt>Rectificación</dt>
 					<dd>
-						Que se corrija un dato que está mal. Corrígelo también en la fuente (el árbitro del torneo, la retransmisión o
-						la FIDE): si no, la siguiente actualización podría volver a traerlo.
+						Que se corrija un dato que está mal en un torneo: una partida en tu ficha que no es tuya, tu nombre, tu ELO o
+						un resultado. Se corrige aquí y las siguientes actualizaciones lo respetan. Pídelo también en la fuente (el
+						árbitro del torneo o quien lo retransmite), para que se corrija en todas partes. Tu ficha sale de la lista de
+						la FIDE, y lo que esté mal en ella se corrige allí, a través de tu federación.
 					</dd>
 				</div>
 				<div>
@@ -296,7 +298,10 @@ const title = Object.fromEntries(sections.map((s) => [s.id, s.title])) as Record
 				</div>
 				<div>
 					<dt>Limitación</dt>
-					<dd>Que un dato deje de mostrarse mientras se resuelve una corrección o una oposición.</dd>
+					<dd>
+						Que un dato deje de mostrarse mientras se comprueba: que una partida no salga en tu ficha, o que no se vean
+						tu ELO o una partida entera. Antes de volver a mostrarlo, se te avisa.
+					</dd>
 				</div>
 			</dl>
 			<p>
