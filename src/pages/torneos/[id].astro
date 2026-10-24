@@ -13,7 +13,7 @@ import { madridDate } from '../../lib/dates'
 import { getTournamentGames } from '../../lib/db/games'
 import { getUpcomingRound } from '../../lib/db/pairings'
 import { getTournamentStandings, standingsHeading } from '../../lib/db/standings'
-import { getTournament, getTournamentParticipants } from '../../lib/db/tournaments'
+import { getTournament, getTournamentParticipants, isIndexableTournament } from '../../lib/db/tournaments'
 import { formatCount, formatNumber, formatPoints, formatRange, formatRoundTime } from '../../lib/format'
 import { CC_BY_SA } from '../../lib/licenses'
 import { ME_COOKIE, resolveMe } from '../../lib/me'
@@ -61,6 +61,10 @@ const timeClass = timeClassOf(tournament.timeControl)
 const me = resolveMe(null, Astro.cookies.get(ME_COOKIE)?.value).fideId
 // Agrupados por equipo; en torneos individuales hay un único grupo sin nombre.
 const teams = [...Map.groupBy(participants, (p) => p.team).entries()]
+// En uno individual con clasificación no se leen los participantes: cada fila
+// de la clasificación es uno de ellos.
+const players = standings && !isTeam ? standings.rows.length : participants.length
+const indexable = isIndexableTournament(tournament.gamesCount, players)
 // Las páginas del torneo y de su retransmisión, sólo si son de una fuente.
 const tournamentUrl = sourceUrl(tournament.url)
 const broadcastUrl = sourceUrl(tournament.gamesSourceUrl)
@@ -82,6 +86,7 @@ const standingsNote =
 	section="torneos"
 	description={`${tournament.name}: ${standings ? 'clasificación' : 'participantes'} y partidas.`}
 	canonical={`/torneos/${id}`}
+	noindex={!indexable}
 >
 	<header class="page-head">
 		<h1>{tournament.name}</h1>
