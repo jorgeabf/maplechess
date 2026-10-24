@@ -5,6 +5,7 @@ import { madridYear } from '../dates'
 import { SITEMAP_SIZE, type SitemapKind } from '../sitemap'
 import { hasGamesSql } from './games'
 import { minorsBornSince } from './players'
+import { indexableTournamentSql } from './tournaments'
 
 /**
  * Trozos de cada tipo, para el índice. Las partidas y los torneos van por
@@ -24,7 +25,11 @@ export async function sitemapCounts(db: D1Database, size = SITEMAP_SIZE): Promis
 
 /**
  * Trozo n (desde 1) de un tipo: los id de sus páginas que se indexan.
- * - Torneos: todos los del rango de id ((n - 1) · size, n · size].
+ * - Torneos: los del rango de id ((n - 1) · size, n · size] con partidas o al
+ *   menos dos jugadores (torneos/[id].astro no indexa los demás). Lee una fila
+ *   por id del rango y, en los torneos sin partidas, hasta dos de la clave de
+ *   participations: el 24-oct-2026, 23.365 filas por 8.803 torneos, 7.322 sin
+ *   partidas (antes del filtro, 8.803).
  * - Partidas: las del rango con jugadas (partidas/[id].astro no indexa las
  *   demás). Lee una fila por id del rango (unas 49.000 por trozo): ply_count
  *   está en la misma fila.
@@ -56,7 +61,7 @@ export async function sitemapIds(
 					.prepare(
 						kind === 'partidas'
 							? 'SELECT id FROM games WHERE id > ?1 AND id <= ?2 AND ply_count > 0'
-							: 'SELECT id FROM tournaments WHERE id > ?1 AND id <= ?2'
+							: `SELECT t.id FROM tournaments t WHERE t.id > ?1 AND t.id <= ?2 AND ${indexableTournamentSql('t')}`
 					)
 					.bind(from, from + size)
 	const { results } = await statement.all<{ id: number }>()

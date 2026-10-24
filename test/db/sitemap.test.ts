@@ -22,11 +22,17 @@ beforeAll(async () => {
 		db.prepare('DELETE FROM tournaments'),
 		db.prepare('DELETE FROM players'),
 		db.prepare('DELETE FROM site_totals'),
-		// Torneos 1, 2 y 5: el 5 abre el segundo trozo.
-		...[1, 2, 5].map((id) =>
+		// Torneos 1, 2, 4 y 5: el 4 abre el segundo trozo. El 1 tiene dos
+		// participantes; el 2, uno; el 4, ninguno, y el 5, partidas sin la lista.
+		...[1, 2, 4, 5].map((id) =>
 			db
-				.prepare("INSERT INTO tournaments (id, source, source_key, name, type, url) VALUES (?1, 'info64', ?1, 'Torneo', 'individual', '')")
-				.bind(id)
+				.prepare(
+					"INSERT INTO tournaments (id, source, source_key, name, type, url, games_count) VALUES (?1, 'info64', ?1, 'Torneo', 'individual', '', ?2)"
+				)
+				.bind(id, id === 5 ? 3 : 0)
+		),
+		db.prepare(
+			"INSERT INTO participations (tournament_id, start_rank, name, name_norm) VALUES (2, 1, 'Supuesto Irreal, Otro', 'supuesto irreal otro')"
 		),
 		// Siete jugadores; con torneos, el 200 y el 500; con una partida con
 		// blancas, el 300, y con negras, el 700. El 200 nació en 2008: en 2026
@@ -70,8 +76,8 @@ describe('sitemapIds', () => {
 		expect(await ids('partidas', 4)).toEqual([])
 	})
 
-	it('todos los torneos, por rangos de id', async () => {
-		expect(await ids('torneos', 1)).toEqual([1, 2])
+	it('torneos con partidas o al menos dos jugadores, por rangos de id', async () => {
+		expect(await ids('torneos', 1)).toEqual([1])
 		expect(await ids('torneos', 2)).toEqual([5])
 	})
 

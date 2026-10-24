@@ -117,6 +117,27 @@ export async function getTournament(db: D1Database, id: number): Promise<Tournam
 	return db.prepare(`SELECT ${COLUMNS} FROM tournaments t WHERE t.id = ?1`).bind(id).first<TournamentRow>()
 }
 
+/**
+ * Un torneo se indexa si tiene partidas o al menos dos jugadores. Sin ninguna
+ * de las dos cosas (cancelado, o la fuente no ha publicado ni la lista ni las
+ * partidas) su página está casi vacía: lleva noindex (torneos/[id].astro) y no
+ * entra en el sitemap (indexableTournamentSql). El 24-oct-2026 eran 47 de los
+ * 8.803 torneos, todos de info64 y sin clasificación ni emparejamientos.
+ */
+export function isIndexableTournament(gamesCount: number, players: number): boolean {
+	return gamesCount > 0 || players >= 2
+}
+
+/**
+ * El mismo criterio en SQL, sobre el torneo `alias`. El EXISTS con OFFSET 1
+ * mira si hay un segundo participante: lee como mucho dos entradas de la clave
+ * de participations, y sólo en los torneos sin partidas.
+ */
+export function indexableTournamentSql(alias: string): string {
+	return `(${alias}.games_count > 0
+		OR EXISTS (SELECT 1 FROM participations pa WHERE pa.tournament_id = ${alias}.id LIMIT 1 OFFSET 1))`
+}
+
 export interface TournamentParticipant {
 	/** Número inicial; en torneos por equipos, tablero dentro del equipo. */
 	startRank: number

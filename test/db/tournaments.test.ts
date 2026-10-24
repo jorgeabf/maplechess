@@ -2,7 +2,12 @@ import { env } from 'cloudflare:workers'
 import { beforeEach, describe, expect, it } from 'vitest'
 import type { TournamentPlayer } from '../../src/ingest/info64/parse'
 import { refreshTotals, replaceParticipations, upsertTournament } from '../../src/ingest/repo'
-import { getTournamentParticipants, searchTournaments, type TournamentFilters } from '../../src/lib/db/tournaments'
+import {
+	getTournamentParticipants,
+	isIndexableTournament,
+	searchTournaments,
+	type TournamentFilters
+} from '../../src/lib/db/tournaments'
 
 const db = env.DB
 
@@ -180,5 +185,14 @@ describe('searchTournaments por provincia o comunidad', () => {
 			'Cto Castellano-Leonés Sub-12 2026',
 			'Cto de Castilla y León 2026'
 		])
+	})
+})
+
+describe('isIndexableTournament', () => {
+	it('con partidas o al menos dos jugadores, como el sitemap', () => {
+		expect(isIndexableTournament(0, 0)).toBe(false)
+		expect(isIndexableTournament(0, 1)).toBe(false)
+		expect(isIndexableTournament(0, 2)).toBe(true)
+		expect(isIndexableTournament(3, 0)).toBe(true)
 	})
 })
