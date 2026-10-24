@@ -140,7 +140,7 @@ La ingesta es educada con las fuentes: como mucho una petición por segundo a in
 ### Tecnología
 
 - [Astro 7](https://astro.build) con renderizado en servidor sobre **Cloudflare Workers**; **D1**, **Workflows** y **Cron Triggers**.
-- [chessops](https://github.com/niklasf/chessops) (reglas, PGN y SAN), [chessground](https://github.com/lichess-org/chessground) (tablero, con las piezas [mpchess](https://github.com/chupinmaxime/mpchess-pieces) de Maxime Chupin) y [Stockfish](https://stockfishchess.org) 19.
+- [chessops](https://github.com/niklasf/chessops) (reglas, PGN y SAN), [chessground](https://github.com/lichess-org/chessground) (tablero, con piezas propias) y [Stockfish](https://stockfishchess.org) 19.
 - TypeScript, vitest dentro de workerd y eslint.
 - Tipografía: las fuentes del sistema, salvo en los titulares, que usan [Source Serif 4](https://github.com/adobe-fonts/source-serif) (OFL), recortada a 17 KB y servida desde el propio sitio.
 
@@ -283,4 +283,4 @@ Necesita una cuenta de Cloudflare con **Workers Paid**: la importación de la li
 - **Datos de jugadores, torneos y partidas:** pertenecen a sus fuentes y se muestran tal como ellas los publican. La [política de privacidad](https://maplechess.es/privacidad#oposicion) explica cómo pedir que se retire alguno.
 - **Partidas de las retransmisiones de lichess:** licencia [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/deed.es); aquí se ofrecen con la misma licencia, y cada una lo dice en su PGN.
 - **Tipografía de los titulares:** Source Serif 4 de Adobe ([SIL Open Font License 1.1](public/fonts/OFL.txt)), modificada y renombrada «Titulares».
-- **Piezas del tablero** (`src/assets/pieces/mpchess/`): mpchess, de Maxime Chupin, con licencia GPL-3.0.
+- **Piezas del tablero** (`src/assets/pieces/maple/`, generadas por `scripts/piezas.mjs`): propias, con la licencia del proyecto.

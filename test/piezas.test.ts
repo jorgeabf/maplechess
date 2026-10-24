@@ -29,7 +29,8 @@ const light = token('board-piece-light')
 const ink = token('board-piece-ink')
 
 describe('piezas del tablero', () => {
-	it('se llaman como las piezas de chessground: color y letra', () => {
+	it('están las doce, con el nombre de chessground: color y letra', () => {
+		expect(Object.keys(tablero)).toHaveLength(12)
 		for (const path of Object.keys(tablero)) expect(path).toMatch(/\/[wb][KQRBNP]\.svg$/)
 	})
 
@@ -57,6 +58,7 @@ describe('piezas del tablero', () => {
 
 describe('figuras de la notación', () => {
 	it('hay una por pieza con letra en SAN, sin el peón', () => {
+		expect(Object.keys(figuras)).toHaveLength(5)
 		for (const path of Object.keys(figuras)) expect(path).toMatch(/\/[KQRBN]\.svg$/)
 	})
 
