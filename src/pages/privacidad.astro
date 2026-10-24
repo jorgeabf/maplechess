@@ -63,8 +63,8 @@ const title = Object.fromEntries(sections.map((s) => [s.id, s.title])) as Record
 				<div>
 					<dt>Tus derechos</dt>
 					<dd>
-						Puedes <a href="#oposicion">oponerte y pedir que se te retire</a>, y ejercer los de{' '}
-						<a href="#derechos">acceso, rectificación, supresión y limitación</a>.
+						Puedes <a href="#oposicion">oponerte y pedir que se te retire</a>, pedir que no se vean tu sexo y tu año
+						de nacimiento, y ejercer los de <a href="#derechos">acceso, rectificación, supresión y limitación</a>.
 					</dd>
 				</div>
 			</dl>
@@ -146,7 +146,8 @@ const title = Object.fromEntries(sections.map((s) => [s.id, s.title])) as Record
 			</p>
 			<p>
 				El sexo y el año de nacimiento sirven para las categorías oficiales de los rankings (femenino, sub-18, +50 y +65)
-				y para buscar por sexo.
+				y para buscar por sexo. El sexo no sale en la ficha. Puedes pedir que no se vean los tuyos (ver{' '}
+				<a href="#derechos">{title.derechos}</a>).
 			</p>
 
 			<h3 id="base-legal">Base legal</h3>
@@ -170,7 +171,7 @@ const title = Object.fromEntries(sections.map((s) => [s.id, s.title])) as Record
 				</li>
 				<li>no se publican los torneos de hasta Sub&nbsp;14, los escolares ni los que dicen algo de la salud de quien juega;</li>
 				<li>de nadie salen en los buscadores el repertorio, el dossier ni las descargas en PGN;</li>
-				<li>cualquiera puede pedir que se le retire.</li>
+				<li>cualquiera puede pedir que se le retire, o sólo que no se vean su sexo y su año.</li>
 			</ul>
 
 			<h3 id="destinatarios">Quién los ve</h3>
@@ -241,7 +242,8 @@ const title = Object.fromEntries(sections.map((s) => [s.id, s.title])) as Record
 				<h2 id="oposicion">{title.oposicion}</h2>
 				<p>
 					Puedes oponerte a que MapleChess publique tus datos y analice tus partidas (el repertorio y el dossier). Basta
-					con pedirlo: no tienes que explicar por qué, y es gratis.
+					con pedirlo: no tienes que explicar por qué, y es gratis. Si sólo quieres que no se vean tu sexo y tu año de
+					nacimiento, mira <a href="#derechos">{title.derechos}</a>.
 				</p>
 				<dl class="def-list">
 					<div>
@@ -301,6 +303,18 @@ const title = Object.fromEntries(sections.map((s) => [s.id, s.title])) as Record
 					<dd>
 						Que un dato deje de mostrarse mientras se comprueba: que una partida no salga en tu ficha, o que no se vean
 						tu ELO o una partida entera. Antes de volver a mostrarlo, se te avisa.
+					</dd>
+				</div>
+				<div>
+					<dt>Sexo y año</dt>
+					<dd>
+						Que no se vean tu sexo, tu año de nacimiento o los dos. Sin el sexo, dejas de salir en el ranking femenino y
+						al buscar por sexo; sin el año, en los rankings por edad, y tu ficha deja de decirlo. El año se sigue
+						guardando sin enseñarlo, para saber si puedes ser menor. Los títulos femeninos de la FIDE (WGM, WIM, WFM y
+						WCM) se siguen viendo, porque son tu título. También puedes pedir a la FIDE, a través de tu federación, que
+						los oculte en su web: el año desaparece entonces también de aquí con la importación del mes siguiente a que
+						lo aplique, pero ya no hay forma de saber si eres menor (ver <a href="#menores">{title.menores}</a>). El
+						sexo no, porque la lista de la FIDE lo trae siempre.
 					</dd>
 				</div>
 			</dl>

@@ -675,6 +675,28 @@ export async function updatePairingPlayers(db: D1Database, rows: StoredPairingPl
 	)
 }
 
+// --- Ocultar el sexo o el año: lo ya guardado (lo aplica reprocess.ts) ---
+
+/**
+ * Aplica la tabla ocultaciones a los jugadores guardados, como la importación
+ * FIDE al escribir: el sexo pasa a NULL y el año se marca. Sólo cambia los que
+ * aún no lo tienen aplicado. Volver a enseñarlos (si se borra una fila) es cosa
+ * de la importación siguiente: el sexo sólo está en la lista.
+ */
+export async function applyHiddenFields(db: D1Database): Promise<{ sex: number; birthYear: number }> {
+	const [sex, birthYear] = await db.batch([
+		db.prepare(
+			`UPDATE players SET sex = NULL
+			WHERE fide_id IN (SELECT fide_id FROM ocultaciones WHERE campo = 'sexo') AND sex IS NOT NULL`
+		),
+		db.prepare(
+			`UPDATE players SET birth_year_hidden = 1
+			WHERE fide_id IN (SELECT fide_id FROM ocultaciones WHERE campo = 'anio') AND birth_year_hidden = 0`
+		)
+	])
+	return { sex: sex.meta.changes, birthYear: birthYear.meta.changes }
+}
+
 // --- Torneos sensibles (tabla torneos_sensibles, migración 0012) ---
 
 /** Claves de los torneos de esa fuente que no se guardan (excluido = 1). La tabla es pequeña. */
@@ -827,6 +849,10 @@ export async function updateDerivedColumns(db: D1Database, rows: ({ id: number }
 	return results.reduce((n, r) => n + r.meta.changes, 0)
 }
 
+/** Si el jugador de la fila de json_each ha pedido ocultar `campo` (tabla ocultaciones). */
+const hidden = (campo: 'sexo' | 'anio') =>
+	`EXISTS (SELECT 1 FROM ocultaciones o WHERE o.fide_id = json_extract(value, '$.fideId') AND o.campo = '${campo}')`
+
 /** Las filas de upsertFidePlayers en el año `year`, de una en una, sin los retirados. */
 function* fideRows(players: FidePlayer[], year: number, retired: Retired) {
 	for (const p of players) {
@@ -843,6 +869,10 @@ function* fideRows(players: FidePlayer[], year: number, retired: Retired) {
  * menores se les quita el año del nombre (publicName); lo recuperan en la
  * primera lista del año en que dejan de serlo. Los retirados no se guardan:
  * sin fila en players no tienen ficha, y la importación borra la que tuvieran.
+ * A quien ha pedido ocultar el sexo o el año (tabla ocultaciones) se le guarda
+ * el sexo NULL y el año marcado en birth_year_hidden. Se mira en el SQL, por
+ * el índice único de la tabla, para no cargar nada más en memoria: casi nadie
+ * está, y una búsqueda que no encuentra nada no suma filas leídas.
  */
 export async function upsertFidePlayers(
 	db: D1Database,
@@ -856,12 +886,14 @@ export async function upsertFidePlayers(
 	for (const json of jsonChunks(fideRows(players, Number(period.slice(0, 4)), retired))) {
 		await db
 			.prepare(
-				`INSERT INTO players (fide_id, name, sex, title, birth_year, rating_std, rating_rapid, rating_blitz, inactive, seen_at, rating_list)
+				`INSERT INTO players (fide_id, name, sex, title, birth_year, birth_year_hidden, rating_std, rating_rapid, rating_blitz,
+					inactive, seen_at, rating_list)
 				SELECT json_extract(value, '$.fideId'),
 					json_extract(value, '$.name'),
-					json_extract(value, '$.sex'),
+					CASE WHEN ${hidden('sexo')} THEN NULL ELSE json_extract(value, '$.sex') END,
 					json_extract(value, '$.title'),
 					json_extract(value, '$.birthYear'),
+					${hidden('anio')},
 					json_extract(value, '$.ratingStd'),
 					json_extract(value, '$.ratingRapid'),
 					json_extract(value, '$.ratingBlitz'),
@@ -875,6 +907,7 @@ export async function upsertFidePlayers(
 					sex = excluded.sex,
 					title = excluded.title,
 					birth_year = excluded.birth_year,
+					birth_year_hidden = excluded.birth_year_hidden,
 					rating_std_prev = CASE WHEN players.rating_list IS NOT excluded.rating_list
 						THEN players.rating_std ELSE players.rating_std_prev END,
 					rating_std = excluded.rating_std,

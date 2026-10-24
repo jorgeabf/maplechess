@@ -32,8 +32,11 @@ export interface PlayerFilters {
 
 export const TITLES = ['GM', 'IM', 'FM', 'CM', 'WGM', 'WIM', 'WFM', 'WCM'] as const
 
-const PLAYER_COLUMNS = `p.fide_id AS fideId, p.name, p.title, p.birth_year AS birthYear,
+const PLAYER_COLUMNS = `p.fide_id AS fideId, p.name, p.title, p.birth_year AS birthYear, p.birth_year_hidden AS birthYearHidden,
 	p.rating_std AS ratingStd, p.rating_rapid AS ratingRapid, p.rating_blitz AS ratingBlitz, p.inactive`
+
+/** Una fila tal como sale de players, con la marca del año oculto: antes de publicBirthYear. */
+type Stored<T> = T & { birthYearHidden: number }
 
 const GAMES_COUNT = `(SELECT count(*) FROM games WHERE white_fide_id = p.fide_id)
 	+ (SELECT count(*) FROM games WHERE black_fide_id = p.fide_id)`
@@ -81,6 +84,7 @@ export async function searchPlayers(
 		params.push(f.title)
 		where.push(`p.title = ?${params.length}`)
 	}
+	// Quien ha pedido ocultar el sexo lo tiene NULL (upsertFidePlayers): no sale con ninguno.
 	if (f.sex) {
 		params.push(f.sex)
 		where.push(`p.sex = ?${params.length}`)
@@ -110,18 +114,18 @@ export async function searchPlayers(
 			.bind(...params)
 	const countFrom = terms && where.length === 1 ? 'FROM players_fts WHERE players_fts MATCH ?1' : `FROM players p ${whereSql}`
 
-	let rows: PlayerRow[]
+	let rows: Stored<PlayerRow>[]
 	let total: number
 	if (terms) {
 		const plan = await countAndPlan(db, countFrom, params, 'players', offset(page) + PAGE_SIZE)
 		total = plan.count
-		rows = total > offset(page) ? (await list(plan.walk).all<PlayerRow>()).results : []
+		rows = total > offset(page) ? (await list(plan.walk).all<Stored<PlayerRow>>()).results : []
 	} else {
-		const [listed, counted] = await db.batch<PlayerRow | { n: number }>([
+		const [listed, counted] = await db.batch<Stored<PlayerRow> | { n: number }>([
 			list(false),
 			db.prepare(countSql(countFrom)).bind(...params)
 		])
-		rows = listed.results as PlayerRow[]
+		rows = listed.results as Stored<PlayerRow>[]
 		total = (counted.results[0] as { n: number }).n
 	}
 	return toCappedPage(rows.map((p) => publicBirthYear(p, year)), total, page)
@@ -160,6 +164,7 @@ export function ageLimit(category: RankingCategory, year: number): { born: 'sinc
  * sale en ninguna página (lo quitan estas consultas), ni tampoco en el nombre
  * de los homónimos (upsertFidePlayers), aunque la FIDE lo publique. Su ficha
  * no se indexa ni enseña su próxima partida, y no tiene dossier ni repertorio.
+ * Va con el año guardado, también si ha pedido ocultarlo (birth_year_hidden).
  */
 export function mayBeMinor(birthYear: number | null, year: number): boolean {
 	return birthYear !== null && birthYear >= minorsBornSince(year)
@@ -185,8 +190,15 @@ export function hasDossierSql(fideIdColumn: string, bornSince: string): string {
 /** Lo que dicen el dossier, el repertorio y su PGN de un posible menor (jugadores/[fideId]/no-disponible.astro). */
 export const MINOR_UNAVAILABLE = 'El dossier y el repertorio no están disponibles para jugadores que pueden ser menores de edad.'
 
-function publicBirthYear<T extends { birthYear: number | null }>(player: T, year: number): T {
-	return mayBeMinor(player.birthYear, year) ? { ...player, birthYear: null } : player
+/**
+ * El jugador con el año que se puede enseñar en `year`: ni el de un posible
+ * menor ni el de quien ha pedido ocultarlo (tabla ocultaciones), y sin la marca.
+ */
+function publicBirthYear<T extends Stored<{ birthYear: number | null }>>(
+	{ birthYearHidden, ...player }: T,
+	year: number
+): Omit<T, 'birthYearHidden'> {
+	return birthYearHidden || mayBeMinor(player.birthYear, year) ? { ...player, birthYear: null } : player
 }
 
 const RANKING_SIZE = 10
@@ -224,17 +236,20 @@ export interface Ranking {
  */
 export function rankingQueries(category: RankingCategory, year: number): { top: string; risers: string; params: number[] } {
 	const age = ageLimit(category, year)
+	// Quien ha pedido ocultar el año no entra en las categorías por edad. La
+	// marca está en la misma fila: no suma filas leídas.
 	const filter =
 		category === 'femenino'
 			? "AND p.sex = 'F'"
 			: age
-				? `AND p.birth_year ${age.born === 'since' ? '>=' : '<='} ?1`
+				? `AND p.birth_year ${age.born === 'since' ? '>=' : '<='} ?1 AND p.birth_year_hidden = 0`
 				: ''
 	// En las que suben, el sexo con +, para que no vaya por players_sex: sin
 	// sqlite_stat1, el planificador lo prefería a players_rating_gain y ordenaba
 	// a todas las jugadoras (de 206 filas a 11.885 con 98.000 jugadores).
 	const risersFilter = category === 'femenino' ? "AND +p.sex = 'F'" : filter
-	const columns = 'p.fide_id AS fideId, p.name, p.title, p.birth_year AS birthYear, p.rating_std AS ratingStd'
+	const columns =
+		'p.fide_id AS fideId, p.name, p.title, p.birth_year AS birthYear, p.birth_year_hidden AS birthYearHidden, p.rating_std AS ratingStd'
 	return {
 		top: `SELECT ${columns} FROM players p
 			WHERE p.inactive = 0 AND p.rating_std IS NOT NULL ${filter}
@@ -249,15 +264,15 @@ export function rankingQueries(category: RankingCategory, year: number): { top: 
 /** Ranking de una categoría en el año `year`, con la fecha de la lista FIDE. */
 export async function getRanking(db: D1Database, category: RankingCategory, year: number): Promise<Ranking> {
 	const { top: topSql, risers: risersSql, params } = rankingQueries(category, year)
-	const [list, top, risers] = await db.batch<{ updatedAt: string } | RankingRow | RiserRow>([
+	const [list, top, risers] = await db.batch<{ updatedAt: string } | Stored<RankingRow> | Stored<RiserRow>>([
 		db.prepare('SELECT updated_at AS updatedAt FROM sync_state WHERE key = ?1').bind(FIDE_LIST_KEY),
 		db.prepare(topSql).bind(...params),
 		db.prepare(risersSql).bind(...params)
 	])
 	return {
 		listDate: (list.results[0] as { updatedAt: string } | undefined)?.updatedAt ?? null,
-		top: (top.results as RankingRow[]).map((p) => publicBirthYear(p, year)),
-		risers: (risers.results as RiserRow[]).map((p) => publicBirthYear(p, year))
+		top: (top.results as Stored<RankingRow>[]).map((p) => publicBirthYear(p, year)),
+		risers: (risers.results as Stored<RiserRow>[]).map((p) => publicBirthYear(p, year))
 	}
 }
 
@@ -291,14 +306,14 @@ export async function findPlayersByName(
 			LIMIT ?3`
 		)
 		.bind(terms, exceptId, limit + 1)
-		.all<PlayerChoice>()
+		.all<Stored<PlayerChoice>>()
 	return { rows: results.slice(0, limit).map((p) => publicBirthYear(p, year)), more: results.length > limit }
 }
 
 export interface PlayerProfile extends PlayerChoice {
 	/** false si no está (o ya no está) en la lista FIDE como ESP: datos sacados de sus torneos. */
 	inFideList: boolean
-	/** Puede ser menor (mayBeMinor); el año ya no está en birthYear. */
+	/** Puede ser menor (mayBeMinor), con el año guardado aunque esté oculto; el año ya no está en birthYear. */
 	minor: boolean
 }
 
@@ -310,7 +325,7 @@ export async function getPlayer(
 	const player = await db
 		.prepare(`SELECT ${PLAYER_COLUMNS} FROM players p WHERE p.fide_id = ?1`)
 		.bind(fideId)
-		.first<Omit<PlayerProfile, 'inFideList' | 'minor'>>()
+		.first<Stored<Omit<PlayerProfile, 'inFideList' | 'minor'>>>()
 	if (player) return { ...publicBirthYear(player, year), inFideList: true, minor: mayBeMinor(player.birthYear, year) }
 
 	// Jugador extranjero o dado de baja: se muestra con lo que digan sus torneos.

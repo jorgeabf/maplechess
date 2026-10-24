@@ -127,7 +127,7 @@ flowchart LR
 | Fuente | Qué aporta | Cuándo se actualiza |
 | --- | --- | --- |
 | [info64.org](https://info64.org) (FEDA) | Torneos desde 2014, participantes con FIDE ID, plantillas de equipos, clasificaciones, partidas y emparejamientos de la próxima ronda | Cada día a las 05:00 UTC (rondas de los últimos 60 días y emparejamientos de los próximos 8) y a las 15:00 y las 22:00, hora de Madrid (emparejamientos y clasificación de los torneos en curso) |
-| [Lista FIDE](https://ratings.fide.com/download_lists.phtml) | Jugadores de la federación española: título, ELO estándar, rápido y blitz, año de nacimiento (no se muestra el de los menores) y si está activo. También el ELO estándar de la lista anterior, para ver quién sube | El día 3 de cada mes |
+| [Lista FIDE](https://ratings.fide.com/download_lists.phtml) | Jugadores de la federación española: título, ELO estándar, rápido y blitz, sexo, año de nacimiento (no se muestra el de los menores ni el de quien pide ocultarlo) y si está activo. También el ELO estándar de la lista anterior, para ver quién sube | El día 3 de cada mes |
 | [Retransmisiones de lichess](https://lichess.org/broadcast) (CC BY-SA 4.0) | Partidas de los torneos que info64 enlaza a una retransmisión y no publica en PGN, y de las retransmisiones oficiales con jugadores españoles, en España y en el extranjero | Con info64 y cada día a las 06:30 UTC |
 | [lichess-org/chess-openings](https://github.com/lichess-org/chess-openings) | Códigos ECO y nombres de las aperturas (CC0) | A mano (`pnpm openings`) |
 
@@ -272,6 +272,7 @@ Necesita una cuenta de Cloudflare con **Workers Paid**: la importación de la li
 - **Un fallo de seguridad** no se publica en una incidencia: avísalo en privado desde la pestaña [Security](https://github.com/jorgeabf/maplechess/security) del repositorio, con «Report a vulnerability».
 - **Para que se retiren tus datos** (o los de un menor a tu cargo), la [política de privacidad](https://maplechess.es/privacidad#oposicion) explica cómo pedirlo.
 - **Para corregir un dato tuyo que está mal** (una partida que no es tuya, tu nombre, tu ELO o un resultado), [también](https://maplechess.es/privacidad#derechos). La corrección se mantiene aunque la fuente se vuelva a leer.
+- **Para que no se vean tu sexo o tu año de nacimiento**, que vienen de la lista FIDE, [igual](https://maplechess.es/privacidad#derechos). Las importaciones de cada mes lo respetan.
 - Los ficheros de prueba (`test/fixtures/`) no llevan datos de personas reales: tienen la estructura de las fuentes, con nombres y FIDE ID inventados.
 
 ## Licencia

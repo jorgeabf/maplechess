@@ -10,14 +10,16 @@
 // También aplica a lo guardado las reglas de los nombres de la ingesta
 // (nombres.ts): quita el año de los menores de los nombres de las partidas
 // (columnas y cabeceras del PGN), de los participantes y de los emparejamientos,
-// y anonimiza a los retirados (tabla retiradas). Y borra los torneos sensibles
+// y anonimiza a los retirados (tabla retiradas). Oculta el sexo y el año de
+// quien lo ha pedido (tabla ocultaciones). Y borra los torneos sensibles
 // (tabla torneos_sensibles) y los de menores (menores.ts), que no se guardan.
 //
 //   POST /api/admin/sync  {"workflow":"reprocess"}
 //   wrangler workflows trigger games-reprocess '{}'
-//   wrangler workflows trigger games-reprocess '{"retiradas":true}'   (sólo la retirada)
-//   wrangler workflows trigger games-reprocess '{"sensibles":true}'   (sólo los torneos sensibles)
-//   wrangler workflows trigger games-reprocess '{"menores":true}'     (sólo los torneos de menores)
+//   wrangler workflows trigger games-reprocess '{"retiradas":true}'    (sólo la retirada)
+//   wrangler workflows trigger games-reprocess '{"ocultaciones":true}' (sólo el sexo y el año ocultos)
+//   wrangler workflows trigger games-reprocess '{"sensibles":true}'    (sólo los torneos sensibles)
+//   wrangler workflows trigger games-reprocess '{"menores":true}'      (sólo los torneos de menores)
 import { WorkflowEntrypoint, type WorkflowEvent, type WorkflowStep } from 'cloudflare:workers'
 import { normalizeName } from '../lib/chess/names'
 import { parseGames } from '../lib/chess/pgn'
@@ -29,6 +31,7 @@ import { isMinorsTournament } from './menores'
 import { isRetired, nameKey, publicName, publicPgnNames, RETIRED_NAME } from './nombres'
 import {
 	anonymizeRetiredParticipations,
+	applyHiddenFields,
 	deleteExcludedTournaments,
 	deleteRetiredPlayers,
 	deleteTournaments,
@@ -59,6 +62,8 @@ export interface GamesReprocessParams {
 	after?: number
 	/** Sólo aplica la lista de retiradas, sin recorrer todas las partidas: tras añadir a alguien. */
 	retiradas?: boolean
+	/** Sólo aplica la tabla ocultaciones a los jugadores (applyHiddenFields): tras añadir a alguien. */
+	ocultaciones?: boolean
 	/** Sólo los torneos sensibles (applySensitive), sin recorrer las partidas: tras marcar alguno. */
 	sensibles?: boolean
 	/** Sólo los torneos de menores (applyMinorsTournaments), sin recorrer las partidas: si cambia la regla. */
@@ -85,8 +90,8 @@ export interface ReprocessedBatch {
 
 export class GamesReprocessWorkflow extends WorkflowEntrypoint<Env, GamesReprocessParams> {
 	async run(event: WorkflowEvent<GamesReprocessParams>, step: WorkflowStep): Promise<void> {
-		const { retiradas, sensibles, menores } = event.payload
-		const all = !retiradas && !sensibles && !menores
+		const { retiradas, ocultaciones, sensibles, menores } = event.payload
+		const all = !retiradas && !ocultaciones && !sensibles && !menores
 		// Lo primero: las partidas de los torneos borrados ya no se recorren.
 		if (all || sensibles) {
 			// Puede preguntar a lichess de qué torneo es una ronda: con sus reintentos.
@@ -118,6 +123,10 @@ export class GamesReprocessWorkflow extends WorkflowEntrypoint<Env, GamesReproce
 		if (all || retiradas) {
 			const retired = await step.do('retiradas', () => applyRetired(this.env.DB))
 			console.log(`[reprocess] retiradas: ${JSON.stringify(retired)}`)
+		}
+		if (all || ocultaciones) {
+			const hidden = await step.do('ocultaciones', () => applyHiddenFields(this.env.DB))
+			console.log(`[reprocess] ocultaciones: ${JSON.stringify(hidden)}`)
 		}
 	}
 }
