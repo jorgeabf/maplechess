@@ -164,11 +164,19 @@ export function buildTree(pgn: string): GameTree {
 	}
 }
 
-/** Lo que necesita el visor de cada nodo: los comentarios ya van pintados en la página. */
-export type ViewerNode = Omit<TreeNode, 'comments' | 'startingComments' | 'nags'>
+/**
+ * Lo que necesita el visor de cada nodo. Los comentarios ya van pintados en la
+ * lista; además, los de cada jugada (los de antes y los de después; en la
+ * raíz, los de la partida) en un solo texto, para enseñarlos bajo los botones
+ * y anunciarlos con la jugada. Sin comentarios, sin el campo.
+ */
+export type ViewerNode = Omit<TreeNode, 'comments' | 'startingComments' | 'nags'> & { comment?: string }
 
 export function toViewerNodes(tree: GameTree): ViewerNode[] {
-	return tree.nodes.map(({ comments: _c, startingComments: _s, nags: _n, ...node }) => node)
+	return tree.nodes.map(({ comments, startingComments, nags: _n, ...node }) => {
+		const texts = node.id === 0 ? tree.comments : [...startingComments, ...comments]
+		return texts.length > 0 ? { ...node, comment: texts.join(' ') } : node
+	})
 }
 
 /** Nodos de la línea principal desde la raíz (sin incluirla). */
