@@ -2,7 +2,8 @@
 // evaluación anotada y análisis con Stockfish. El árbol de jugadas (FEN de
 // cada nodo, UCI, reloj…) llega ya calculado del servidor en un
 // <script type="application/json">. En el tablero se pueden mover las piezas
-// para probar una idea: la variante propia, que no se guarda ni cambia el PGN.
+// para probar una idea, y pulsar una línea del motor para recorrerla: las dos
+// cosas hacen una variante propia, que no se guarda ni cambia el PGN.
 import { Chessground } from '@lichess-org/chessground'
 import type { Api } from '@lichess-org/chessground/api'
 import type { DrawShape } from '@lichess-org/chessground/draw'
@@ -62,6 +63,8 @@ class VisorPartida extends HTMLElement {
 	/** Escritura pendiente de la jugada en la URL (URL_DELAY_MS). */
 	private urlTimer?: ReturnType<typeof setTimeout>
 	private engineShape: DrawShape | null = null
+	/** Flecha de la primera jugada de la línea del motor señalada. */
+	private previewShape: DrawShape | null = null
 	private abort = new AbortController()
 
 	private get movesBox(): HTMLElement {
@@ -104,6 +107,11 @@ class VisorPartida extends HTMLElement {
 			signal
 		})
 		this.addEventListener('click', (event) => this.onClick(event), { signal })
+		// La flecha de la línea del motor señalada, como la de las jugadas del explorador.
+		this.addEventListener('pointerover', (event) => this.showPreview(event), { signal })
+		this.addEventListener('focusin', (event) => this.showPreview(event), { signal })
+		this.addEventListener('pointerleave', () => this.setPreview(null), { signal })
+		this.addEventListener('focusout', () => this.setPreview(null), { signal })
 		document.addEventListener('click', (event) => this.onBack(event), { signal })
 		document.addEventListener('keydown', (event) => this.onKey(event), { signal })
 		this.listenSwipe(this.querySelector<HTMLElement>('.board-box')!, signal)
@@ -131,7 +139,11 @@ class VisorPartida extends HTMLElement {
 			this.querySelector<HTMLElement>('.engine')!,
 			{
 				onToggle: (on) => (this.dataset.engine = on ? 'on' : 'off'),
-				onAnalysis: (view) => this.showAnalysis(view)
+				onAnalysis: (view) => this.showAnalysis(view),
+				// Una línea de la posición que se ve (si llega tarde, de otra, nada).
+				onLine: (fen, moves) => {
+					if (fen === this.shown.fen) this.play(moves)
+				}
 			},
 			signal
 		)
@@ -379,17 +391,18 @@ class VisorPartida extends HTMLElement {
 	}
 
 	/**
-	 * Jugadas nuevas desde lo que se ve, hechas en el tablero. Si la primera es
-	 * la de la partida (o una variante del PGN), se sigue la partida. Si no,
-	 * entran en la variante propia, que empieza o cambia desde aquí, y se va a
-	 * la primera. Con el foco en las jugadas de la franja, que se rehacen, el
-	 * foco pasa a la jugada actual: si no, se perdería con ellas.
+	 * Jugadas nuevas desde lo que se ve: una, hecha en el tablero, o una línea
+	 * del motor. Si la primera es la de la partida (o una variante del PGN),
+	 * se sigue la partida. Si no, entran en la variante propia, que empieza o
+	 * cambia desde aquí, y se va a la primera. Con el foco en la línea del
+	 * motor pulsada o en las jugadas de la franja, que se rehacen, el foco
+	 * pasa a la jugada actual: si no, se perdería con ellas.
 	 */
 	private play(moves: LineMove[]): void {
 		const [first] = moves
 		if (!first) return
 		const active = document.activeElement
-		const follow = active instanceof Element && active.closest('[data-variant-moves]') !== null
+		const follow = active instanceof Element && active.closest('.engine-lines, [data-variant-moves]') !== null
 		const step = this.step ?? 0
 		const child =
 			step === 0 ? this.nodes[this.current].children.find((id) => this.nodes[id].uci === first.uci) : undefined
@@ -435,6 +448,7 @@ class VisorPartida extends HTMLElement {
 			movable: { color: pos ? turn : undefined, dests: pos ? chessgroundDests(pos) : new Map() }
 		})
 		this.engineShape = null
+		this.previewShape = null
 		this.drawShapes()
 		this.showCurrent()
 		this.markEnds()
@@ -545,7 +559,7 @@ class VisorPartida extends HTMLElement {
 		}
 	}
 
-	/** Las flechas del PGN (en una jugada de la variante propia, ninguna) y la del motor. */
+	/** Las flechas del PGN (en una jugada de la variante propia, ninguna), la del motor y la de la línea señalada. */
 	private drawShapes(): void {
 		const annotated = this.step ? [] : this.nodes[this.current].shapes
 		const shapes: DrawShape[] = annotated.map((s) => ({
@@ -555,7 +569,24 @@ class VisorPartida extends HTMLElement {
 			brush: s.color
 		}))
 		if (this.engineShape) shapes.push(this.engineShape)
+		if (this.previewShape) shapes.push(this.previewShape)
 		this.cg?.setAutoShapes(shapes)
+	}
+
+	/** Flecha de la línea del motor sobre la que está el puntero o el foco (data-uci, panel-motor.ts). */
+	private showPreview(event: Event): void {
+		const line = event.target instanceof Element ? event.target.closest<HTMLElement>('[data-uci]') : null
+		this.setPreview(line?.dataset.uci ?? null)
+	}
+
+	/** En gris, como la vista previa del explorador: el azul es la mejor jugada. */
+	private setPreview(uci: string | null): void {
+		const shape: DrawShape | null = uci
+			? { orig: uci.slice(0, 2) as Key, dest: uci.slice(2, 4) as Key, brush: 'paleGrey' }
+			: null
+		if (shape?.orig === this.previewShape?.orig && shape?.dest === this.previewShape?.dest) return
+		this.previewShape = shape
+		this.drawShapes()
 	}
 
 	private flip(): void {

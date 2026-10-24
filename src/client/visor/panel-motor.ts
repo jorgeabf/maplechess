@@ -1,13 +1,12 @@
 // Panel del motor: interruptor, estado y líneas de Stockfish. Lo usan el visor
 // de partidas y el explorador del repertorio (marcado en PanelMotor.astro).
 // Quien lo usa le dice qué posición mostrar y recibe la evaluación y la mejor
-// jugada para pintarlas en su tablero.
-import { normalizeMove } from 'chessops/chess'
-import { makeSan } from 'chessops/san'
-import { parseUci } from 'chessops/util'
-import { formatScore, gameOver, positionOf, whitePov, winningChances, type GameOver } from '../../lib/chess/uci'
+// jugada para pintarlas en su tablero y, si las líneas se pulsan, la que se
+// pulsa.
+import { formatScore, gameOver, whitePov, winningChances, type GameOver } from '../../lib/chess/uci'
 import { formatLine } from '../../lib/format'
 import type { Analysis, Engine } from './motor'
+import { playLine, type LineMove } from './variante'
 
 const ENGINE_PREF = 'visor:motor'
 const PV_MOVES = 12
@@ -28,27 +27,6 @@ function writePref(on: boolean): void {
 	}
 }
 
-/**
- * Variante del motor (UCI) en SAN con números de jugada, como la lista de
- * jugadas: "34…Qxc3 35.Qa4" (makeSanVariation de chessops escribe
- * "34... Qxc3 35. Qa4").
- */
-function pvToSan(fen: string, pv: string[]): string {
-	const pos = positionOf(fen)
-	if (!pos) return ''
-	let ply = (pos.fullmoves - 1) * 2 + (pos.turn === 'white' ? 1 : 2)
-	const moves: { ply: number; san: string }[] = []
-	for (const uci of pv.slice(0, PV_MOVES)) {
-		const parsed = parseUci(uci)
-		if (!parsed) break
-		const move = normalizeMove(pos, parsed)
-		if (!pos.isLegal(move)) break
-		moves.push({ ply: ply++, san: makeSan(pos, move) })
-		pos.play(move)
-	}
-	return formatLine(moves)
-}
-
 /** «Stockfish 19 · profundidad 18», con «…» mientras busca. */
 function depthStatus(depth: number, done: boolean): string {
 	return `Stockfish 19 · profundidad ${depth}${done ? '' : '…'}`
@@ -66,6 +44,11 @@ export interface EngineHandlers {
 	onToggle?: (on: boolean) => void
 	/** Nuevo análisis de la posición actual; null al apagarse. */
 	onAnalysis: (view: EngineView | null) => void
+	/**
+	 * Se pulsa una línea: sus jugadas (las que se ven, PV_MOVES) desde `fen`.
+	 * Sin él, las líneas son texto.
+	 */
+	onLine?: (fen: string, moves: LineMove[]) => void
 }
 
 /** Estado de una posición en la que ya no hay jugadas (gameOver). */
@@ -86,6 +69,8 @@ export class EnginePanel {
 	private infiniteFen = ''
 	/** La posición y la profundidad de las líneas que se ven. */
 	private shown = { fen: '', depth: 0 }
+	/** Las jugadas de cada línea que se ve, para pulsarla. */
+	private lines: LineMove[][] = []
 	private on = false
 	/** Cuenta los análisis pedidos: uno que llega tarde (otra posición, apagado) se descarta. */
 	private request = 0
@@ -101,7 +86,12 @@ export class EnginePanel {
 		this.toggle.addEventListener('change', () => void this.setOn(this.toggle.checked), { signal })
 		this.infiniteButton = root.querySelector<HTMLButtonElement>('[data-engine-infinite]')!
 		this.infiniteButton.addEventListener('click', () => this.analyzeInfinite(), { signal })
+		this.linesBox.addEventListener('click', (event) => this.onLineClick(event), { signal })
 		document.addEventListener('visibilitychange', () => this.onVisibility(), { signal })
+	}
+
+	private get linesBox(): HTMLElement {
+		return this.root.querySelector('.engine-lines')!
 	}
 
 	/** Enciende el motor si se dejó encendido la última vez. Después del primer show(). */
@@ -181,7 +171,7 @@ export class EnginePanel {
 		this.infiniteFen = ''
 		this.shown = { fen: '', depth: 0 }
 		this.setStatus('')
-		this.root.querySelector('.engine-lines')!.replaceChildren()
+		this.clearLines()
 		this.handlers.onAnalysis(null)
 	}
 
@@ -196,7 +186,7 @@ export class EnginePanel {
 		const again = fen === this.shown.fen && this.shown.depth > 0
 		if (!again) {
 			this.shown = { fen, depth: 0 }
-			this.root.querySelector('.engine-lines')!.replaceChildren()
+			this.clearLines()
 		}
 		const over = gameOver(fen)
 		if (over) {
@@ -257,18 +247,63 @@ export class EnginePanel {
 		this.shown.depth = analysis.depth
 
 		this.setStatus(depthStatus(analysis.depth, analysis.done), analysis.done)
-		const items = lines.map((line) => {
-			const li = document.createElement('li')
-			const score = document.createElement('span')
-			score.className = 'score'
-			score.textContent = formatScore(whitePov(line.score, fen))
-			const pv = document.createElement('span')
-			pv.className = 'pv'
-			pv.textContent = pvToSan(fen, line.pv)
-			li.append(score, pv)
-			return li
-		})
-		this.root.querySelector('.engine-lines')!.replaceChildren(...items)
+		this.lines = lines.map((line) => playLine(fen, line.pv.slice(0, PV_MOVES)))
+		this.renderLines(lines.map((line) => formatScore(whitePov(line.score, fen))))
 		this.handlers.onAnalysis({ winning: winningChances(whitePov(best.score, fen)), best: best.pv[0] ?? null })
+	}
+
+	/**
+	 * Pinta las líneas sobre las que ya hay, sin rehacerlas: llegan unas siete
+	 * veces por segundo, y un botón nuevo bajo el puntero perdía el clic
+	 * (pulsado en uno y soltado en otro) y el foco. Cada una, con su
+	 * puntuación y sus jugadas en SAN con números, como la lista de jugadas:
+	 * "34…Qxc3 35.Qa4". Las que se pulsan llevan su primera jugada (data-uci),
+	 * para la flecha que la señala.
+	 */
+	private renderLines(scores: string[]): void {
+		const box = this.linesBox
+		this.lines.forEach((moves, i) => {
+			const item = box.children[i] ?? box.appendChild(this.lineItem())
+			const line = item.querySelector<HTMLElement>('.pv-line')!
+			line.dataset.line = String(i)
+			if (line instanceof HTMLButtonElement && moves[0]) line.dataset.uci = moves[0].uci
+			line.querySelector('.score')!.textContent = scores[i]
+			line.querySelector('.pv')!.textContent = formatLine(moves)
+		})
+		while (box.children.length > this.lines.length) box.lastElementChild!.remove()
+	}
+
+	/** Una línea: un botón si se pulsan (onLine) y, si no, texto. */
+	private lineItem(): HTMLLIElement {
+		const item = document.createElement('li')
+		const line = document.createElement(this.handlers.onLine ? 'button' : 'span')
+		if (line instanceof HTMLButtonElement) line.type = 'button'
+		line.className = 'pv-line'
+		const score = document.createElement('span')
+		score.className = 'score'
+		const pv = document.createElement('span')
+		pv.className = 'pv'
+		// El espacio no se ve (entre dos elementos de un flex) y separa la
+		// puntuación de la primera jugada al leer el botón: «−1.03 17.Nf3…».
+		line.append(score, ' ', pv)
+		item.append(line)
+		return item
+	}
+
+	/**
+	 * Vacía las líneas al cambiar de posición o apagar el motor. Con el foco en
+	 * una (las flechas valen en toda la página), al interruptor: si no, se
+	 * perdería con ella.
+	 */
+	private clearLines(): void {
+		if (this.linesBox.contains(document.activeElement)) this.toggle.focus()
+		this.linesBox.replaceChildren()
+		this.lines = []
+	}
+
+	private onLineClick(event: Event): void {
+		const line = event.target instanceof Element ? event.target.closest<HTMLElement>('button[data-line]') : null
+		const moves = line ? this.lines[Number(line.dataset.line)] : undefined
+		if (moves?.length) this.handlers.onLine?.(this.shown.fen, moves)
 	}
 }

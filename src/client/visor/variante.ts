@@ -1,5 +1,7 @@
-// Jugadas fuera de la partida: las que se hacen en el tablero del visor (la
-// variante propia, que no se guarda).
+// Jugadas fuera de la partida: las de una línea del motor y las que se hacen
+// en el tablero del visor (la variante propia, que no se guarda). Las comparten
+// el panel del motor, que pinta sus líneas con ellas, y el visor, que las
+// recorre en el tablero.
 import { normalizeMove } from 'chessops/chess'
 import { makeFen } from 'chessops/fen'
 import { makeSan } from 'chessops/san'

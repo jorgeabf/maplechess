@@ -93,12 +93,32 @@
 		min-block-size: calc(3lh + 2 * var(--space-1));
 	}
 
-	.engine-lines :global(li) {
+	/*
+	 * Cada línea, un botón (panel-motor.ts) donde se pulsan: en el visor la
+	 * recorre en el tablero; en el explorador, juega su primera jugada. Sin
+	 * aspecto de botón, como las jugadas de la lista: el fondo al pasar por
+	 * encima y el anillo de foco dicen que se pulsa.
+	 */
+	.engine-lines :global(.pv-line) {
 		display: flex;
 		gap: var(--space-2);
+		inline-size: 100%;
 		overflow: hidden;
 		white-space: nowrap;
 		text-overflow: ellipsis;
+	}
+
+	.engine-lines :global(button.pv-line) {
+		padding: 0;
+		border: 0;
+		border-radius: var(--radius-s);
+		background: none;
+		text-align: start;
+		cursor: pointer;
+	}
+
+	.engine-lines :global(button.pv-line:hover) {
+		background: var(--surface-hover);
 	}
 
 	.engine-lines :global(.score) {
@@ -129,7 +149,7 @@
 			min-block-size: calc(6lh + 2 * var(--space-1));
 		}
 
-		.engine-lines :global(li) {
+		.engine-lines :global(.pv-line) {
 			align-items: baseline;
 			white-space: normal;
 		}
