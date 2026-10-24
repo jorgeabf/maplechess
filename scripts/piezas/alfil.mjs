@@ -1,9 +1,8 @@
 // Alfil: mitra apuntada sobre un collar y el cuerpo abierto en curva, con la
-// peana del peón. Lo separan del peón la altura, la bola de arriba y la
+// peana del rey. Tiene más masa que el peón (la mitra, el cuello y el collar,
+// más anchos), y lo distinguen además la altura, la bola de arriba y la
 // ranura: una cuña tallada que entra ancha por la derecha de la mitra y se
-// estrecha hacia el eje. No corta la silueta: llega al borde y se funde con
-// él. Las medidas están ajustadas a la rejilla de 56, 64, 72 y 82 px, para que
-// el borde claro de la negra pase con margen sobre el nogal.
+// estrecha hacia el eje. No corta la silueta: llega al borde y se funde con él.
 import { circulo, filetePeana, peana, torno } from './comun.mjs'
 
 const n = (x) => Math.round(x * 10) / 10
@@ -23,26 +22,26 @@ function ranura([x0, y0], [x1, y1], a0, a1) {
 export default {
 	letra: 'B',
 	partes: [
-		torno([50, 53.5], ['L', 57, 53.5], ['C', 56.5, 65, 60.5, 75, 73, 78], ...peana(26)),
-		torno([50, 21.5], ['C', 56, 24.5, 62.5, 30.5, 62.5, 37.5], ['C', 62.5, 43, 59.5, 46.5, 56.5, 49], ['L', 50, 49]),
-		torno([50, 48], ['L', 61.5, 48], ['Q', 65, 48, 65, 51.25], ['Q', 65, 54.5, 61.5, 54.5], ['L', 50, 54.5]),
-		circulo(50, 21, 5)
+		torno([50, 55], ['L', 60, 55], ['C', 59.6, 65, 63.5, 75, 74, 78], ...peana(27)),
+		torno([50, 21.5], ['C', 55.9, 24.5, 65.5, 31.5, 65.5, 38.5], ['C', 65.5, 44, 61.6, 47.5, 58.1, 50], ['L', 50, 50]),
+		torno([50, 49], ['L', 64, 49], ['Q', 67.5, 49, 67.5, 52.5], ['Q', 67.5, 56, 64, 56], ['L', 50, 56]),
+		circulo(50, 21, 5.5)
 	],
-	lineas: filetePeana(26),
-	marcas: ranura([61.5, 32.5], [48.7, 42.1], 2.5, 1.5),
+	lineas: filetePeana(27),
+	marcas: ranura([63.9, 33.9], [49.1, 45], 2.8, 1.7),
 	// La silueta que se ve en el tablero, sin juntas, como la del rey: las
 	// partes con medio contorno más por los lados y por arriba, y la peana en
 	// la línea base. La ranura, un hueco algo más ancho que en el tablero.
 	figura:
 		torno(
-			[50, 14],
-			['A', 7, 56.5, 23.6, 1],
-			['C', 60.8, 27.3, 64.5, 32.6, 64.5, 37.5],
-			['C', 64.5, 40.6, 63.3, 43.6, 61.7, 46],
-			['Q', 67, 46, 67, 51.25],
-			['Q', 67, 56.5, 61.5, 56.5],
-			['L', 58.9, 56.5],
-			['C', 59, 66.4, 62.1, 73.3, 75, 76],
-			...peana(28, 12)
-		) + ranura([61, 33.6], [48.2, 42.6], 3, 2)
+			[50, 13.5],
+			['A', 7.5, 57, 23.7, 1],
+			['C', 62.2, 27.8, 67.5, 33.6, 67.5, 38.5],
+			['C', 67.5, 41.6, 66, 44.5, 64.1, 47],
+			['Q', 69.5, 47, 69.5, 52.5],
+			['Q', 69.5, 58, 64, 58],
+			['L', 62, 58],
+			['C', 62.2, 66.6, 65.1, 73.4, 76, 76],
+			...peana(29, 12)
+		) + ranura([63.4, 34.9], [48.6, 45.5], 3.3, 2.2)
 }
