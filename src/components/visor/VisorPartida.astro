@@ -384,6 +384,7 @@ const hasVariations = tree.nodes.some((n) => n.children.length > 1)
 		flex: 1 0 4.75rem;
 		max-inline-size: 8rem;
 		overflow: hidden;
+		font-family: var(--font-moves);
 		font-weight: var(--weight-strong);
 		text-align: center;
 		text-overflow: ellipsis;
@@ -540,8 +541,15 @@ const hasVariations = tree.nodes.some((n) => n.children.length > 1)
 		border-radius: var(--radius-s);
 		background: none;
 		color: var(--text);
+		font-family: var(--font-moves);
 		font-weight: var(--weight-strong);
 		cursor: pointer;
+	}
+
+	/* El símbolo de la jugada ($146, la novedad, es una «N»), en letras. Acotado:
+	   Logo.astro tiene otro .glyph. */
+	.moves :global(.glyph) {
+		font-family: var(--font-sans);
 	}
 
 	.moves :global(.move:hover),
