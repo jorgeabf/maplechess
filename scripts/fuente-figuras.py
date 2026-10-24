@@ -57,6 +57,11 @@ UPM = 1000
 # lean como una palabra. Elegidos con Jorge el 24-oct-2026, sobre una lista
 # de jugadas real, entre 700, 760 y 820 de alto con 30, 40 y 55 de margen: con
 # 700, a 14 px las figuras se empastaban, y con 820 pesaban más que la jugada.
+# Las demás miden HEIGHT por la raíz cuadrada de su alto entre el de la más
+# alta, medidos en la tinta: guardan el orden de alturas del tablero con menos
+# diferencia, y la torre, que con una escala común se quedaba en unos tres
+# cuartos del rey, pasa a un 85 %. Elegido por Jorge el 24-oct-2026 entre esa
+# escala común, ésta (la intermedia) y todas a HEIGHT.
 HEIGHT = 760
 SIDE = 40
 # Altura sobre y bajo la línea base. No mueven nada: la altura de la línea la
@@ -120,14 +125,17 @@ def to_font(pen: RecordingPen, baseline: float, scale: float, x_min: float) -> R
 def build(source: Path) -> None:
     letters = [chr(code) for code in parse_unicodes(UNICODES)]
     figures = {letter: read_svg(source / f"{letter}.svg") for letter in letters}
-    # Una escala para las cinco: la figura más alta llega a HEIGHT sobre la
-    # línea base.
-    scale = HEIGHT / max(baseline - bounds(pen)[1] for pen, baseline in figures.values())
+    # Alto de la tinta de cada figura sobre la línea base, en unidades del SVG.
+    heights = {letter: baseline - bounds(pen)[1] for letter, (pen, baseline) in figures.items()}
+    tallest = max(heights.values())
 
     charstrings, metrics = {}, {}
     notdef = T2CharStringPen(UPM // 2, None)
     charstrings[".notdef"], metrics[".notdef"] = notdef.getCharString(), (UPM // 2, 0)
     for letter, (pen, baseline) in figures.items():
+        # Una escala por figura, para que mida HEIGHT × √(su alto / el de la
+        # más alta) (ver HEIGHT): la más alta, HEIGHT.
+        scale = HEIGHT * (heights[letter] / tallest) ** 0.5 / heights[letter]
         x_min, _, x_max, _ = bounds(pen)
         glyph = to_font(pen, baseline, scale, x_min)
         advance = round((x_max - x_min) * scale) + 2 * SIDE
