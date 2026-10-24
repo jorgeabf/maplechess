@@ -386,9 +386,17 @@
 		font-variant-numeric: tabular-nums;
 	}
 
-	/* Formularios */
+	/*
+	 * Formularios. El rótulo encima del campo, en una columna que no tiene
+	 * mínimo y llena el label. Con una columna auto, su mínimo era el ancho
+	 * propio del campo (206 px con size=20) y a 250 px el campo de «Tú
+	 * contra…» y el del buscador de la cabecera se salían de su caja. Con
+	 * minmax(0, 1fr) encoge cuando no cabe, también el label en una fila flex
+	 * (su min-content pasa a 0), y con sitio mide lo mismo.
+	 */
 	label {
 		display: grid;
+		grid-template-columns: minmax(0, 1fr);
 		gap: var(--space-1);
 		font-size: var(--text-s);
 		color: var(--text-muted);
