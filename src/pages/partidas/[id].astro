@@ -7,7 +7,7 @@ import Base from '../../layouts/Base.astro'
 import { buildTree } from '../../lib/chess/movetree'
 import { getAdjacentGames, getGame } from '../../lib/db/games'
 import { displayName, formatDate, formatResult } from '../../lib/format'
-import { CC_BY_SA } from '../../lib/licenses'
+import { CC_BY_SA, licensedPgn } from '../../lib/licenses'
 import { ME_COOKIE, isOwn, resolveMe } from '../../lib/me'
 import { backTarget, boardColor, positiveInt, type BackKind } from '../../lib/params'
 import { sourceUrl } from '../../lib/urls'
@@ -101,7 +101,7 @@ const backLabel = back && `← Volver ${(ownBack && OWN_BACK_LABELS[back.kind]) 
 
 	<VisorPartida
 		tree={tree}
-		pgn={game.pgn}
+		pgn={licensedPgn(game.pgn)}
 		white={white}
 		black={black}
 		result={game.result}
