@@ -24,7 +24,7 @@ const { items } = Astro.props
 					</button>
 				)
 			case 'comment':
-				return <span class="comment">{item.text}</span>
+				return <span class:list={['comment', { advice: item.advice }]}>{item.text}</span>
 			case 'variation':
 				return (
 					<span class="variation">

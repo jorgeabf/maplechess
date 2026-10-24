@@ -43,7 +43,7 @@ const items = moveList(tree)
 // escribir en el portapapeles.
 const nodes = toViewerNodes(tree)
 const data = JSON.stringify({ nodes, pgn: pgn.trim() }).replace(/</g, '\\u003c')
-const hasComments = nodes.some((n) => n.comment !== undefined)
+const hasComments = nodes.some((n) => n.comments !== undefined)
 const lastPly = tree.nodes.reduce((max, n) => Math.max(max, n.ply), 0)
 // Mayús+→ entra en las variantes del PGN: sólo se dice donde las hay. Mayús+←
 // sale también de la propia, que se puede hacer en cualquiera.
@@ -128,7 +128,7 @@ const hasVariations = tree.nodes.some((n) => n.children.length > 1)
 			<EvalChart tree={tree} />
 			{/* section y no div: con nombre es una región, y un div ignora aria-label. */}
 			<section class="moves" aria-label="Jugadas">
-				{tree.comments.map((text) => <p class="comment intro">{text}</p>)}
+				{tree.comments.map((c) => <p class:list={['comment intro', { advice: c.advice }]}>{c.text}</p>)}
 				<MoveLine items={items} />
 				<span class="final-result result">{formatResult(result)}</span>
 			</section>
@@ -584,6 +584,18 @@ const hasVariations = tree.nodes.some((n) => n.children.length > 1)
 	.moves :global(.comment.intro) {
 		display: block;
 		margin: 0 0 var(--space-2);
+	}
+
+	/*
+	 * Los consejos de lichess («Mejor Qxc3.», GameComment en movetree.ts), con
+	 * las figuras, como la jugada que nombran. Las figuras no se inclinan con la
+	 * cursiva, como en los libros: la fuente no tiene cursiva y la inclinación
+	 * sería la que imita el navegador.
+	 */
+	.moves :global(.comment.advice),
+	.move-note :global(.advice) {
+		font-family: var(--font-moves);
+		font-synthesis-style: none;
 	}
 
 	.moves :global(.variation) {
