@@ -262,6 +262,9 @@ curl -X POST localhost:4321/api/admin/sync -H "Authorization: Bearer $TOKEN" \
   - Retransmisiones enlazadas desde info64: sólo si info64 no publica el PGN. Se guardan las partidas con jugadas y con algún participante del torneo.
   - Oficiales con españoles (`LICHESS_SYNC`), aunque info64 no las enlace. En la medición de abril a septiembre de 2026 eran unas 1.280 partidas nuevas al mes; el 97 % trae `%clk`.
   - **Licencia CC BY-SA 4.0** (database.lichess.org): hay que citar la fuente y la licencia (pie, `/acerca`, torneo y partida, con `CC_BY_SA` de `src/lib/licenses.ts`). Lo derivado se ofrece con la misma licencia.
+    - En los PGN que se descargan o se copian, un comentario antes de la primera jugada (`licensedPgn` en `src/lib/licenses.ts`, que aplican `pgnResponse` y la página de la partida), puesto al entregarlo y no en el guardado.
+    - Una partida es de lichess si sus cabeceras `GameURL`, `Site` o `BroadcastURL` llevan una dirección de lichess (`lichessUrl`), no por el torneo: las descargas no leen más filas, y también se encuentran las de info64 que son una exportación de lichess (el CE Absoluto 2025, con su análisis). Lo mismo decide el crédito de debajo de la partida: en esas de info64, «retransmisión de lichess publicada en info64 (FEDA)». Comprobado el 24-oct-2026: ninguna partida de un torneo con `games_source = 'lichess'` va sin esas cabeceras.
+    - La página del torneo sigue decidiendo por `games_source`, porque no lee los PGN: la del CE Absoluto 2025 no menciona lichess, aunque sus partidas sí.
   - Volcados mensuales de las oficiales: `database.lichess.org/broadcast/lichess_db_broadcast_YYYY-MM.pgn.zst`, de 12 a 31 MB. Son de pzstd, con marcos saltables; `scripts/lichess-rondas.mjs` los lee para la carga inicial.
 - **chess-results: NO se usa.** Sus términos prohíben copiar y republicar sus datos. Queda pendiente de que Swiss-Manager dé permiso.
 
