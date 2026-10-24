@@ -197,6 +197,18 @@
 		/* Coordenadas sobre cada casilla: 9,4:1 y 4,8:1. */
 		--board-coord-on-light: var(--walnut-dark);
 		--board-coord-on-dark: var(--maple-pale);
+		/*
+		 * Piezas: un tono claro y una tinta de nogal casi negra, en el borde de
+		 * todas, para que uno de los dos destaque sobre cualquier casilla. El
+		 * nogal es de luminosidad media: contra él, ningún color pasa de 5,1:1, y
+		 * una pieza de un solo tono oscuro no llega a 4,5:1. Las blancas, relleno
+		 * claro y contorno de tinta; las negras, al revés, con el filete claro
+		 * por fuera (la taracea del logo). La tinta queda a 13,7:1 sobre el arce;
+		 * el claro, a 4,8:1 sobre el nogal. Las SVG llevan los colores escritos:
+		 * las genera scripts/piezas.mjs a partir de estos tokens.
+		 */
+		--board-piece-light: var(--maple-pale);
+		--board-piece-ink: #1c1610;
 		/* Blanco puro en modo claro: el crema de la página se confundiría con él. */
 		--eval-white: light-dark(#ffffff, #f4f2ec);
 		--eval-black: #2a2b2f;

@@ -1,7 +1,7 @@
 /*
  * Tablero de chessground con los tokens de la web (sustituye a su tema
- * "brown") y piezas mpchess (sustituyen a las cburnett, las de lichess por
- * defecto).
+ * "brown") y las piezas propias de MapleChess (sustituyen a las cburnett, las
+ * de lichess por defecto).
  */
 
 /*
@@ -37,59 +37,59 @@ cg-board {
 }
 
 /*
- * Piezas mpchess de Maxime Chupin (GPL-3.0), dibujadas para los diagramas
- * del paquete mpchess de LaTeX: https://github.com/chupinmaxime/mpchess-pieces.
- * Los SVG son los de lichess (public/piece/mpchess), con los caballos
- * corregidos. Ninguno llega a los 4 KB de assetsInlineLimit, así que Vite los
- * incrusta en este CSS: llegan con él, sin peticiones aparte. El contorno
- * queda a 16:1 sobre el arce y a 4,1:1 sobre el nogal.
+ * Piezas propias de MapleChess, dibujadas desde cero: perfiles de torno, la
+ * taracea del logo y, en el borde de todas, un tono claro y una tinta casi
+ * negra, para que destaquen sobre las dos casillas (13,7:1 sobre el arce y
+ * 4,8:1 sobre el nogal). Las genera scripts/piezas.mjs, que también las mide.
+ * Ninguna llega a los 4 KB de assetsInlineLimit, así que Vite las incrusta en
+ * este CSS: llegan con él, sin peticiones aparte.
  */
 .cg-wrap piece.pawn.white {
-	background-image: url('../../assets/pieces/mpchess/wP.svg');
+	background-image: url('../../assets/pieces/maple/wP.svg');
 }
 
 .cg-wrap piece.knight.white {
-	background-image: url('../../assets/pieces/mpchess/wN.svg');
+	background-image: url('../../assets/pieces/maple/wN.svg');
 }
 
 .cg-wrap piece.bishop.white {
-	background-image: url('../../assets/pieces/mpchess/wB.svg');
+	background-image: url('../../assets/pieces/maple/wB.svg');
 }
 
 .cg-wrap piece.rook.white {
-	background-image: url('../../assets/pieces/mpchess/wR.svg');
+	background-image: url('../../assets/pieces/maple/wR.svg');
 }
 
 .cg-wrap piece.queen.white {
-	background-image: url('../../assets/pieces/mpchess/wQ.svg');
+	background-image: url('../../assets/pieces/maple/wQ.svg');
 }
 
 .cg-wrap piece.king.white {
-	background-image: url('../../assets/pieces/mpchess/wK.svg');
+	background-image: url('../../assets/pieces/maple/wK.svg');
 }
 
 .cg-wrap piece.pawn.black {
-	background-image: url('../../assets/pieces/mpchess/bP.svg');
+	background-image: url('../../assets/pieces/maple/bP.svg');
 }
 
 .cg-wrap piece.knight.black {
-	background-image: url('../../assets/pieces/mpchess/bN.svg');
+	background-image: url('../../assets/pieces/maple/bN.svg');
 }
 
 .cg-wrap piece.bishop.black {
-	background-image: url('../../assets/pieces/mpchess/bB.svg');
+	background-image: url('../../assets/pieces/maple/bB.svg');
 }
 
 .cg-wrap piece.rook.black {
-	background-image: url('../../assets/pieces/mpchess/bR.svg');
+	background-image: url('../../assets/pieces/maple/bR.svg');
 }
 
 .cg-wrap piece.queen.black {
-	background-image: url('../../assets/pieces/mpchess/bQ.svg');
+	background-image: url('../../assets/pieces/maple/bQ.svg');
 }
 
 .cg-wrap piece.king.black {
-	background-image: url('../../assets/pieces/mpchess/bK.svg');
+	background-image: url('../../assets/pieces/maple/bK.svg');
 }
 
 cg-board square.last-move {
