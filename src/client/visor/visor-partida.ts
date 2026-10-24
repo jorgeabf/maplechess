@@ -410,10 +410,24 @@ class VisorPartida extends HTMLElement {
 		this.dataset.orientation = this.dataset.orientation === 'black' ? 'white' : 'black'
 	}
 
-	/** Jugada actual, entre los botones. */
+	/**
+	 * Jugada actual, entre los botones, y su comentario debajo (sólo en las
+	 * partidas con comentarios). El comentario va también en la jugada, oculto
+	 * a la vista: es la región viva, así que se anuncia con ella en cualquier
+	 * ancho, y la línea de debajo queda fuera del árbol de accesibilidad.
+	 */
 	private showCurrent(): void {
 		const node = this.nodes[this.current]
-		this.querySelector('[data-current]')!.textContent = node.id === 0 ? 'Inicio' : formatMove(node.ply, node.san)
+		const current = this.querySelector('[data-current]')!
+		current.textContent = node.id === 0 ? 'Inicio' : formatMove(node.ply, node.san)
+		if (node.comment) {
+			const spoken = document.createElement('span')
+			spoken.className = 'visually-hidden'
+			spoken.textContent = `. ${node.comment}`
+			current.append(spoken)
+		}
+		const note = this.querySelector('[data-note]')
+		if (note) note.textContent = node.comment ?? ''
 	}
 
 	/**

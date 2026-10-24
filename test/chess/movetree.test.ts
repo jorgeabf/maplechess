@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { moveList, type MoveItem } from '../../src/lib/chess/movelist'
-import { buildTree, mainline } from '../../src/lib/chess/movetree'
+import { buildTree, mainline, toViewerNodes } from '../../src/lib/chess/movetree'
 
 const PGN = `[Event "Prueba"]
 [White "A"]
@@ -93,6 +93,14 @@ describe('anotaciones de lichess', () => {
 			'1. e4 e5 2. Nf3?! {Mejor d4.} 2… Nc6? {Mejor Nf6.} 3. Bc4?? {Mejor Bb5.} ' +
 				'3… Nf6? {Mate inevitable; mejor Bc5.} 4. Ng5?? {Deja escapar el mate; mejor Bxf7+.} 4… d5 {Lo de siempre}'
 		)
+	})
+})
+
+describe('toViewerNodes', () => {
+	it('da a cada jugada sus comentarios en un texto, y a la raíz los de la partida', () => {
+		const nodes = toViewerNodes(buildTree('{Partida} 1. e4 {Abre} {[%clk 0:03:00]} e5 ({Otra} 1... c5 {Siciliana}) 2. Nf3 *'))
+		expect(nodes.map((n) => n.comment)).toEqual(['Partida', 'Abre', undefined, undefined, 'Otra Siciliana'])
+		expect(nodes[2]).not.toHaveProperty('comment')
 	})
 })
 

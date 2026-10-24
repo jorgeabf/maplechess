@@ -11,6 +11,7 @@ import PlayerName from '../PlayerName.astro'
 import EvalChart from './EvalChart.astro'
 import MoveLine from './MoveLine.astro'
 import PanelMotor from './PanelMotor.astro'
+import ScriptTableros from './ScriptTableros.astro'
 
 interface Side {
 	name: string
@@ -40,7 +41,9 @@ const items = moveList(tree)
 // "<" escapado: el JSON va dentro de un <script> y no puede cerrarlo. El PGN
 // va aquí y no se pide al copiar: tras esperar a la red, Safari ya no deja
 // escribir en el portapapeles.
-const data = JSON.stringify({ nodes: toViewerNodes(tree), pgn: pgn.trim() }).replace(/</g, '\\u003c')
+const nodes = toViewerNodes(tree)
+const data = JSON.stringify({ nodes, pgn: pgn.trim() }).replace(/</g, '\\u003c')
+const hasComments = nodes.some((n) => n.comment !== undefined)
 const lastPly = tree.nodes.reduce((max, n) => Math.max(max, n.ply), 0)
 // Los atajos de las variantes (Mayús+← y Mayús+→), sólo donde las hay.
 const hasVariations = tree.nodes.some((n) => n.children.length > 1)
@@ -102,6 +105,8 @@ const hasVariations = tree.nodes.some((n) => n.children.length > 1)
 				<span class="copied" role="status"></span>
 			</span>
 		</div>
+		{/* El comentario de la jugada actual, que la jugada ya anuncia (showCurrent). */}
+		{hasComments && <p class="move-note" aria-hidden="true" data-note></p>}
 	</div>
 
 	<div class="side">
@@ -140,9 +145,7 @@ const hasVariations = tree.nodes.some((n) => n.children.length > 1)
 	<script type="application/json" data-game set:html={data} />
 </visor-partida>
 
-{/* Con src y no con import: así el código de navegador queda fuera del
-    programa de TypeScript del servidor (ver src/client/tsconfig.json). */}
-<script src="../../client/visor/visor-partida.ts"></script>
+<ScriptTableros />
 
 <style>
 	/*
@@ -383,6 +386,28 @@ const hasVariations = tree.nodes.some((n) => n.children.length > 1)
 		margin-inline-start: auto;
 	}
 
+	/*
+	 * El comentario de la jugada actual, bajo los botones: en una columna la
+	 * lista, donde también está, queda debajo del motor y del gráfico. Sólo en
+	 * las partidas con comentarios, y con su línea reservada aunque la jugada
+	 * no tenga: así el motor no salta al avanzar. En dos columnas la lista está
+	 * al lado y no sale (en la consulta de .moves, más abajo).
+	 */
+	.move-note {
+		order: 5;
+		min-block-size: 1lh;
+		margin: 0;
+		padding-inline-start: var(--space-2);
+		border-inline-start: 2px solid var(--border);
+		color: var(--text-muted);
+		font-size: var(--text-s);
+		font-style: italic;
+	}
+
+	.move-note:empty {
+		border-color: transparent;
+	}
+
 	/* Flex y no grid: en dos columnas, la lista se queda con lo que sobre. */
 	.side {
 		display: flex;
@@ -420,6 +445,10 @@ const hasVariations = tree.nodes.some((n) => n.children.length > 1)
 	@media (width >= 54rem), (width >= 40rem) and (orientation: landscape) {
 		.moves {
 			overscroll-behavior: contain;
+		}
+
+		.move-note {
+			display: none;
 		}
 	}
 
