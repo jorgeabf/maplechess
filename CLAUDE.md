@@ -34,10 +34,11 @@ MapleChess es un buscador de jugadores españoles (lista FIDE, federación ESP),
       - El DOM sigue diciendo «Nf3»: copiar, el PGN y los lectores de pantalla no cambian, y sin la fuente se ven las letras.
       - Los caracteres de ajedrez (♘) no valen: iOS y Android los pintan como emoji.
     - La ponen `--font-moves` y `--font-moves-serif`, en la regla que ya tiene cada elemento que muestra jugadas: la lista, la franja de la variante, la jugada actual, el motor, el explorador y el dossier. Una clase global, en `@layer base`, perdería frente a ellas.
-    - La prosa y los nombres siguen con letras: los nombres de apertura, los comentarios, los consejos de lichess traducidos y el tooltip del gráfico de evaluación.
+    - La prosa y los nombres siguen con letras: los nombres de apertura, los comentarios del PGN y el tooltip del gráfico de evaluación.
       - En el cruce del dossier, las jugadas van en su propio `<span>`, fuera de la frase: con la fuente en la frase entera, las mayúsculas de los nombres saldrían como piezas.
       - El NAG 146 (la novedad, una «N») se queda en letra (`.glyph`).
-    - Escala intermedia: el rey a 0,76 em, cada figura a 0,76 × √(su alto / el del rey), y 0,04 em a cada lado.
+      - **Los consejos de lichess** que traduce la web («Mejor Qxc3.», `translateAdvice`) sí van con figuras, enteros (`advice` en `GameComment`): sus frases no llevan K, Q, R, B ni N mayúsculas, y un test lo comprueba. Una frase nueva en `LICHESS_JUDGMENTS` tiene que cumplirlo.
+    - Escala intermedia: el rey a 0,88 em, cada figura a 0,88 × √(su alto / el del rey), y 0,04 em a cada lado. Jorge eligió primero 0,76 y, con las figuras definitivas, 0,88: a 0,76 el rey del motor se quedaba en unos 10 px en el escritorio. Una jugada con figura lleva un 6 % más de tinta que con letras.
     - Pesa 1,2 KB: Vite la incrusta en el CSS como `data:`, de ahí el `font-src 'self' data:` de la CSP. Con `font-display: block` no asoma la letra. El script falla si llega a 4 KB.
     - Las figuras salen de las piezas (`scripts/piezas/figuras/`). Si cambia una, `node scripts/piezas.mjs <pieza>` y `python scripts/fuente-figuras.py`.
   - Flechas: la mejor jugada del motor, en `paleBlue` en el visor y en el explorador; la vista previa (una jugada del explorador, la línea del motor señalada), en `paleGrey`. Nunca en verde, que es el de los resultados.
