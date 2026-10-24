@@ -12,10 +12,11 @@ scripts/piezas/figuras/ si no se da otra carpeta:
 
     python scripts/fuente-figuras.py [carpeta]
 
-Cada figura (K.svg, Q.svg, R.svg, B.svg y N.svg) tiene un viewBox de 100x100
-cuyo borde de abajo es la línea base, con la misma escala en las cinco, y uno
-o varios <path> sólo de relleno: sin trazos, sin contornos solapados y con los
-huecos en sentido contrario al contorno que los rodea (regla nonzero).
+Cada figura (K.svg, Q.svg, R.svg, B.svg y N.svg) va en las mismas unidades
+que las otras cuatro, con el borde de abajo de su viewBox en la línea base, y
+tiene uno o varios <path> sólo de relleno: sin trazos, sin contornos solapados
+y con los huecos en sentido contrario al contorno que los rodea (regla
+nonzero). El resto del viewBox no cuenta: el alto y el ancho salen de la tinta.
 
 La fuente va en CFF, que guarda las curvas cúbicas del SVG tal cual. El
 script falla si la woff2 llega a 4 KB: por debajo, Vite la incrusta en el CSS
@@ -24,6 +25,7 @@ archivo aparte y, hasta que llegara, se verían las letras.
 """
 
 import io
+import re
 import sys
 import xml.etree.ElementTree as ET
 from pathlib import Path
@@ -70,18 +72,26 @@ TIMESTAMP = timestampFromString("Sat Oct 24 00:00:00 2026")
 SVG = "{http://www.w3.org/2000/svg}"
 
 
-def read_svg(path: Path) -> RecordingPen:
-    """Los contornos de la figura en las unidades del SVG, con la y hacia abajo."""
+def read_svg(path: Path) -> tuple[RecordingPen, float]:
+    """
+    Los contornos de la figura en las unidades del SVG, con la y hacia abajo, y
+    la línea base: el borde de abajo del viewBox (min-y más el alto).
+    """
     root = ET.parse(path).getroot()
-    if root.get("viewBox", "").replace(",", " ").split() != ["0", "0", "100", "100"]:
-        sys.exit(f"{path.name}: el viewBox tiene que ser 0 0 100 100")
+    # Cuatro números separados por espacios o comas, como dice SVG.
+    try:
+        _, min_y, width, height = map(float, re.split(r"[\s,]+", root.get("viewBox", "").strip()))
+    except ValueError:
+        sys.exit(f"{path.name}: el viewBox tiene que tener cuatro números")
+    if width <= 0 or height <= 0:
+        sys.exit(f"{path.name}: el ancho y el alto del viewBox tienen que ser positivos")
     for element in root.iter():
         if element.get("transform") is not None or element.get("stroke", "none") != "none":
             sys.exit(f"{path.name}: sólo rellenos, sin transform ni stroke")
     pen = RecordingPen()
     for element in root.iter(f"{SVG}path"):
         parse_path(element.get("d"), pen)
-    return pen
+    return pen, min_y + height
 
 
 def bounds(pen: RecordingPen) -> tuple[float, float, float, float]:
@@ -90,14 +100,14 @@ def bounds(pen: RecordingPen) -> tuple[float, float, float, float]:
     return bounds_pen.bounds
 
 
-def to_font(pen: RecordingPen, scale: float, x_min: float) -> RecordingPen:
+def to_font(pen: RecordingPen, baseline: float, scale: float, x_min: float) -> RecordingPen:
     """
-    La figura en unidades de la fuente: la y hacia arriba, el borde de abajo
-    del viewBox en la línea base y la tinta a SIDE del origen. Los contornos
+    La figura en unidades de la fuente: la y hacia arriba, la línea base del
+    SVG en la de la fuente y la tinta a SIDE del origen. Los contornos
     exteriores, en sentido antihorario, como pide CFF.
     """
     font_pen = RecordingPen()
-    pen.replay(TransformPen(RoundingPen(font_pen), (scale, 0, 0, -scale, SIDE - x_min * scale, 100 * scale)))
+    pen.replay(TransformPen(RoundingPen(font_pen), (scale, 0, 0, -scale, SIDE - x_min * scale, baseline * scale)))
     area = AreaPen()
     font_pen.replay(area)
     if area.value >= 0:
@@ -110,15 +120,16 @@ def to_font(pen: RecordingPen, scale: float, x_min: float) -> RecordingPen:
 def build(source: Path) -> None:
     letters = [chr(code) for code in parse_unicodes(UNICODES)]
     figures = {letter: read_svg(source / f"{letter}.svg") for letter in letters}
-    # Una escala para las cinco: la figura más alta llega a HEIGHT.
-    scale = HEIGHT / max(100 - bounds(pen)[1] for pen in figures.values())
+    # Una escala para las cinco: la figura más alta llega a HEIGHT sobre la
+    # línea base.
+    scale = HEIGHT / max(baseline - bounds(pen)[1] for pen, baseline in figures.values())
 
     charstrings, metrics = {}, {}
     notdef = T2CharStringPen(UPM // 2, None)
     charstrings[".notdef"], metrics[".notdef"] = notdef.getCharString(), (UPM // 2, 0)
-    for letter, pen in figures.items():
+    for letter, (pen, baseline) in figures.items():
         x_min, _, x_max, _ = bounds(pen)
-        glyph = to_font(pen, scale, x_min)
+        glyph = to_font(pen, baseline, scale, x_min)
         advance = round((x_max - x_min) * scale) + 2 * SIDE
         t2 = T2CharStringPen(advance, None)
         glyph.replay(t2)
