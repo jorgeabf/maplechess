@@ -1,12 +1,11 @@
 // Lista de jugadas para pintar: la línea principal y, tras cada jugada que
 // las tenga, sus variantes anidadas. Los números de jugada se repiten
 // ("12…") cuando una jugada negra va detrás de un comentario o una variante,
-// como en los libros.
+// como en los libros. El número va con su jugada, para pintarlos juntos.
 import { NAG_SYMBOLS, type GameTree } from './movetree'
 
 export type MoveItem =
-	| { kind: 'number'; text: string }
-	| { kind: 'move'; id: number; san: string; glyphs: string }
+	| { kind: 'move'; id: number; san: string; glyphs: string; number?: string }
 	| { kind: 'comment'; text: string; advice?: true }
 	| { kind: 'variation'; items: MoveItem[] }
 
@@ -24,9 +23,8 @@ function line(tree: GameTree, firstId: number): MoveItem[] {
 			needNumber = true
 		}
 		const moveNumber = Math.ceil(node.ply / 2)
-		if (node.ply % 2 === 1) items.push({ kind: 'number', text: `${moveNumber}.` })
-		else if (needNumber) items.push({ kind: 'number', text: `${moveNumber}…` })
-		items.push({ kind: 'move', id: node.id, san: node.san, glyphs: glyphs(node.nags) })
+		const number = node.ply % 2 === 1 ? `${moveNumber}.` : needNumber ? `${moveNumber}…` : undefined
+		items.push({ kind: 'move', id: node.id, san: node.san, glyphs: glyphs(node.nags), number })
 		needNumber = false
 
 		for (const comment of node.comments) {
