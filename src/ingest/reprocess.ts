@@ -10,44 +10,53 @@
 // También aplica a lo guardado las reglas de los nombres de la ingesta
 // (nombres.ts): quita el año de los menores de los nombres de las partidas
 // (columnas y cabeceras del PGN), de los participantes y de los emparejamientos,
-// y anonimiza a los retirados (tabla retiradas). Y borra los torneos sensibles
-// (tabla torneos_sensibles) y los de menores (menores.ts), que no se guardan.
+// y anonimiza a los retirados (tabla retiradas). Oculta el sexo y el año de
+// quien lo ha pedido (tabla ocultaciones), también el del nombre. Y borra los
+// torneos sensibles (tabla torneos_sensibles) y los de menores (menores.ts),
+// que no se guardan.
 //
 //   POST /api/admin/sync  {"workflow":"reprocess"}
 //   wrangler workflows trigger games-reprocess '{}'
-//   wrangler workflows trigger games-reprocess '{"retiradas":true}'   (sólo la retirada)
-//   wrangler workflows trigger games-reprocess '{"sensibles":true}'   (sólo los torneos sensibles)
-//   wrangler workflows trigger games-reprocess '{"menores":true}'     (sólo los torneos de menores)
+//   wrangler workflows trigger games-reprocess '{"retiradas":true}'    (sólo la retirada)
+//   wrangler workflows trigger games-reprocess '{"ocultaciones":true}' (sólo el sexo y el año ocultos)
+//   wrangler workflows trigger games-reprocess '{"sensibles":true}'    (sólo los torneos sensibles)
+//   wrangler workflows trigger games-reprocess '{"menores":true}'      (sólo los torneos de menores)
 import { WorkflowEntrypoint, type WorkflowEvent, type WorkflowStep } from 'cloudflare:workers'
 import { normalizeName } from '../lib/chess/names'
 import { parseGames } from '../lib/chess/pgn'
 import { timeClassOf } from '../lib/chess/timecontrol'
 import { madridYear } from '../lib/dates'
+import { withoutHomonymYear } from '../lib/format'
 import { derivedColumns, type DerivedColumns } from './games'
 import { LICHESS_STEP, parseBroadcastUrl, resolveTourId, type BroadcastRef } from './lichess/api'
 import { isMinorsTournament } from './menores'
-import { isRetired, nameKey, publicName, publicPgnNames, RETIRED_NAME } from './nombres'
+import { isRetired, nameKey, publicName, publicPgnNames, RETIRED_NAME, withoutHiddenYear } from './nombres'
 import {
 	anonymizeRetiredParticipations,
+	applyHiddenFields,
 	deleteExcludedTournaments,
 	deleteRetiredPlayers,
 	deleteTournaments,
 	excludeBroadcasts,
 	loadExcludedBroadcasts,
+	loadGameCandidates,
 	loadGamesForReprocess,
+	loadHiddenYearPlayers,
+	loadHiddenYears,
 	loadHomonymParticipations,
 	loadPairingNames,
 	loadPairingPlayers,
 	loadRetired,
-	loadRetiredGameCandidates,
 	proposeSensitive,
 	refreshTotals,
 	renameGames,
 	renameParticipations,
 	renamePairings,
+	renamePlayers,
 	updateDerivedColumns,
 	updateGamePlayers,
 	updatePairingPlayers,
+	withoutHiddenYears,
 	withoutRetired,
 	type BroadcastKey,
 	type StoredGame
@@ -59,6 +68,8 @@ export interface GamesReprocessParams {
 	after?: number
 	/** Sólo aplica la lista de retiradas, sin recorrer todas las partidas: tras añadir a alguien. */
 	retiradas?: boolean
+	/** Sólo aplica la tabla ocultaciones a lo guardado (applyHidden), sin recorrer todas las partidas: tras añadir a alguien. */
+	ocultaciones?: boolean
 	/** Sólo los torneos sensibles (applySensitive), sin recorrer las partidas: tras marcar alguno. */
 	sensibles?: boolean
 	/** Sólo los torneos de menores (applyMinorsTournaments), sin recorrer las partidas: si cambia la regla. */
@@ -85,8 +96,8 @@ export interface ReprocessedBatch {
 
 export class GamesReprocessWorkflow extends WorkflowEntrypoint<Env, GamesReprocessParams> {
 	async run(event: WorkflowEvent<GamesReprocessParams>, step: WorkflowStep): Promise<void> {
-		const { retiradas, sensibles, menores } = event.payload
-		const all = !retiradas && !sensibles && !menores
+		const { retiradas, ocultaciones, sensibles, menores } = event.payload
+		const all = !retiradas && !ocultaciones && !sensibles && !menores
 		// Lo primero: las partidas de los torneos borrados ya no se recorren.
 		if (all || sensibles) {
 			// Puede preguntar a lichess de qué torneo es una ronda: con sus reintentos.
@@ -118,6 +129,10 @@ export class GamesReprocessWorkflow extends WorkflowEntrypoint<Env, GamesReproce
 		if (all || retiradas) {
 			const retired = await step.do('retiradas', () => applyRetired(this.env.DB))
 			console.log(`[reprocess] retiradas: ${JSON.stringify(retired)}`)
+		}
+		if (all || ocultaciones) {
+			const hidden = await step.do('ocultaciones', () => applyHidden(this.env.DB))
+			console.log(`[reprocess] ocultaciones: ${JSON.stringify(hidden)}`)
 		}
 	}
 }
@@ -202,17 +217,9 @@ export async function applyRetired(db: D1Database): Promise<RetiredCleanup> {
 	// de los homónimos adultos: con él y sin él.
 	const nameNorms = [...new Set(results.flatMap(({ nombre }) => [normalizeName(nombre), nameKey(nombre)]))]
 	// Las partidas sin FIDE ID, por las palabras del nombre en el FTS.
-	const matches = results
-		.map(({ nombre }) =>
-			nameKey(nombre)
-				.split(/[^\p{L}\p{N}]+/u)
-				.filter(Boolean)
-				.map((word) => `"${word}"`)
-				.join(' ')
-		)
-		.filter(Boolean)
+	const matches = results.map(({ nombre }) => matchAllWords(nameKey(nombre))).filter(Boolean)
 
-	const candidates = await loadRetiredGameCandidates(db, matches)
+	const candidates = await loadGameCandidates(db, [...retired.ids], matches)
 	const games = candidates.map((g) => withoutRetired(g, retired)).filter((g, i) => g !== candidates[i])
 	await updateGamePlayers(db, games)
 
@@ -234,6 +241,74 @@ export async function applyRetired(db: D1Database): Promise<RetiredCleanup> {
 	return {
 		players: await deleteRetiredPlayers(db),
 		participations: await anonymizeRetiredParticipations(db, nameNorms),
+		games: games.length,
+		pairings: pairings.length
+	}
+}
+
+/** Consulta MATCH del FTS con todas las palabras de `text`, cada una entre comillas; vacía si no tiene ninguna. */
+function matchAllWords(text: string): string {
+	return text
+		.split(/[^\p{L}\p{N}]+/u)
+		.filter(Boolean)
+		.map((word) => `"${word}"`)
+		.join(' ')
+}
+
+/** Lo que applyHidden ha cambiado. */
+export interface HiddenCleanup {
+	/** Fichas sin el sexo y fichas con el año marcado (applyHiddenFields). */
+	sex: number
+	birthYear: number
+	/** Nombres sin el año de homónimo. */
+	players: number
+	participations: number
+	games: number
+	pairings: number
+}
+
+/**
+ * Aplica la tabla ocultaciones a lo guardado, como la ingesta al escribir: en
+ * las fichas, el sexo y la marca del año (applyHiddenFields), y el año de
+ * homónimo del nombre de quien ha ocultado el suyo, en su ficha, en los
+ * participantes, en las partidas (columnas y PGN) y en los emparejamientos.
+ * Las partidas, sólo las candidatas: por su FIDE ID y, sin él, por su nombre y
+ * su año en el FTS. Los participantes, entre los homónimos, recorriendo la
+ * tabla como renameStoredParticipations. Repetirlo no cambia nada.
+ */
+export async function applyHidden(db: D1Database): Promise<HiddenCleanup> {
+	const fields = await applyHiddenFields(db)
+	const hidden = await loadHiddenYears(db)
+	if (hidden.ids.size === 0) return { ...fields, players: 0, participations: 0, games: 0, pairings: 0 }
+
+	// En su ficha, por su FIDE ID: es suya.
+	const players = (await loadHiddenYearPlayers(db)).flatMap((p) => {
+		const name = withoutHomonymYear(p.name)
+		return name === p.name ? [] : [{ ...p, name }]
+	})
+	await renamePlayers(db, players)
+
+	const participations = (await loadHomonymParticipations(db)).flatMap((p) => {
+		const name = withoutHiddenYear(hidden, p.fideId, p.name)
+		return name === p.name ? [] : [{ ...p, name }]
+	})
+	await renameParticipations(db, participations)
+
+	const candidates = await loadGameCandidates(db, [...hidden.ids], [...hidden.names].map(matchAllWords))
+	const games = candidates.map((g) => withoutHiddenYears(g, hidden)).filter((g, i) => g !== candidates[i])
+	await renameGames(db, games)
+
+	const pairings = (await loadPairingPlayers(db)).flatMap((p) => {
+		const whiteName = withoutHiddenYear(hidden, p.whiteFideId, p.whiteName)
+		const blackName = withoutHiddenYear(hidden, p.blackFideId, p.blackName)
+		return whiteName === p.whiteName && blackName === p.blackName ? [] : [{ ...p, whiteName, blackName }]
+	})
+	await renamePairings(db, pairings)
+
+	return {
+		...fields,
+		players: players.length,
+		participations: participations.length,
 		games: games.length,
 		pairings: pairings.length
 	}

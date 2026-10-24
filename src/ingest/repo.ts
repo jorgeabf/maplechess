@@ -4,11 +4,23 @@
 // único parámetro JSON y se insertan con INSERT … SELECT … FROM json_each(?).
 // Cada parámetro puede ocupar hasta 2 MB: los lotes se cortan por tamaño.
 import { normalizeName } from '../lib/chess/names'
+import { setPgnTags } from '../lib/chess/pgn'
 import { madridYear } from '../lib/dates'
+import { withoutHomonymYear } from '../lib/format'
 import type { FidePlayer } from './fide/parse'
 import type { DerivedColumns, GameRow, Participant, TournamentContext } from './games'
 import type { Pairing, PairedPlayer, StandingsPage, TournamentPlayer, TournamentType } from './info64/parse'
-import { anonymizePgn, isRetired, nameKey, publicName, RETIRED_NAME, type Retired } from './nombres'
+import {
+	anonymizePgn,
+	isRetired,
+	nameKey,
+	publicName,
+	RETIRED_NAME,
+	withoutHiddenYear,
+	yearKey,
+	type HiddenYears,
+	type Retired
+} from './nombres'
 import { appliedRows, rectifyGame, rectifyParticipant, type Rectification } from './rectificaciones'
 
 const MAX_JSON_BYTES = 1_000_000
@@ -24,6 +36,27 @@ export async function loadRetired(db: D1Database): Promise<Retired> {
 	return {
 		ids: new Set(results.flatMap((r) => (r.fideId === null ? [] : [r.fideId]))),
 		names: new Set(results.map((r) => nameKey(r.nombre)))
+	}
+}
+
+/**
+ * Quien ha pedido ocultar su año (tabla ocultaciones), con su nombre y su año
+ * de la ficha para reconocerle sin FIDE ID. Es pequeña: se lee entera en cada
+ * escritura que la necesita, como la de retiradas.
+ */
+export async function loadHiddenYears(db: D1Database): Promise<HiddenYears> {
+	const { results } = await db
+		.prepare(
+			`SELECT o.fide_id AS fideId, p.name, p.birth_year AS birthYear
+			FROM ocultaciones o LEFT JOIN players p ON p.fide_id = o.fide_id
+			WHERE o.campo = 'anio'`
+		)
+		.all<{ fideId: number; name: string | null; birthYear: number | null }>()
+	return {
+		ids: new Set(results.map((r) => r.fideId)),
+		names: new Set(
+			results.flatMap((r) => (r.name !== null && r.birthYear !== null ? [yearKey(r.name, r.birthYear)] : []))
+		)
 	}
 }
 
@@ -125,10 +158,11 @@ export async function upsertTournament(db: D1Database, t: TournamentInput): Prom
 
 /**
  * Sustituye los participantes del torneo (el ranking inicial puede cambiar
- * entre lecturas). Los nombres, sin el año de los menores; los datos,
- * rectificados (rectificaciones.ts), y los retirados, anonimizados
- * (nombres.ts). Una lista vacía no borra la guardada: es una página que cambió
- * o vino a medias (un torneo aún sin inscritos no tiene nada guardado).
+ * entre lecturas). Los nombres, sin el año de los menores ni el de quien ha
+ * pedido ocultarlo; los datos, rectificados (rectificaciones.ts), y los
+ * retirados, anonimizados (nombres.ts). Una lista vacía no borra la guardada:
+ * es una página que cambió o vino a medias (un torneo aún sin inscritos no
+ * tiene nada guardado).
  * Devuelve false si se ha conservado una lista guardada, para avisar.
  */
 export async function replaceParticipations(
@@ -142,15 +176,16 @@ export async function replaceParticipations(
 	}
 	const year = madridYear(new Date())
 	const retired = await loadRetired(db)
+	const hiddenYears = await loadHiddenYears(db)
 	const rectifications = await loadRectifications(db, tournamentId)
 	const hits = new Set<number>()
 	const rows = players.map((player) => {
-		// La retirada, después: mira a quien es de verdad.
+		// La retirada y el año oculto, después: miran a quien es de verdad.
 		const p = rectifyParticipant(player, rectifications, hits, year)
 		if (isRetired(retired, p.fideId, p.name)) {
 			return { ...p, name: RETIRED_NAME, nameNorm: normalizeName(RETIRED_NAME), fideId: null, title: null }
 		}
-		const name = publicName(p.name, year)
+		const name = withoutHiddenYear(hiddenYears, p.fideId, publicName(p.name, year))
 		return { ...p, name, nameNorm: normalizeName(name) }
 	})
 	await db.batch([
@@ -274,10 +309,11 @@ export interface GamesSource {
  * organizador que retira medio torneo. Las guardadas se quedan, el torneo pasa
  * por revisado y devuelve false para avisar. Con `replace`, se guarda igual.
  *
- * Las rectificaciones (rectificaciones.ts) y la retirada se aplican aquí,
- * después de cruzar y por ese orden: el cruce necesita el FIDE ID y el nombre
- * de la fuente para saber quién es quién, y la retirada mira a quien es de
- * verdad. Una partida oculta no se guarda, y se borra si estaba.
+ * Las rectificaciones (rectificaciones.ts), la retirada y el año oculto se
+ * aplican aquí, después de cruzar y por ese orden: el cruce necesita el FIDE
+ * ID y el nombre de la fuente para saber quién es quién, y la retirada y el
+ * año oculto miran a quien es de verdad. Una partida oculta no se guarda, y se
+ * borra si estaba.
  */
 export async function saveGames(
 	db: D1Database,
@@ -298,11 +334,12 @@ export async function saveGames(
 		}
 	}
 	const retired = await loadRetired(db)
+	const hiddenYears = await loadHiddenYears(db)
 	const rectifications = await loadRectifications(db, tournamentId)
 	const hits = new Set<number>()
 	const saved = rows.flatMap((row) => {
 		const rectified = rectifyGame(row, rectifications, hits)
-		return rectified ? [withoutRetired(rectified, retired)] : []
+		return rectified ? [withoutHiddenYears(withoutRetired(rectified, retired), hiddenYears)] : []
 	})
 	// Sin partidas no hay fuente que mostrar.
 	const sourceName = saved.length > 0 ? source.name : null
@@ -393,6 +430,19 @@ export function withoutRetired<T extends GamePlayers>(game: T, retired: Retired)
 	return result
 }
 
+/**
+ * La partida sin el año de homónimo de quien ha pedido ocultarlo, en la
+ * columna y en la cabecera del PGN; la misma si no juega ninguno.
+ */
+export function withoutHiddenYears<T extends GamePlayers>(game: T, hidden: HiddenYears): T {
+	let result = game
+	const whiteName = withoutHiddenYear(hidden, game.whiteFideId, game.whiteName)
+	if (whiteName !== game.whiteName) result = { ...result, whiteName, pgn: setPgnTags(result.pgn, { White: whiteName }) }
+	const blackName = withoutHiddenYear(hidden, game.blackFideId, game.blackName)
+	if (blackName !== game.blackName) result = { ...result, blackName, pgn: setPgnTags(result.pgn, { Black: blackName }) }
+	return result
+}
+
 /** Da por revisadas las partidas del torneo sin tocarlas (la fuente no respondió, o la lectura no se guardó). */
 export async function markGamesChecked(db: D1Database, tournamentId: number, checkedAt: string): Promise<void> {
 	await db.prepare('UPDATE tournaments SET games_checked_at = ?2 WHERE id = ?1').bind(tournamentId, checkedAt).run()
@@ -455,6 +505,7 @@ export interface StoredParticipation {
 	team: string
 	startRank: number
 	name: string
+	fideId: number | null
 }
 
 /**
@@ -464,7 +515,7 @@ export interface StoredParticipation {
 export async function loadHomonymParticipations(db: D1Database): Promise<StoredParticipation[]> {
 	const { results } = await db
 		.prepare(
-			`SELECT tournament_id AS tournamentId, team, start_rank AS startRank, name FROM participations
+			`SELECT tournament_id AS tournamentId, team, start_rank AS startRank, name, fide_id AS fideId FROM participations
 			WHERE name GLOB '*,* [0-9][0-9][0-9][0-9]' OR name GLOB '*,* [0-9][0-9][0-9][0-9] *'`
 		)
 		.all<StoredParticipation>()
@@ -579,17 +630,24 @@ const GAME_PLAYERS = `id, white_name AS whiteName, black_name AS blackName,
 	white_fide_id AS whiteFideId, black_fide_id AS blackFideId, pgn`
 
 /**
- * Partidas en las que puede jugar un retirado: por su FIDE ID (índices
- * games_white y games_black) y, sin él, por las palabras de su nombre en el FTS
- * (`matches`, una consulta MATCH por retirado). Quién lo es de verdad lo decide
- * isRetired; aquí sólo se buscan candidatas, sin repetir.
+ * Partidas en las que puede jugar alguien (un retirado, quien ha ocultado su
+ * año): por sus FIDE ID (índices games_white y games_black) y, sin él, por las
+ * palabras de su nombre en el FTS (`matches`, una consulta MATCH por persona).
+ * Quién lo es de verdad lo decide quien llama (isRetired, withoutHiddenYear);
+ * aquí sólo se buscan candidatas, sin repetir.
  */
-export async function loadRetiredGameCandidates(db: D1Database, matches: string[]): Promise<StoredGamePlayers[]> {
+export async function loadGameCandidates(
+	db: D1Database,
+	fideIds: number[],
+	matches: string[]
+): Promise<StoredGamePlayers[]> {
 	const results = await db.batch<StoredGamePlayers>([
-		db.prepare(
-			`SELECT ${GAME_PLAYERS} FROM games WHERE white_fide_id IN (SELECT fide_id FROM retiradas)
-			UNION SELECT ${GAME_PLAYERS} FROM games WHERE black_fide_id IN (SELECT fide_id FROM retiradas)`
-		),
+		db
+			.prepare(
+				`SELECT ${GAME_PLAYERS} FROM games WHERE white_fide_id IN (SELECT value FROM json_each(?1))
+				UNION SELECT ${GAME_PLAYERS} FROM games WHERE black_fide_id IN (SELECT value FROM json_each(?1))`
+			)
+			.bind(JSON.stringify(fideIds)),
 		...matches.map((match) =>
 			db
 				.prepare(
@@ -673,6 +731,59 @@ export async function updatePairingPlayers(db: D1Database, rows: StoredPairingPl
 				.bind(json)
 		)
 	)
+}
+
+// --- Ocultar el sexo o el año: lo ya guardado (lo aplica reprocess.ts) ---
+
+/**
+ * Aplica la tabla ocultaciones a los jugadores guardados, como la importación
+ * FIDE al escribir: el sexo pasa a NULL y el año se marca (el del nombre, en
+ * applyHidden). Sólo cambia los que aún no lo tienen aplicado. Volver a
+ * enseñarlos (si se borra una fila) es cosa de la importación siguiente: el
+ * sexo sólo está en la lista.
+ */
+export async function applyHiddenFields(db: D1Database): Promise<{ sex: number; birthYear: number }> {
+	const [sex, birthYear] = await db.batch([
+		db.prepare(
+			`UPDATE players SET sex = NULL
+			WHERE fide_id IN (SELECT fide_id FROM ocultaciones WHERE campo = 'sexo') AND sex IS NOT NULL`
+		),
+		db.prepare(
+			`UPDATE players SET birth_year_hidden = 1
+			WHERE fide_id IN (SELECT fide_id FROM ocultaciones WHERE campo = 'anio') AND birth_year_hidden = 0`
+		)
+	])
+	return { sex: sex.meta.changes, birthYear: birthYear.meta.changes }
+}
+
+/** Nombre de la ficha de un jugador. */
+export interface StoredPlayerName {
+	fideId: number
+	name: string
+}
+
+/** Nombres de quien ha pedido ocultar su año: unos pocos, por la clave primaria. */
+export async function loadHiddenYearPlayers(db: D1Database): Promise<StoredPlayerName[]> {
+	const { results } = await db
+		.prepare(
+			`SELECT fide_id AS fideId, name FROM players
+			WHERE fide_id IN (SELECT fide_id FROM ocultaciones WHERE campo = 'anio')`
+		)
+		.all<StoredPlayerName>()
+	return results
+}
+
+/** Cambia el nombre de esas fichas. El índice FTS lo sigue por su trigger (players_au). */
+export async function renamePlayers(db: D1Database, rows: StoredPlayerName[]): Promise<void> {
+	if (rows.length === 0) return
+	await db
+		.prepare(
+			`UPDATE players SET name = json_extract(j.value, '$.name')
+			FROM json_each(?1) AS j
+			WHERE players.fide_id = json_extract(j.value, '$.fideId') AND players.name IS NOT json_extract(j.value, '$.name')`
+		)
+		.bind(JSON.stringify(rows))
+		.run()
 }
 
 // --- Torneos sensibles (tabla torneos_sensibles, migración 0012) ---
@@ -827,11 +938,21 @@ export async function updateDerivedColumns(db: D1Database, rows: ({ id: number }
 	return results.reduce((n, r) => n + r.meta.changes, 0)
 }
 
-/** Las filas de upsertFidePlayers en el año `year`, de una en una, sin los retirados. */
+/** Si el jugador de la fila de json_each ha pedido ocultar `campo` (tabla ocultaciones). */
+const hidden = (campo: 'sexo' | 'anio') =>
+	`EXISTS (SELECT 1 FROM ocultaciones o WHERE o.fide_id = json_extract(value, '$.fideId') AND o.campo = '${campo}')`
+
+/**
+ * Las filas de upsertFidePlayers en el año `year`, de una en una, sin los
+ * retirados. Los homónimos que aún llevan el año en el nombre traen también
+ * el nombre sin él (bareName), por si lo han ocultado: unos 900 de 98.000.
+ */
 function* fideRows(players: FidePlayer[], year: number, retired: Retired) {
 	for (const p of players) {
 		if (retired.ids.has(p.fideId)) continue
-		yield { ...p, name: publicName(p.name, year), inactive: p.inactive ? 1 : 0 }
+		const name = publicName(p.name, year)
+		const bareName = withoutHomonymYear(name)
+		yield { ...p, name, ...(bareName === name ? {} : { bareName }), inactive: p.inactive ? 1 : 0 }
 	}
 }
 
@@ -843,6 +964,11 @@ function* fideRows(players: FidePlayer[], year: number, retired: Retired) {
  * menores se les quita el año del nombre (publicName); lo recuperan en la
  * primera lista del año en que dejan de serlo. Los retirados no se guardan:
  * sin fila en players no tienen ficha, y la importación borra la que tuvieran.
+ * A quien ha pedido ocultar el sexo o el año (tabla ocultaciones) se le guarda
+ * el sexo NULL, y el año marcado en birth_year_hidden y fuera del nombre si es
+ * un homónimo. Se mira en el SQL, por el índice único de la tabla, para no
+ * cargar nada más en memoria: casi nadie está, y una búsqueda que no encuentra
+ * nada no suma filas leídas.
  */
 export async function upsertFidePlayers(
 	db: D1Database,
@@ -856,12 +982,15 @@ export async function upsertFidePlayers(
 	for (const json of jsonChunks(fideRows(players, Number(period.slice(0, 4)), retired))) {
 		await db
 			.prepare(
-				`INSERT INTO players (fide_id, name, sex, title, birth_year, rating_std, rating_rapid, rating_blitz, inactive, seen_at, rating_list)
+				`INSERT INTO players (fide_id, name, sex, title, birth_year, birth_year_hidden, rating_std, rating_rapid, rating_blitz,
+					inactive, seen_at, rating_list)
 				SELECT json_extract(value, '$.fideId'),
-					json_extract(value, '$.name'),
-					json_extract(value, '$.sex'),
+					CASE WHEN json_extract(value, '$.bareName') IS NOT NULL AND ${hidden('anio')}
+						THEN json_extract(value, '$.bareName') ELSE json_extract(value, '$.name') END,
+					CASE WHEN ${hidden('sexo')} THEN NULL ELSE json_extract(value, '$.sex') END,
 					json_extract(value, '$.title'),
 					json_extract(value, '$.birthYear'),
+					${hidden('anio')},
 					json_extract(value, '$.ratingStd'),
 					json_extract(value, '$.ratingRapid'),
 					json_extract(value, '$.ratingBlitz'),
@@ -875,6 +1004,7 @@ export async function upsertFidePlayers(
 					sex = excluded.sex,
 					title = excluded.title,
 					birth_year = excluded.birth_year,
+					birth_year_hidden = excluded.birth_year_hidden,
 					rating_std_prev = CASE WHEN players.rating_list IS NOT excluded.rating_list
 						THEN players.rating_std ELSE players.rating_std_prev END,
 					rating_std = excluded.rating_std,
@@ -916,7 +1046,8 @@ export async function refreshTotals(db: D1Database): Promise<void> {
  * Sustituye los emparejamientos guardados del torneo por los de esta ronda.
  * Nombre, título, FIDE ID y ELO salen del participante con ese número del
  * ranking inicial, ya rectificado (rectificaciones.ts); si no lo hay, se queda
- * lo que trae la página de la ronda, con el nombre sin el año de los menores.
+ * lo que trae la página de la ronda, con el nombre sin el año de los menores
+ * ni el de quien ha pedido ocultarlo.
  * Si la ronda aún no está emparejada (sin filas), se borran los de otras
  * rondas y se conservan los de ésta: una página que vuelve vacía no los quita.
  */
@@ -933,11 +1064,13 @@ export async function replacePairings(
 	}
 	const year = madridYear(new Date())
 	const retired = await loadRetired(db)
+	const hiddenYears = await loadHiddenYears(db)
 	// El nombre de la página sólo se usa si no hay participante con ese número;
-	// el del participante ya está anonimizado si es un retirado.
+	// el del participante ya está anonimizado si es un retirado, y sin el año
+	// si lo ha ocultado. La página no da el FIDE ID: va por el nombre.
 	const side = (p: PairedPlayer): PairedPlayer => ({
 		...p,
-		name: isRetired(retired, null, p.name) ? RETIRED_NAME : publicName(p.name, year)
+		name: isRetired(retired, null, p.name) ? RETIRED_NAME : withoutHiddenYear(hiddenYears, null, publicName(p.name, year))
 	})
 	const rows = pairings.map((p) => ({ ...p, white: side(p.white), black: side(p.black) }))
 	await db.batch([
