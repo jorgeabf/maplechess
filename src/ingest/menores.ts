@@ -37,12 +37,14 @@ const CATEGORY = '(?:pre ?)?(?:benjamin(?:es)?|benjami|benxamin)|alevin(?:es)?|a
 /**
  * Los de un colegio o entre colegios (colegio, CEIP, IES, instituto,
  * ikastola…) y los escolares: los juegos escolares y el deporte en edad
- * escolar (JUDEX, Juegos Deportivos, Jocs Esportius, Xogade). Las escuelas de
- * ajedrez («Escuela», «Escola», «Eskola») son clubes, y no entran.
+ * escolar (JUDEX, Juegos Deportivos, Jocs Esportius, Xogade). También el
+ * «Torneig d'Escoles» de Xàtiva, de Sub 8 a Sub 16, que no lo dice en el
+ * nombre; en el slug, «torneig-descoles». Las escuelas de ajedrez («Escuela»,
+ * «Escola», «Eskola») son clubes, y no entran.
  */
 const SCHOOL = [
 	'colegios?|col ?legis?|ceips?|ies|institutos?|instituts?|college|schools?|ikastolak?|ikastetxeak?',
-	'interescolar(?:es|s)?|intercentros|escolar(?:es|s)?',
+	'interescolar(?:es|s)?|intercentros|escolar(?:es|s)?|torneig d ?escoles',
 	'judex|xogade|juegos deportivos|jj ?dd|jocs esportius|xogos deportivos'
 ].join('|')
 
