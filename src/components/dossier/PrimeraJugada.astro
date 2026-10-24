@@ -1,0 +1,149 @@
+---
+// Resumen de la primera jugada del dossier (firstMoves en lib/chess/dossier.ts):
+// con blancas, qué juega; con negras, qué le juegan y qué responde a cada
+// cosa, debajo. La puntuación es la suya con cada jugada de la primera
+// columna. Cada jugada lleva al repertorio en esa posición.
+import type { FirstMoves } from '../../lib/chess/dossier'
+import { parseLine, type Color, type Stats } from '../../lib/chess/repertoire'
+import { formatMove, formatNumber, formatPercent } from '../../lib/format'
+import ScoreBar from '../repertorio/ScoreBar.astro'
+
+interface Props {
+	summary: FirstMoves
+	/** Color del jugador. */
+	color: Color
+	/** Repertorio tras unas jugadas (UCI). */
+	href: (moves: string[]) => string
+}
+
+const { summary, color, href } = Astro.props
+
+/** "1.e4" o "1…c5": la última de `moves` con su número. */
+function label(moves: string[]): string {
+	const move = parseLine(moves.join(' ')).moves.at(-1)
+	return move ? formatMove(move.ply, move.san) : moves.join(' ')
+}
+
+const share = (stats: Stats, total: Stats) => formatPercent(stats.games / total.games)
+// Sin fila de respuestas si no hay ninguna que salga sola: las partidas acaban
+// tras la primera jugada o ninguna respuesta llega al mínimo.
+const rows = summary.moves.map((m) => ({ ...m, replies: m.replies?.moves.length ? m.replies : null }))
+---
+
+<table class="data-table">
+	<thead>
+		<tr>
+			<th scope="col">{color === 'white' ? 'Jugada' : 'Contra'}</th>
+			<th scope="col" class="end">Partidas</th>
+			<th scope="col" class="end">Puntuación</th>
+		</tr>
+	</thead>
+	<tbody>
+		{
+			rows.map((m) => (
+				<>
+					<tr class:list={{ 'has-replies': m.replies !== null }}>
+						<th scope="row">
+							<a class="move" href={href([m.uci])} rel="nofollow">
+								{label([m.uci])}
+							</a>
+						</th>
+						<td class="end num">
+							<span class="share">{share(m.stats, summary.total)}</span>{' '}
+							<span class="muted">({formatNumber(m.stats.games)})</span>
+						</td>
+						<td class="end">
+							<ScoreBar stats={m.stats} />
+						</td>
+					</tr>
+					{m.replies && (
+						<tr class="replies">
+							<td colspan="3">
+								<span class="visually-hidden">Respuestas:</span>
+								<ul>
+									{m.replies.moves.map((r) => (
+										<li>
+											<a class="move" href={href([m.uci, r.uci])} rel="nofollow">
+												{label([m.uci, r.uci])}
+											</a>{' '}
+											<span class="share num">{share(r.stats, m.replies!.total)}</span>
+										</li>
+									))}
+									{m.replies.other && (
+										<li class="muted">
+											otras <span class="num">{share(m.replies.other, m.replies.total)}</span>
+										</li>
+									)}
+								</ul>
+							</td>
+						</tr>
+					)}
+				</>
+			))
+		}
+		{
+			summary.other && (
+				<tr>
+					<th scope="row" class="muted">
+						Otras
+					</th>
+					<td class="end num">
+						{share(summary.other, summary.total)} <span class="muted">({formatNumber(summary.other.games)})</span>
+					</td>
+					<td class="end">
+						<ScoreBar stats={summary.other} />
+					</td>
+				</tr>
+			)
+		}
+	</tbody>
+</table>
+
+<style>
+	/*
+	 * Tan ancha como su contenido: a todo el ancho de la tarjeta, la jugada y
+	 * su puntuación quedarían a un palmo. Pide unos 255 px; más estrecho, se
+	 * desplaza dentro de su tarjeta, como las demás tablas del dossier.
+	 */
+	table {
+		inline-size: auto;
+		min-inline-size: min(100%, 24rem);
+	}
+
+	.move {
+		font-family: var(--font-serif);
+		font-weight: var(--weight-strong);
+	}
+
+	th .move {
+		font-size: var(--text-m);
+	}
+
+	.share {
+		font-weight: var(--weight-strong);
+	}
+
+	/* Las respuestas van bajo su jugada, sin raya entre las dos filas. */
+	.has-replies > * {
+		border-bottom: 0;
+	}
+
+	.replies > td {
+		padding-block-start: 0;
+		padding-inline-start: var(--space-4);
+		white-space: normal;
+	}
+
+	.replies ul {
+		display: flex;
+		flex-wrap: wrap;
+		gap: var(--space-1) var(--space-4);
+		margin: 0;
+		padding: 0;
+		list-style: none;
+	}
+
+	.replies li {
+		white-space: nowrap;
+	}
+</style>

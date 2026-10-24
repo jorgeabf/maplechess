@@ -1,8 +1,9 @@
 ---
 // Dossier para preparar una partida contra un jugador: lo esencial de sus
-// partidas con un color (sus líneas principales, qué ha cambiado, cómo rinde
-// según el rival y sus últimas partidas) en una página que se lee en el móvil
-// o se imprime. Una consulta: sus partidas con ese color, sin el PGN.
+// partidas con un color (su primera jugada, sus líneas principales, qué ha
+// cambiado, cómo rinde según el rival y sus últimas partidas) en una página
+// que se lee en el móvil o se imprime. Una consulta: sus partidas con ese
+// color, sin el PGN.
 //
 // Si quien prepara la partida dice quién es (campo yo de un formulario POST,
 // que se recuerda en una cookie; ver lib/me.ts), se añaden vuestras partidas y el cruce de sus
@@ -14,13 +15,22 @@
 import { env } from 'cloudflare:workers'
 import CabeceraJugador from '../../../components/CabeceraJugador.astro'
 import Cruce from '../../../components/dossier/Cruce.astro'
+import PrimeraJugada from '../../../components/dossier/PrimeraJugada.astro'
 import FiltrosPlegables from '../../../components/FiltrosPlegables.astro'
 import GamesTable from '../../../components/GamesTable.astro'
 import ScoreBar from '../../../components/repertorio/ScoreBar.astro'
 import Segmented from '../../../components/Segmented.astro'
 import Base from '../../../layouts/Base.astro'
 import { clockSummary, clockTimeClasses, MIN_CLOCK_GAMES, OPENING_MOVE, TROUBLE_SHARE } from '../../../lib/chess/clock'
-import { crossReference, ELO_GAP, mainLines, recentChanges, resultsByEloGap, type EloGap } from '../../../lib/chess/dossier'
+import {
+	crossReference,
+	ELO_GAP,
+	firstMoves,
+	mainLines,
+	recentChanges,
+	resultsByEloGap,
+	type EloGap
+} from '../../../lib/chess/dossier'
 import { addGame, emptyStats, indexPositions, parseLine } from '../../../lib/chess/repertoire'
 import { TIME_CLASS_LABEL } from '../../../lib/chess/timecontrol'
 import { addYears, isoDate } from '../../../lib/dates'
@@ -114,6 +124,7 @@ const games = from ? all.filter((g) => g.date !== null && g.date >= from) : all
 const rivalIndex = indexPositions(repertoireGames(games), color)
 // Tu índice: todas tus partidas con el otro color y el mismo ritmo.
 const myIndex = mePlayer ? indexPositions(repertoireGames(myGames), myColor) : null
+const first = firstMoves(rivalIndex, color)
 const lines = mainLines(rivalIndex).map((l) => ({
 	...l,
 	line: parseLine(l.moves.join(' ')),
@@ -246,6 +257,15 @@ alternatives.push({
 			</p>
 		) : (
 			<div class="dossier">
+				{first && first.moves.length > 0 && (
+					<section class="card first" aria-labelledby="primera">
+						<h2 id="primera">
+							{own ? 'Tu' : 'Su'} primera jugada con {colorText}
+						</h2>
+						<PrimeraJugada summary={first} color={color} href={(moves) => repertoireHref(moves)} />
+					</section>
+				)}
+
 				<section class="card lines" aria-labelledby="lineas">
 					<h2 id="lineas">
 						{own ? 'Tus' : 'Sus'} líneas principales con {colorText}
@@ -545,6 +565,7 @@ alternatives.push({
 		gap: var(--space-4);
 	}
 
+	.first,
 	.lines,
 	.you,
 	.clock,
@@ -653,10 +674,11 @@ alternatives.push({
 	}
 
 	/*
-	 * Con la fila de cabeceras, las dos tablas piden unos 270 px como mínimo:
+	 * Con la fila de cabeceras, las tres tablas piden de 255 a 270 px como mínimo:
 	 * caben desde unos 350 px de pantalla (a 360 hay 278). Más estrecho, se
 	 * desplazan dentro de su tarjeta, como las de la ficha.
 	 */
+	.first,
 	.rivals,
 	.clock {
 		overflow-x: auto;

@@ -62,7 +62,12 @@ MapleChess es un buscador de jugadores españoles (lista FIDE, federación ESP),
   - `repo.ts`: escrituras con `json_each`; cada parámetro puede llevar hasta ~1 MB de JSON, porque D1 admite 100 parámetros por sentencia.
 - `src/lib/chess/`: nombres, PGN, ECO, árbol de jugadas, UCI y repertorio. Se comparte entre servidor y cliente.
   - `repertoire.ts`: árbol de aperturas de un jugador (`/jugadores/{id}/repertorio`). Repite `games.opening_moves` (las 40 primeras medias jugadas en UCI) y compara por posición, así que junta transposiciones. `explore` consulta una posición; `indexPositions` indexa todas en una pasada (dossier).
-  - `dossier.ts`: dossier para preparar a un rival (`/jugadores/{id}/preparar`): líneas principales, cambios del último año, resultados según el ELO del rival y cruce con tus partidas (`crossReference`).
+  - `dossier.ts`: dossier para preparar a un rival (`/jugadores/{id}/preparar`): primera jugada (`firstMoves`), líneas principales, cambios del último año, resultados según el ELO del rival y cruce con tus partidas (`crossReference`).
+    - **La primera jugada** va antes de las líneas, en su tarjeta (`components/dossier/PrimeraJugada.astro`).
+      - Con blancas, sus primeras jugadas; con negras, las de sus rivales y, debajo de cada una, sus respuestas.
+      - Cada jugada lleva su % de partidas y enlaza al repertorio en esa posición. La puntuación (ScoreBar) va en la jugada de la primera columna: con negras, la suya contra cada primera jugada, que es lo que eliges tú.
+      - Una jugada sale sola si se juega en al menos el 5 % de las partidas de la posición, como mucho 4 (3 respuestas). Las demás se suman en «otras».
+      - Sale del mismo índice que las líneas: ninguna lectura de D1 más.
   - `clock.ts`: apuros de tiempo del dossier a partir de `games.clocks` (segundos que le quedan a cada jugador tras cada media jugada, del `[%clk]` del PGN; lo trae el 43 % de las partidas). Cuenta como apuro bajar del 5 % del tiempo inicial, y el resumen no mezcla ritmos.
   - `timecontrol.ts`: clasifica el ritmo (estándar, rápidas, blitz) según la FIDE a partir del texto libre del torneo o de la cabecera `TimeControl`.
   - `rating.ts`: ELO verosímiles (1000–3000).

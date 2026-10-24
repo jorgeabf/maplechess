@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
 	crossReference,
+	firstMoves,
 	mainLines,
 	openingFamily,
 	recentChanges,
@@ -194,5 +195,108 @@ describe('crossReference', () => {
 
 	it('sin partidas tuyas con ese color no hay cruce', () => {
 		expect(cross([])).toBeNull()
+	})
+})
+
+describe('firstMoves', () => {
+	const repeat = (n: number, movetext: string, result = '1-0', date = '2026-01-01') =>
+		Array.from({ length: n }, () => game(0, movetext, result, date))
+	const summary = (moves: { uci: string; stats: { games: number } }[]) => moves.map((m) => [m.uci, m.stats.games])
+
+	it('con blancas, sus primeras jugadas más jugadas y, sumadas, las demás', () => {
+		const result = firstMoves(
+			indexPositions(
+				[
+					...repeat(12, '1. e4 c5'),
+					...repeat(6, '1. d4 d5'),
+					...repeat(3, '1. c4 e5'),
+					...repeat(2, '1. Nf3 d5'),
+					// Por debajo del 5 % de las partidas, y una más allá de las cuatro.
+					...repeat(1, '1. g3 d5', '0-1', '2026-03-01'),
+					...repeat(1, '1. b3 e5', '1/2-1/2')
+				],
+				'white'
+			),
+			'white'
+		)
+		expect(result?.total.games).toBe(25)
+		expect(summary(result!.moves)).toEqual([
+			['e2e4', 12],
+			['d2d4', 6],
+			['c2c4', 3],
+			['g1f3', 2]
+		])
+		expect(result?.moves.every((m) => m.replies === null)).toBe(true)
+		expect(result?.other).toEqual({ games: 2, wins: 0, draws: 1, losses: 1, lastDate: '2026-03-01' })
+	})
+
+	it('deja en «otras» las jugadas de menos del 5 % aunque quepan', () => {
+		const result = firstMoves(indexPositions([...repeat(20, '1. e4'), ...repeat(1, '1. d4')], 'white'), 'white')
+		expect(summary(result!.moves)).toEqual([['e2e4', 20]])
+		expect(result?.other?.games).toBe(1)
+	})
+
+	it('con pocas partidas salen todas, la más reciente primero', () => {
+		const result = firstMoves(
+			indexPositions([game(1, '1. e4', '1-0', '2026-01-01'), game(2, '1. d4', '1-0', '2026-02-01')], 'white'),
+			'white'
+		)
+		expect(summary(result!.moves)).toEqual([
+			['d2d4', 1],
+			['e2e4', 1]
+		])
+		expect(result?.other).toBeNull()
+	})
+
+	it('con negras, las primeras jugadas de sus rivales y sus respuestas a cada una', () => {
+		const result = firstMoves(
+			indexPositions(
+				[
+					...repeat(3, '1. e4 c5', '0-1'),
+					...repeat(1, '1. e4 e5', '1-0'),
+					...repeat(2, '1. d4 Nf6', '1/2-1/2'),
+					...repeat(1, '1. c4 e5', '0-1')
+				],
+				'black'
+			),
+			'black'
+		)
+		expect(summary(result!.moves)).toEqual([
+			['e2e4', 4],
+			['d2d4', 2],
+			['c2c4', 1]
+		])
+		// Las puntuaciones son las suyas, con negras.
+		expect(result?.moves[0].stats).toMatchObject({ wins: 3, losses: 1 })
+		const replies = result!.moves[0].replies!
+		expect(replies.total.games).toBe(4)
+		expect(summary(replies.moves)).toEqual([
+			['c7c5', 3],
+			['e7e5', 1]
+		])
+		expect(replies.other).toBeNull()
+		expect(summary(result!.moves[1].replies!.moves)).toEqual([['g8f6', 2]])
+	})
+
+	it('con negras, como mucho tres respuestas a cada jugada', () => {
+		const result = firstMoves(
+			indexPositions(
+				[
+					game(1, '1. e4 c5', '0-1', '2026-04-01'),
+					game(2, '1. e4 e5', '0-1', '2026-03-01'),
+					game(3, '1. e4 e6', '0-1', '2026-02-01'),
+					game(4, '1. e4 c6', '1-0', '2026-01-01')
+				],
+				'black'
+			),
+			'black'
+		)
+		const replies = result!.moves[0].replies!
+		expect(replies.moves.map((m) => m.uci)).toEqual(['c7c5', 'e7e5', 'e7e6'])
+		expect(replies.other).toMatchObject({ games: 1, losses: 1 })
+	})
+
+	it('sin partidas con jugadas no hay resumen', () => {
+		expect(firstMoves(indexPositions([], 'white'), 'white')).toBeNull()
 	})
 })
