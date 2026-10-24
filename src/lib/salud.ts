@@ -3,7 +3,8 @@
 // guardas. /api/estado lo lee y .github/workflows/vigilancia.yml lo consulta dos
 // veces al día: si una pasada lleva demasiado sin terminar o falla en muchos
 // torneos, la acción falla y GitHub manda un correo. También si queda algún
-// torneo que parece sensible por revisar (hasSensitivePending).
+// torneo que parece sensible por revisar (hasSensitivePending) o alguna
+// rectificación sin aplicar (hasRectificationsPending).
 //
 // Los Workflows escriben con saveHealth, también cuando no hay nada que hacer
 // (la lista FIDE sin cambios). Mientras una pasada no haya escrito nunca, su
@@ -114,6 +115,16 @@ export async function loadHealth(db: D1Database, now = new Date()): Promise<Reco
  */
 export async function hasSensitivePending(db: D1Database): Promise<boolean> {
 	return (await db.prepare('SELECT 1 FROM torneos_sensibles WHERE excluido IS NULL LIMIT 1').first()) !== null
+}
+
+/**
+ * ¿Hay alguna rectificación sin aplicar? Lo está la recién apuntada, hasta que
+ * se relee su torneo, y la que la última lectura no ha encontrado: la fuente lo
+ * ha corregido o ha cambiado el dato, y el error puede haber vuelto. Es una
+ * alarma.
+ */
+export async function hasRectificationsPending(db: D1Database): Promise<boolean> {
+	return (await db.prepare('SELECT 1 FROM rectificaciones WHERE aplicada IS NULL LIMIT 1').first()) !== null
 }
 
 /** Guarda la salud de una pasada al terminar. `fin` es ahora, salvo en los tests. */

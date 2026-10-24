@@ -18,7 +18,8 @@ const estado = async () => {
 beforeEach(async () => {
 	await env.DB.batch([
 		env.DB.prepare("DELETE FROM sync_state WHERE key GLOB 'salud.*'"),
-		env.DB.prepare('DELETE FROM torneos_sensibles')
+		env.DB.prepare('DELETE FROM torneos_sensibles'),
+		env.DB.prepare('DELETE FROM rectificaciones')
 	])
 })
 
@@ -84,7 +85,8 @@ describe('GET /api/estado', () => {
 		expect(body).toEqual({
 			estado: 'ok',
 			pasadas: { info64: 'ok', emparejamientos: 'ok', lichess: 'ok', fide: 'ok' },
-			sensibles: 'ok'
+			sensibles: 'ok',
+			rectificaciones: 'ok'
 		})
 	})
 
@@ -97,7 +99,8 @@ describe('GET /api/estado', () => {
 		expect(body).toEqual({
 			estado: 'fallo',
 			pasadas: { info64: 'caducada', emparejamientos: 'ok', lichess: 'ok', fide: 'ok' },
-			sensibles: 'ok'
+			sensibles: 'ok',
+			rectificaciones: 'ok'
 		})
 	})
 
@@ -107,7 +110,8 @@ describe('GET /api/estado', () => {
 		expect(body).toEqual({
 			estado: 'ok',
 			pasadas: { info64: 'sin datos', emparejamientos: 'sin datos', lichess: 'sin datos', fide: 'sin datos' },
-			sensibles: 'ok'
+			sensibles: 'ok',
+			rectificaciones: 'ok'
 		})
 	})
 
@@ -129,7 +133,26 @@ describe('GET /api/estado', () => {
 		expect(body).toEqual({
 			estado: 'fallo',
 			pasadas: { info64: 'ok', emparejamientos: 'ok', lichess: 'ok', fide: 'ok' },
-			sensibles: 'por revisar'
+			sensibles: 'por revisar',
+			rectificaciones: 'ok'
 		})
+	})
+
+	it('con una rectificación sin aplicar, 503 aunque las pasadas vayan bien; aplicada, 200', async () => {
+		for (const run of HEALTH_RUNS) await saveHealth(env.DB, run, { ok: 10, fallos: 0, avisos: 0 }, hoursAgo(1, new Date()))
+		await env.DB.prepare(
+			"INSERT INTO rectificaciones (peticion, source, source_key, fide_id, campo, valor, creada) VALUES ('P-2026-001', 'info64', 'torneo-inventado', 930001, 'fide_id', NULL, '2026-10-24')"
+		).run()
+		const { status, body } = await estado()
+		expect(status).toBe(503)
+		expect(body).toEqual({
+			estado: 'fallo',
+			pasadas: { info64: 'ok', emparejamientos: 'ok', lichess: 'ok', fide: 'ok' },
+			sensibles: 'ok',
+			rectificaciones: 'por revisar'
+		})
+
+		await env.DB.prepare("UPDATE rectificaciones SET aplicada = '2026-10-24T10:00:00.000Z'").run()
+		expect(await estado()).toMatchObject({ status: 200, body: { estado: 'ok', rectificaciones: 'ok' } })
 	})
 })

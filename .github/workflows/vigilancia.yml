@@ -1,11 +1,13 @@
 # Vigilancia de la ingesta: dos veces al día pide /api/estado, que responde 503
 # si alguna pasada (info64, emparejamientos, lichess o la lista FIDE) lleva
-# demasiado sin terminar o falla en muchos torneos, o si queda algún torneo que
-# parece sensible por revisar (ver src/lib/salud.ts).
+# demasiado sin terminar o falla en muchos torneos, si queda algún torneo que
+# parece sensible por revisar o si hay alguna rectificación sin aplicar (ver
+# src/lib/salud.ts).
 #
 # Si falla, GitHub manda un correo a quien creó el workflow o cambió por última
 # vez su schedule (Settings → Notifications → Actions, activado por defecto). El
-# registro del paso dice qué pasada falla, o «"sensibles":"por revisar"».
+# registro del paso dice qué pasada falla, «"sensibles":"por revisar"» o
+# «"rectificaciones":"por revisar"».
 #
 # Ojo: en los repositorios públicos, GitHub desactiva los schedule tras 60 días
 # sin actividad en el repositorio. Se vuelven a activar a mano, en la pestaña

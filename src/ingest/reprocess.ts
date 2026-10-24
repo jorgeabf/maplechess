@@ -26,7 +26,7 @@ import { madridYear } from '../lib/dates'
 import { derivedColumns, type DerivedColumns } from './games'
 import { LICHESS_STEP, parseBroadcastUrl, resolveTourId, type BroadcastRef } from './lichess/api'
 import { isMinorsTournament } from './menores'
-import { isRetired, publicName, publicPgnNames, RETIRED_NAME, retiredKey } from './nombres'
+import { isRetired, nameKey, publicName, publicPgnNames, RETIRED_NAME } from './nombres'
 import {
 	anonymizeRetiredParticipations,
 	deleteExcludedTournaments,
@@ -200,11 +200,11 @@ export async function applyRetired(db: D1Database): Promise<RetiredCleanup> {
 	const { results } = await db.prepare('SELECT nombre FROM retiradas').all<{ nombre: string }>()
 	// Los participantes sin FIDE ID se comparan por name_norm, que lleva el año
 	// de los homónimos adultos: con él y sin él.
-	const nameNorms = [...new Set(results.flatMap(({ nombre }) => [normalizeName(nombre), retiredKey(nombre)]))]
+	const nameNorms = [...new Set(results.flatMap(({ nombre }) => [normalizeName(nombre), nameKey(nombre)]))]
 	// Las partidas sin FIDE ID, por las palabras del nombre en el FTS.
 	const matches = results
 		.map(({ nombre }) =>
-			retiredKey(nombre)
+			nameKey(nombre)
 				.split(/[^\p{L}\p{N}]+/u)
 				.filter(Boolean)
 				.map((word) => `"${word}"`)

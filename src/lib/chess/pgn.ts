@@ -183,3 +183,44 @@ export function writeGame(
 	}
 	return makePgn({ ...game, headers: merged })
 }
+
+/** Las cabeceras del principio del texto, una por línea. */
+const HEADER_BLOCK = /^(?:\[.*\]\r?\n)*/
+
+/** Línea de la cabecera `tag` con su valor escapado (\" y \\). */
+function tagLine(tag: string, value: string): string {
+	return `[${tag} "${value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"]`
+}
+
+/**
+ * Cambia cabeceras del texto de un PGN ya escrito, sin volver a serializarlo:
+ * con un valor, la línea se sustituye o, si no estaba, se añade tras las
+ * demás; con null, se quita. El resto del texto queda igual, byte a byte.
+ */
+export function setPgnTags(pgn: string, tags: Record<string, string | null>): string {
+	let text = pgn
+	for (const [tag, value] of Object.entries(tags)) {
+		const line = `^\\[${tag} "(?:[^"\\\\]|\\\\.)*"\\]`
+		if (value === null) {
+			text = text.replace(new RegExp(`${line}\\r?\\n`, 'gm'), '')
+			continue
+		}
+		const current = new RegExp(`${line}(?=\\r?$)`, 'm')
+		if (current.test(text)) {
+			text = text.replace(current, () => tagLine(tag, value))
+			continue
+		}
+		const end = HEADER_BLOCK.exec(text)?.[0].length ?? 0
+		const eol = text.slice(0, end).endsWith('\r\n') ? '\r\n' : '\n'
+		text = text.slice(0, end) + tagLine(tag, value) + eol + text.slice(end)
+	}
+	return text
+}
+
+/**
+ * Cambia el resultado del texto de un PGN ya escrito: la cabecera Result y la
+ * marca del final de las jugadas. El resto queda igual, byte a byte.
+ */
+export function setPgnResult(pgn: string, result: GameResult): string {
+	return setPgnTags(pgn, { Result: result }).replace(/(?:1-0|0-1|1\/2-1\/2|\*)(\s*)$/, (_, space: string) => result + space)
+}

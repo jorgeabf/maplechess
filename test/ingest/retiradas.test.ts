@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import type { FidePlayer } from '../../src/ingest/fide/parse'
 import { buildGameRows } from '../../src/ingest/games'
 import type { TournamentPlayer } from '../../src/ingest/info64/parse'
-import { anonymizePgn, isRetired, RETIRED_NAME, retiredKey } from '../../src/ingest/nombres'
+import { anonymizePgn, isRetired, nameKey, RETIRED_NAME } from '../../src/ingest/nombres'
 import {
 	replacePairings,
 	replaceParticipations,
@@ -94,7 +94,7 @@ describe('anonimizar a un retirado', () => {
 	})
 
 	it('isRetired va por el FIDE ID y, sin él, por el nombre', () => {
-		const retired = { ids: new Set([RETIRED.fideId]), names: new Set([retiredKey(RETIRED.name)]) }
+		const retired = { ids: new Set([RETIRED.fideId]), names: new Set([nameKey(RETIRED.name)]) }
 		expect(isRetired(retired, RETIRED.fideId, 'Otro nombre')).toBe(true)
 		// Un homónimo con otro FIDE ID es otra persona.
 		expect(isRetired(retired, 999, RETIRED.name)).toBe(false)

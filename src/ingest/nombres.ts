@@ -5,6 +5,7 @@
 // menor no se guarda en ningún nombre, venga de donde venga. Y de quien ha
 // pedido que se le retire no se guarda ni el nombre (RETIRED_NAME).
 import { normalizeName } from '../lib/chess/names'
+import { setPgnTags } from '../lib/chess/pgn'
 import { madridYear } from '../lib/dates'
 import { mayBeMinor } from '../lib/db/players'
 import { homonymYear, withoutHomonymYear } from '../lib/format'
@@ -45,14 +46,18 @@ export function publicPgnNames(pgn: string, year = madridYear(new Date())): stri
  */
 export const RETIRED_NAME = 'Jugador retirado'
 
-/** Personas retiradas: sus FIDE ID y sus nombres en forma de comparar (retiredKey). */
+/** Personas retiradas: sus FIDE ID y sus nombres en forma de comparar (nameKey). */
 export interface Retired {
 	ids: ReadonlySet<number>
 	names: ReadonlySet<string>
 }
 
-/** Forma de comparar un nombre con los retirados: canónica y sin el año de los homónimos. */
-export function retiredKey(name: string): string {
+/**
+ * Forma de comparar dos nombres de una misma persona: canónica y sin el año de
+ * los homónimos, que un menor recupera al dejar de serlo. La usan la retirada y
+ * la rectificación.
+ */
+export function nameKey(name: string): string {
 	return normalizeName(withoutHomonymYear(name))
 }
 
@@ -62,7 +67,7 @@ export function retiredKey(name: string): string {
  * retira (es lo que protege a quien lo pidió).
  */
 export function isRetired(retired: Retired, fideId: number | null, name: string): boolean {
-	return fideId !== null ? retired.ids.has(fideId) : retired.names.has(retiredKey(name))
+	return fideId !== null ? retired.ids.has(fideId) : retired.names.has(nameKey(name))
 }
 
 /**
@@ -71,7 +76,5 @@ export function isRetired(retired: Retired, fideId: number | null, name: string)
  * igual, byte a byte.
  */
 export function anonymizePgn(pgn: string, color: 'White' | 'Black'): string {
-	return pgn
-		.replace(new RegExp(`^\\[${color} "(?:[^"\\\\]|\\\\.)*"\\]$`, 'm'), `[${color} "${RETIRED_NAME}"]`)
-		.replace(new RegExp(`^\\[${color}(?:FideId|Title) "(?:[^"\\\\]|\\\\.)*"\\]\\r?\\n`, 'gm'), '')
+	return setPgnTags(pgn, { [color]: RETIRED_NAME, [`${color}FideId`]: null, [`${color}Title`]: null })
 }

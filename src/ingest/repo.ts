@@ -8,7 +8,8 @@ import { madridYear } from '../lib/dates'
 import type { FidePlayer } from './fide/parse'
 import type { DerivedColumns, GameRow, Participant, TournamentContext } from './games'
 import type { Pairing, PairedPlayer, StandingsPage, TournamentPlayer, TournamentType } from './info64/parse'
-import { anonymizePgn, isRetired, publicName, RETIRED_NAME, retiredKey, type Retired } from './nombres'
+import { anonymizePgn, isRetired, nameKey, publicName, RETIRED_NAME, type Retired } from './nombres'
+import { appliedRows, rectifyGame, rectifyParticipant, type Rectification } from './rectificaciones'
 
 const MAX_JSON_BYTES = 1_000_000
 
@@ -22,8 +23,41 @@ export async function loadRetired(db: D1Database): Promise<Retired> {
 		.all<{ fideId: number | null; nombre: string }>()
 	return {
 		ids: new Set(results.flatMap((r) => (r.fideId === null ? [] : [r.fideId]))),
-		names: new Set(results.map((r) => retiredKey(r.nombre)))
+		names: new Set(results.map((r) => nameKey(r.nombre)))
 	}
+}
+
+/**
+ * Rectificaciones del torneo (tabla rectificaciones, por su clave natural).
+ * Casi nunca hay ninguna: es una lectura del índice por escritura.
+ */
+export async function loadRectifications(db: D1Database, tournamentId: number): Promise<Rectification[]> {
+	const { results } = await db
+		.prepare(
+			`SELECT r.id, r.fide_id AS fideId, r.nombre AS name, r.ronda AS round, r.campo AS field, r.valor AS value
+			FROM tournaments t JOIN rectificaciones r ON r.source = t.source AND r.source_key = t.source_key
+			WHERE t.id = ?1`
+		)
+		.bind(tournamentId)
+		.all<Rectification>()
+	return results
+}
+
+/**
+ * Apunta en `aplicada` lo que ha aplicado una escritura (appliedRows): `at` en
+ * las filas que casan y NULL en las demás que le tocaba aplicar, que es la
+ * alarma de /api/estado. Va en el mismo batch que la escritura.
+ */
+function markApplied(db: D1Database, applied: { checked: number[]; hits: number[] }, at: string): D1PreparedStatement[] {
+	if (applied.checked.length === 0) return []
+	return [
+		db
+			.prepare(
+				`UPDATE rectificaciones SET aplicada = CASE WHEN id IN (SELECT value FROM json_each(?2)) THEN ?1 END
+				WHERE id IN (SELECT value FROM json_each(?3))`
+			)
+			.bind(at, JSON.stringify(applied.hits), JSON.stringify(applied.checked))
+	]
 }
 
 /** Parte las filas en lotes cuyo JSON no pase de maxBytes. */
@@ -91,10 +125,11 @@ export async function upsertTournament(db: D1Database, t: TournamentInput): Prom
 
 /**
  * Sustituye los participantes del torneo (el ranking inicial puede cambiar
- * entre lecturas). Los nombres, sin el año de los menores, y los retirados,
- * anonimizados (nombres.ts). Una lista vacía no borra la guardada: es una
- * página que cambió o vino a medias (un torneo aún sin inscritos no tiene nada
- * guardado). Devuelve false si se ha conservado una lista guardada, para avisar.
+ * entre lecturas). Los nombres, sin el año de los menores; los datos,
+ * rectificados (rectificaciones.ts), y los retirados, anonimizados
+ * (nombres.ts). Una lista vacía no borra la guardada: es una página que cambió
+ * o vino a medias (un torneo aún sin inscritos no tiene nada guardado).
+ * Devuelve false si se ha conservado una lista guardada, para avisar.
  */
 export async function replaceParticipations(
 	db: D1Database,
@@ -107,7 +142,11 @@ export async function replaceParticipations(
 	}
 	const year = madridYear(new Date())
 	const retired = await loadRetired(db)
-	const rows = players.map((p) => {
+	const rectifications = await loadRectifications(db, tournamentId)
+	const hits = new Set<number>()
+	const rows = players.map((player) => {
+		// La retirada, después: mira a quien es de verdad.
+		const p = rectifyParticipant(player, rectifications, hits, year)
 		if (isRetired(retired, p.fideId, p.name)) {
 			return { ...p, name: RETIRED_NAME, nameNorm: normalizeName(RETIRED_NAME), fideId: null, title: null }
 		}
@@ -134,7 +173,8 @@ export async function replaceParticipations(
 					ON CONFLICT DO NOTHING`
 				)
 				.bind(tournamentId, json)
-		)
+		),
+		...markApplied(db, appliedRows(rectifications, hits, 'participantes'), new Date().toISOString())
 	])
 	return true
 }
@@ -234,8 +274,10 @@ export interface GamesSource {
  * organizador que retira medio torneo. Las guardadas se quedan, el torneo pasa
  * por revisado y devuelve false para avisar. Con `replace`, se guarda igual.
  *
- * Los jugadores retirados se anonimizan aquí, después de cruzar: el cruce
- * necesita su FIDE ID y su nombre para saber que son ellos.
+ * Las rectificaciones (rectificaciones.ts) y la retirada se aplican aquí,
+ * después de cruzar y por ese orden: el cruce necesita el FIDE ID y el nombre
+ * de la fuente para saber quién es quién, y la retirada mira a quien es de
+ * verdad. Una partida oculta no se guarda, y se borra si estaba.
  */
 export async function saveGames(
 	db: D1Database,
@@ -256,10 +298,15 @@ export async function saveGames(
 		}
 	}
 	const retired = await loadRetired(db)
-	const saved = rows.map((row) => withoutRetired(row, retired))
+	const rectifications = await loadRectifications(db, tournamentId)
+	const hits = new Set<number>()
+	const saved = rows.flatMap((row) => {
+		const rectified = rectifyGame(row, rectifications, hits)
+		return rectified ? [withoutRetired(rectified, retired)] : []
+	})
 	// Sin partidas no hay fuente que mostrar.
-	const sourceName = rows.length > 0 ? source.name : null
-	const sourceUrl = rows.length > 0 ? source.url : null
+	const sourceName = saved.length > 0 ? source.name : null
+	const sourceUrl = saved.length > 0 ? source.url : null
 	await db.batch([
 		...chunkByJsonSize(saved).map((json) =>
 			db
@@ -319,7 +366,8 @@ export async function saveGames(
 					games_source_url = ?4
 				WHERE id = ?1`
 			)
-			.bind(tournamentId, checkedAt, sourceName, sourceUrl)
+			.bind(tournamentId, checkedAt, sourceName, sourceUrl),
+		...markApplied(db, appliedRows(rectifications, hits, 'partidas'), checkedAt)
 	])
 	return true
 }
@@ -867,10 +915,10 @@ export async function refreshTotals(db: D1Database): Promise<void> {
 /**
  * Sustituye los emparejamientos guardados del torneo por los de esta ronda.
  * Nombre, título, FIDE ID y ELO salen del participante con ese número del
- * ranking inicial; si no lo hay, se queda lo que trae la página de la ronda,
- * con el nombre sin el año de los menores. Si la ronda aún no está emparejada
- * (sin filas), se borran los de otras rondas y se conservan los de ésta: una
- * página que vuelve vacía no los quita.
+ * ranking inicial, ya rectificado (rectificaciones.ts); si no lo hay, se queda
+ * lo que trae la página de la ronda, con el nombre sin el año de los menores.
+ * Si la ronda aún no está emparejada (sin filas), se borran los de otras
+ * rondas y se conservan los de ésta: una página que vuelve vacía no los quita.
  */
 export async function replacePairings(
 	db: D1Database,
