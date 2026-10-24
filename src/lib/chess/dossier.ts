@@ -1,6 +1,7 @@
-// Dossier para preparar una partida contra un jugador: sus líneas principales
-// con un color, qué ha cambiado en su repertorio y cómo rinde según el ELO de
-// sus rivales. Sale de las mismas partidas que lee el repertorio.
+// Dossier para preparar una partida contra un jugador: su primera jugada y sus
+// líneas principales con un color, qué ha cambiado en su repertorio y cómo
+// rinde según el ELO de sus rivales. Sale de las mismas partidas que lee el
+// repertorio.
 import { Chess, normalizeMove } from 'chessops/chess'
 import { parseUci } from 'chessops/util'
 import { addYears } from '../dates'
@@ -239,5 +240,67 @@ export function crossReference(
 			return { kind: 'new-for-you', moves, yours: node.stats, lineMove, yourMoves: [], rivalAfter: null }
 		}
 		pos.play(normalizeMove(pos, parseUci(lineMove)!))
+	}
+}
+
+/** Las jugadas desde una posición: las más jugadas y, sumadas, las demás. */
+export interface MoveShares {
+	/** Partidas que pasan por la posición: la base de los porcentajes. */
+	total: Stats
+	/** De la más jugada a la menos. */
+	moves: MoveCount[]
+	/** Las demás jugadas, sumadas; null si no hay. */
+	other: Stats | null
+}
+
+export interface FirstMove extends MoveCount {
+	/** Con negras: sus respuestas a esta primera jugada de las blancas. Con blancas, null. */
+	replies: MoveShares | null
+}
+
+export interface FirstMoves extends MoveShares {
+	moves: FirstMove[]
+}
+
+// Una jugada sale sola si se juega en al menos el 5 % de las partidas de la
+// posición: con pocas partidas salen todas, y con cientos, las que son una
+// costumbre. Las demás se suman en «otras».
+const FIRST_MOVES = { max: 4, maxReplies: 3, minShare: 0.05 }
+
+function sumStats(a: Stats, b: Stats): Stats {
+	return {
+		games: a.games + b.games,
+		wins: a.wins + b.wins,
+		draws: a.draws + b.draws,
+		losses: a.losses + b.losses,
+		lastDate: (a.lastDate ?? '') > (b.lastDate ?? '') ? a.lastDate : b.lastDate
+	}
+}
+
+function moveShares(node: PositionNode, max: number): MoveShares {
+	const all = byGames(node, Infinity)
+	// Van de más a menos partidas: las que pasan el mínimo son las primeras.
+	const moves = all.slice(0, max).filter((m) => m.stats.games >= FIRST_MOVES.minShare * node.stats.games)
+	const rest = all.slice(moves.length)
+	return { total: node.stats, moves, other: rest.length > 0 ? rest.map((m) => m.stats).reduce(sumStats) : null }
+}
+
+/**
+ * Resumen de la primera jugada del índice de posiciones (indexPositions) del
+ * jugador que lleva `color`. Con blancas, sus primeras jugadas; con negras, las
+ * de sus rivales y, de cada una, sus respuestas. null si no hay partidas con
+ * jugadas.
+ */
+export function firstMoves(index: Map<string, PositionNode>, color: Color): FirstMoves | null {
+	const root = index.get(positionKey(Chess.default()))
+	if (!root) return null
+	const { total, moves, other } = moveShares(root, FIRST_MOVES.max)
+	return {
+		total,
+		other,
+		moves: moves.map((m) => {
+			const after = color === 'black' ? index.get(root.moves.get(m.uci)!.child) : undefined
+			return { ...m, replies: after ? moveShares(after, FIRST_MOVES.maxReplies) : null }
+		})
 	}
 }
