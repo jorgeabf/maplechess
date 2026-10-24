@@ -4,8 +4,8 @@
 // - tableros a 32, 41 y 72 px por casilla, con las coordenadas de board.css;
 // - cada pieza sobre las casillas sin marcar y marcadas, con su contraste;
 // - las figuras en una lista de jugadas, en sans y en serif, en claro y en
-//   oscuro, macizas y huecas;
-// - las cburnett (las de lichess) y las mpchess (las de ahora), para comparar.
+//   oscuro;
+// - las cburnett (las de lichess), para comprobar que no se parecen.
 // La escribe `node scripts/piezas.mjs --muestra <carpeta>`.
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -27,15 +27,6 @@ function cburnett() {
 		const letra = Object.keys(ROLES).find((k) => ROLES[k] === rol)
 		juego[`${color[0]}${letra}`] = url
 	}
-	return juego
-}
-
-/** Las mpchess, mientras sigan en el repo. */
-function mpchess() {
-	const dir = join(ROOT, 'src', 'assets', 'pieces', 'mpchess')
-	if (!existsSync(dir)) return null
-	const juego = {}
-	for (const color of 'wb') for (const letra of Object.keys(ROLES)) juego[`${color}${letra}`] = uri(readFileSync(join(dir, `${color}${letra}.svg`)))
 	return juego
 }
 
@@ -204,10 +195,7 @@ ${textos}
 </section>`
 	})
 
-	const comparadas = [
-		['cburnett (lichess, por defecto)', 'cb', cburnett()],
-		['mpchess (las de ahora)', 'mp', mpchess()]
-	]
+	const comparadas = [['cburnett (lichess, por defecto)', 'cb', cburnett()]]
 		.filter(([, , uris]) => uris)
 		.map(([nombre, prefijo, uris]) => [nombre, registrar(prefijo, uris)])
 	const comparacion = comparadas.length
