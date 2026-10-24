@@ -33,7 +33,7 @@ Saber contra quién te toca en la próxima ronda, ver qué aperturas juega y dó
 | **Busca** | Unos 98.000 jugadores españoles de la lista FIDE, unos 8.500 torneos de info64 desde 2014 y sus partidas. |
 | **Mira quién te toca** | Los emparejamientos de la próxima ronda, en cuanto info64 los publica, con un enlace para preparar a cada rival. |
 | **Prepara al rival** | Un dossier por color: su primera jugada, sus líneas principales, qué ha cambiado este año, cómo puntúa según el rival, sus apuros de tiempo y dónde te separas tú. |
-| **Analiza** | Visor con variantes, comentarios y relojes, en el que puedes probar tus propias jugadas, y Stockfish 19 en el propio navegador. |
+| **Analiza** | Visor con piezas propias, variantes, comentarios y relojes, en el que puedes probar tus propias jugadas, y Stockfish 19 en el propio navegador. |
 | **Descarga** | PGN completos, con ELO, FIDE ID, ECO y apertura, de una partida, un torneo, un jugador o una búsqueda. |
 
 ## Qué ofrece
@@ -81,6 +81,8 @@ De quien puede ser menor de edad (cumple 18 años o menos este año, según la l
   - **Variante propia:** mueve las piezas para probar una idea o pulsa una línea del motor para recorrerla. La partida no cambia, y «Volver a la partida» te lleva a donde estabas.
   - **Stockfish 19** funciona en el propio navegador: las 3 mejores líneas, que se pueden pulsar, la barra de evaluación y la mejor jugada como flecha. Analiza cada posición hasta 10 s o hasta la profundidad 22, para no agotar la batería del móvil; «Seguir analizando» continúa sin límite. Con la pestaña oculta se para y, al volver, sigue.
   - Si la fuente anota evaluaciones, un gráfico las muestra jugada a jugada.
+  - **Piezas propias,** dibujadas para MapleChess en madera de arce y nogal. Todas llevan un borde claro y otro oscuro, así que se distinguen bien sobre las dos casillas: al menos 4,8:1 de contraste, que es lo máximo que permite el nogal.
+- **Notación con figuras:** las jugadas se escriben con las mismas piezas del tablero (♘f3 en lugar de Nf3), que se leen igual en cualquier idioma, en el visor, el motor, el repertorio y el dossier. Al copiar y en el PGN siguen en letras.
 - **Descargas en PGN:** de una partida, de un torneo, de todas las de un jugador o de una posición del repertorio (hasta 5.000 partidas), o del resultado de una búsqueda (las que enseña, hasta 1.000).
 
 Las páginas se generan en el servidor y las búsquedas son formularios normales: todo funciona sin JavaScript menos el tablero y el motor.
@@ -236,7 +238,7 @@ curl -X POST localhost:4321/api/admin/sync -H "Authorization: Bearer $TOKEN" \
 ```
 migrations/        Esquema de D1
 data/openings/     Aperturas de lichess (TSV, CC0)
-scripts/           Copia del motor, aperturas, iconos y tarjeta para compartir, rondas de lichess y fuente de los titulares
+scripts/           Copia del motor, aperturas, iconos y tarjeta para compartir, rondas de lichess, piezas del tablero y fuentes de los titulares y de las figuras
 src/worker.ts      Entrypoint: web, crons y Workflows
 src/ingest/        Ingesta: info64, lista FIDE, lichess y escritura en D1
 src/lib/chess/     PGN, nombres, ECO, árbol de jugadas, UCI, ritmo, reloj, repertorio y dossier
