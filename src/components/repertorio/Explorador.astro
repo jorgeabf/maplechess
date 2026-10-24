@@ -109,7 +109,7 @@ const positionHref = (moves: string[]) => `${lineHref(moves)}#${ANCHOR}`
 								))}
 								{exploration.ended && (
 									<tr>
-										<td class="muted">Acaba aquí</td>
+										<td class="muted ended">Acaba aquí</td>
 										<td class="end num">
 											{formatNumber(exploration.ended.games)}{' '}
 											<span class="muted">({share(exploration.ended.games)})</span>
@@ -308,6 +308,11 @@ const positionHref = (moves: string[]) => `${lineHref(moves)}#${ANCHOR}`
 	 * El scroll queda para jugadas o recuentos muy largos. Con sus cuatro
 	 * columnas la tabla pide al menos unos 375 px; por debajo de 30rem la
 	 * tarjeta ocupa todo el ancho y no llega, así que se oculta «Última vez».
+	 * Con tres, a 320 px pedía de 260 a 290 px de 254 y se desplazaba: entre
+	 * columnas queda sólo el relleno final de cada una, «Resultado», que pasa a
+	 * ser la última, va a plomo con la tarjeta (global.css se lo quita a la
+	 * última, aquí la oculta) y «Acaba aquí» parte línea. Medido en 120
+	 * posiciones de seis repertorios: a 320 px ya no se desplaza ninguna.
 	 */
 	.moves-card {
 		overflow-x: auto;
@@ -316,6 +321,18 @@ const positionHref = (moves: string[]) => `${lineHref(moves)}#${ANCHOR}`
 	@media (width < 30rem) {
 		.last-date {
 			display: none;
+		}
+
+		.moves-table :is(th, td) {
+			padding-inline: 0 var(--space-3);
+		}
+
+		.moves-table :has(+ .last-date) {
+			padding-inline-end: 0;
+		}
+
+		.moves-table .ended {
+			white-space: normal;
 		}
 	}
 
