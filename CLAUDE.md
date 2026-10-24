@@ -52,6 +52,11 @@ MapleChess es un buscador de jugadores españoles (lista FIDE, federación ESP),
     - Las categorías de la FIDE, también con edad impar desde 2026 («- G11», «| O10»). Con una cifra («- O7», «| G9»), sólo al final del nombre y tras un guion o una barra, porque «Jornada de Entrenamiento G8» es un grupo. También entran «Kids» y «para niños», pero no «Santos Niños», que es una fiesta.
     - Medido el 23-oct-2026 en `/torneos` de producción: casan 3.593 de los unos 12.500 torneos, con 131.733 participaciones y 12.985 partidas. Las partidas son de 177 torneos, casi todas de los Campeonatos de España Sub 8 a Sub 14 y de los mundiales de cadetes.
     - Se cuelan los grupos de adultos de algunos torneos mixtos («Copa Diputación … General, S16 y S14», «Torneo Escolar … Adultos») y se escapan los que no lo dicen en el nombre. Se acepta, como en la búsqueda por sitio.
+      - Añadidos el 24-oct-2026 los que se escapaban por no decirlo con las palabras de la regla, catorce torneos, todos sin partidas:
+        - el «Torneig d'Escoles» de Xàtiva (cinco ediciones, de 2022 a 2026), de Sub 8 a Sub 16. Se busca la frase entera, también como «torneig descoles» en el slug;
+        - los interescolares en euskera («Eskolarteko Xake Txapelketa», «Eskolartekoa»: seis);
+        - en gallego, el programa «Xadrez nas Escolas» (dos) y el «Torneio das Escolas» (uno).
+      - «Escola», «Escolas» y «Escola d'Escacs» solos siguen sin entrar: son clubes, como «Escolas Xadrez As Burgas».
     - El reprocesado (`{"menores":true}`, `applyMinorsTournaments`) borra los guardados con todo lo suyo en cascada, de 100 en 100 (`deleteTournaments`). Se lanza tras desplegar y si cambia la regla.
     - El mismo hueco que con los sensibles: la retransmisión de lichess de un torneo de info64 de menores se guardaría como torneo propio si su nombre no lo dice.
   - `repo.ts`: escrituras con `json_each`; cada parámetro puede llevar hasta ~1 MB de JSON, porque D1 admite 100 parámetros por sentencia.

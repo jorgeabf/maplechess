@@ -99,7 +99,16 @@ describe('isMinorsTournament', () => {
 			'Circuito_JUDEX_Nacional_2030_INVENTADO',
 			'Juegos Deportivos del Principado Inventado',
 			'Zonal I Inventada XL Jocs Esportius C.V.',
-			'Torneo do Programa Xogade'
+			'Torneo do Programa Xogade',
+			"XII Torneig d'Escoles - Club Inventat",
+			// El slug de info64 pega la «d» del apóstrofo.
+			'xii-torneig-descoles-club-inventat',
+			'Inventatu III. Eskolarteko Xake Txapelketa Especial A',
+			'Inventatu IV Eskolartekoa. Especial',
+			'Taldekako eskolarteko txapelketa',
+			'II Torneo Xadrez nas Escolas',
+			"Torneo de Xadrez 'Xadrez nas Escolas'",
+			'I Torneio das Escolas'
 		]) {
 			expect(isMinorsTournament(name), name).toBe(true)
 		}
@@ -130,6 +139,9 @@ describe('isMinorsTournament', () => {
 			'Campeonato Juvenil Inventado',
 			'Open Escuela de Ajedrez Inventada',
 			'Xake Eskola Inventada Open',
+			"I IRT Sub1800 Escola d'Escacs Inventada",
+			'Torneo Escolas Xadrez Inventadas Nadal 2030',
+			'Escolas Inventadas Entroido 2030',
 			'Jornada de Entrenamiento G6',
 			'Jornada de Entrenamiento G8',
 			'Jornada de Entrenamiento G9',
