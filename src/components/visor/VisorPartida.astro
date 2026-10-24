@@ -11,6 +11,7 @@ import PlayerName from '../PlayerName.astro'
 import EvalChart from './EvalChart.astro'
 import MoveLine from './MoveLine.astro'
 import PanelMotor from './PanelMotor.astro'
+import ScriptTableros from './ScriptTableros.astro'
 
 interface Side {
 	name: string
@@ -140,9 +141,7 @@ const hasVariations = tree.nodes.some((n) => n.children.length > 1)
 	<script type="application/json" data-game set:html={data} />
 </visor-partida>
 
-{/* Con src y no con import: así el código de navegador queda fuera del
-    programa de TypeScript del servidor (ver src/client/tsconfig.json). */}
-<script src="../../client/visor/visor-partida.ts"></script>
+<ScriptTableros />
 
 <style>
 	/*

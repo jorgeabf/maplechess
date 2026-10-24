@@ -8,6 +8,7 @@ import { OPENING_MOVES_PLIES } from '../../lib/chess/pgn'
 import type { Color, Exploration, Line } from '../../lib/chess/repertoire'
 import { formatDate, formatMove, formatNumber, formatPercent } from '../../lib/format'
 import PanelMotor from '../visor/PanelMotor.astro'
+import ScriptTableros from '../visor/ScriptTableros.astro'
 import ScoreBar from './ScoreBar.astro'
 
 interface Props {
@@ -146,9 +147,7 @@ const positionHref = (moves: string[]) => `${lineHref(moves)}#${ANCHOR}`
 	<PanelMotor />
 </explorador-repertorio>
 
-{/* Con src y no con import: el código de navegador va en su propio programa
-    de TypeScript (ver src/client/tsconfig.json). */}
-<script src="../../client/repertorio/explorador-repertorio.ts"></script>
+<ScriptTableros />
 
 <style>
 	/*

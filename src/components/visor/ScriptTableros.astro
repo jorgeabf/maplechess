@@ -1,0 +1,10 @@
+---
+// El código de navegador del visor y del explorador del repertorio, en un solo
+// script (ver src/client/tableros.ts). Los dos componentes lo incluyen desde
+// aquí: con el mismo <script src> en cada uno, Vite dejaba dos archivos que
+// sólo importaban el común, y la cascada seguía. Con src y no con import: el
+// código de navegador va en su propio programa de TypeScript (ver
+// src/client/tsconfig.json).
+---
+
+<script src="../../client/tableros.ts"></script>
