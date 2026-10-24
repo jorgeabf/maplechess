@@ -27,3 +27,54 @@ export const ENGINE_SOURCE = `https://github.com/nmrugg/stockfish.js/releases/ta
  * licencia, avisar de los cambios y publicar lo derivado con la misma licencia.
  */
 export const CC_BY_SA = 'https://creativecommons.org/licenses/by-sa/4.0/deed.es'
+
+/**
+ * Aviso de las partidas de lichess en los PGN que se descargan o se copian: la
+ * fuente, la licencia con su enlace y que se han cambiado (§3.a; la ingesta
+ * pone el torneo, los nombres, los FIDE ID, el ELO y la apertura: buildGameRows),
+ * y que lo derivado va con la misma licencia (§3.b).
+ */
+export const LICHESS_NOTICE = `Partida de una retransmisión de lichess.org, con licencia CC BY-SA 4.0 (${CC_BY_SA}). MapleChess ha completado o corregido sus cabeceras; esta versión tiene la misma licencia.`
+
+/**
+ * Cabeceras con la dirección en lichess, por orden de preferencia: las dos de
+ * la partida (lo que se exporta de lichess y se sube a info64 sólo trae Site)
+ * y la de la ronda.
+ */
+const LICHESS_HEADERS = ['GameURL', 'Site', 'BroadcastURL']
+const LICHESS_HEADER = /^\[(GameURL|Site|BroadcastURL) "(https:\/\/lichess\.org\/[^"\\]*)"/gm
+
+/**
+ * Dirección en lichess del PGN guardado, o null si no es de lichess. Es lo que
+ * dice si una partida es de lichess, para su aviso de licencia (licensedPgn)
+ * y el crédito de su página.
+ *
+ * Se reconoce por sus cabeceras, que lichess pone en sus retransmisiones y la
+ * ingesta conserva, y no por la fuente del torneo: así las descargas no leen
+ * más filas, y también encuentra las de info64 que vienen de lichess. Hay
+ * organizadores que suben allí lo que exportan de lichess, con su Site y su
+ * análisis (el CE Absoluto 2025).
+ *
+ * El PGN guardado es el de makePgn (writeGame): las cabeceras, una línea en
+ * blanco y las jugadas. Las jugadas no se miran: un enlace en un comentario no
+ * dice de dónde es la partida.
+ */
+export function lichessUrl(pgn: string): string | null {
+	const headersEnd = pgn.indexOf('\n\n')
+	if (headersEnd === -1) return null
+	const urls = new Map(
+		Array.from(pgn.slice(0, headersEnd).matchAll(LICHESS_HEADER), ([, tag, url]): [string, string] => [tag, url])
+	)
+	return LICHESS_HEADERS.map((tag) => urls.get(tag)).find((url) => url !== undefined) ?? null
+}
+
+/**
+ * El PGN guardado tal como se entrega: si es de lichess (lichessUrl), con
+ * LICHESS_NOTICE en un comentario antes de la primera jugada. Los lectores de
+ * PGN conservan los comentarios; una cabecera inventada, no siempre.
+ */
+export function licensedPgn(pgn: string): string {
+	if (lichessUrl(pgn) === null) return pgn
+	const movetext = pgn.indexOf('\n\n') + 2
+	return `${pgn.slice(0, movetext)}{ ${LICHESS_NOTICE} } ${pgn.slice(movetext)}`
+}

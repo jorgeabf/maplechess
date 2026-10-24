@@ -1,22 +1,25 @@
 // Respuesta HTTP de descarga de PGN.
 import { fileSlug } from './format'
+import { licensedPgn } from './licenses'
 
 /**
  * Las partidas, separadas por la línea en blanco que pide el estándar: cada
- * una sin espacios al final y con su salto de línea.
+ * una sin espacios al final y con su salto de línea. Las de lichess, con su
+ * aviso de licencia (licensedPgn).
  */
 async function* separated(pgns: Iterable<string> | AsyncIterable<string>): AsyncGenerator<string> {
 	let first = true
 	for await (const pgn of pgns) {
-		yield `${first ? '' : '\n'}${pgn.trimEnd()}\n`
+		yield `${first ? '' : '\n'}${licensedPgn(pgn).trimEnd()}\n`
 		first = false
 	}
 }
 
 /**
- * Descarga de las partidas `pgns` a medida que llegan (gamesPgn las lee por
- * lotes), sin juntarlas antes en memoria. Si algo falla a mitad, el 200 ya ha
- * salido y el archivo queda cortado: el error queda en el registro.
+ * Descarga de las partidas guardadas `pgns` a medida que llegan (gamesPgn las
+ * lee por lotes), sin juntarlas antes en memoria. Todas las descargas pasan por
+ * aquí: así ninguna sale sin el aviso de las de lichess. Si algo falla a mitad,
+ * el 200 ya ha salido y el archivo queda cortado: el error queda en el registro.
  */
 export function pgnResponse(pgns: Iterable<string> | AsyncIterable<string>, name: string): Response {
 	const chunks = separated(pgns)
