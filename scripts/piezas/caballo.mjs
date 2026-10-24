@@ -29,9 +29,14 @@ export default {
 	],
 	lineas: `${filetePeana(PEANA)}M20 50.5H27`,
 	marcas: `M61 23.5${nuca}H65.5V43C65.5 35 63 29 57.5 25.5Z${circulo(44.5, 33.5, 3)}`,
-	// La silueta de las tres partes en un solo contorno, sin el ojo: a 14 px
-	// mediría menos de un píxel.
+	// La silueta que se ve en el tablero, sin juntas, como la del rey: las
+	// partes con medio contorno más por los lados y por arriba, y la peana en
+	// la línea base. Sin el ojo, que a 14 px mediría menos de un píxel.
 	figura:
-		'M50 88H26Q24 88 24 86V81C24 79.2 25.2 78 27 78C36 78 39 76 39 72V67H35.5Q32 67 32 63.5Q32 60 35.5 60H37.5V59' +
-		`${perfil}${nuca}${cuello}V63.5Q68 67 64.5 67H61V72C61 76 64 78 73 78C74.8 78 76 79.2 76 81V86Q76 88 74 88Z`
+		'M50 88H24Q22 88 22 86V79C22 77.2 23.2 76 25 76C34 76 37 74.7 37 72V69H35.5Q30 69 30 63.5Q30 58 35.5 58' +
+		'C35.5 57 35.1 56.3 33.9 56.3L25.2 57C20.8 57.2 18 54.6 18 51V48C18 45.2 18.8 44.1 21.8 41.9' +
+		'C26.8 37.9 30.6 34.6 33.6 31.6C36.6 28.6 38.1 25.2 41.1 23.7C43.1 22.7 44.6 22.6 45.5 22.3' +
+		'C46.1 20.8 49.9 16.1 52.9 15.1A2 2 0 0 1 55.2 16C56.7 18.5 57.5 20.2 57.9 21.7L61 21.5' +
+		'C67.2 22.8 74 32.5 74 43C74 47.2 73.4 51.5 72.4 55.2C71.7 57.7 70.9 60.3 70 62.5V63.5Q70 69 64.5 69H63V72' +
+		'C63 74.7 66 76 75 76C76.8 76 78 77.2 78 79V86Q78 88 76 88Z'
 }
