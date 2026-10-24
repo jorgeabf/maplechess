@@ -30,13 +30,26 @@ export const BASE = 88
 export const CONTORNO = 4
 /** Grosor de las líneas interiores (juntas, filetes de taracea). */
 export const LINEA = 3
+/**
+ * Grosor del perfil de tinta que rodea a las negras por fuera del filete
+ * claro. Sobre el arce el filete casi no se ve (1,2:1) y la pieza parecía
+ * llevar un halo: el perfil marca el borde, y el filete queda incrustado entre
+ * dos líneas oscuras. Con 2 es una línea de 1,1 a 1,4 px en el escritorio
+ * (casillas de 56 a 72 px), sin suavizarse a gris como una de menos de un
+ * píxel, y de 1,3 a 1,6 px del dispositivo en el móvil; mide la mitad del
+ * filete, que sigue mandando. Lo eligió Jorge el 24-oct-2026 entre 1,5, 2 y
+ * 2,5, con el caballo.
+ */
+export const SOMBRA = 2
 
 /*
  * Esquinas que ocupan las coordenadas (9 px fijos, chessground.base.css, con
  * los ajustes de board.css): el número arriba a la izquierda (x < .., y < ..)
  * y la letra abajo a la derecha (x > .., y > ..). La pieza se pinta encima y
- * las taparía. Con la casilla de 41 px (el móvil) no se tocan; con la de 32
- * (--board-min: 16rem, pantallas muy estrechas) la peana puede rozar la letra.
+ * las taparía. Con la casilla de 41 px (el móvil), la peana de las negras,
+ * con su perfil, roza el borde de la letra en menos de un píxel; con la de 32
+ * (--board-min: 16rem, pantallas muy estrechas), la peana tapa un poco la
+ * letra.
  */
 export const ESQUINAS = {
 	41: { numero: { x: 20, y: 21 }, letra: { x: 79, y: 76 } },
@@ -180,15 +193,21 @@ export function poligono(...vertices) {
  * queda la junta. `pieza.lineas`, trazos abiertos (juntas, filetes);
  * `pieza.marcas`, formas rellenas del color del borde (un ojo, una ranura).
  * Las negras son las blancas con los colores cambiados: el borde claro queda
- * fuera, que es lo que las separa del nogal.
+ * fuera, que es lo que las separa del nogal. Con `sombra`, las negras llevan
+ * además el perfil de tinta: una capa bajo toda la silueta, más ancha que el
+ * filete, que sólo asoma por fuera y no se ve en las juntas.
  */
-export function svgPieza(pieza, color, { contorno = CONTORNO, linea = LINEA } = {}) {
+export function svgPieza(pieza, color, { contorno = CONTORNO, linea = LINEA, sombra = SOMBRA } = {}) {
 	const [relleno, borde] = color === 'w' ? [COLORES.claro, COLORES.tinta] : [COLORES.tinta, COLORES.claro]
 	const partes = pieza.partes.map((d) => `<path d="${d}"/>`).join('')
 	const lineas = pieza.lineas ? `<path fill="none" stroke-width="${linea}" d="${pieza.lineas}"/>` : ''
 	const marcas = pieza.marcas ? `<path fill="${borde}" stroke="none" d="${pieza.marcas}"/>` : ''
+	const perfil =
+		color === 'b' && sombra
+			? `<g fill="${COLORES.tinta}" stroke="${COLORES.tinta}" stroke-width="${contorno + 2 * sombra}" stroke-linejoin="round">${partes}</g>`
+			: ''
 	return (
-		`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${LADO} ${LADO}">` +
+		`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${LADO} ${LADO}">${perfil}` +
 		`<g fill="${relleno}" stroke="${borde}" stroke-width="${contorno}" stroke-linejoin="round" stroke-linecap="round">` +
 		`${partes}${lineas}${marcas}</g></svg>`
 	)
@@ -336,8 +355,10 @@ export function informe(pieza, opciones = {}) {
 	const filas = []
 	for (const color of ['w', 'b']) {
 		const svg = svgPieza(pieza, color, opciones)
+		// El borde de la negra con perfil es más ancho: perfil y filete.
+		const grosor = (opciones.contorno ?? CONTORNO) + (color === 'b' ? (opciones.sombra ?? SOMBRA) : 0)
 		for (const tamano of TAMANOS) {
-			const pintada = pintar(svg, tamano.css * tamano.dpr, opciones.contorno ?? CONTORNO)
+			const pintada = pintar(svg, tamano.css * tamano.dpr, grosor)
 			for (const casilla of CASILLAS) {
 				const { borde, cuerpo } = medirSobre(pintada, casilla.color)
 				const valor = Math.max(borde, cuerpo)
