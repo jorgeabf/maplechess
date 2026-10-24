@@ -73,6 +73,12 @@
 			"name": "games-reprocess",
 			"binding": "GAMES_REPROCESS",
 			"class_name": "GamesReprocessWorkflow"
+		},
+		{
+			// Archivo de partidas de la Federación Cántabra de Ajedrez; sólo a mano.
+			"name": "fca-import",
+			"binding": "FCA_IMPORT",
+			"class_name": "FcaImportWorkflow"
 		}
 	],
 	"triggers": {

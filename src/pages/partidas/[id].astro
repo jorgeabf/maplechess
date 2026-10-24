@@ -7,7 +7,7 @@ import Base from '../../layouts/Base.astro'
 import { buildTree } from '../../lib/chess/movetree'
 import { getAdjacentGames, getGame } from '../../lib/db/games'
 import { displayName, formatDate, formatResult } from '../../lib/format'
-import { CC_BY_SA, licensedPgn, lichessUrl } from '../../lib/licenses'
+import { CC_BY, CC_BY_SA, fcaUrl, licensedPgn, lichessUrl } from '../../lib/licenses'
 import { ME_COOKIE, isOwn, resolveMe } from '../../lib/me'
 import { backTarget, boardColor, positiveInt, type BackKind } from '../../lib/params'
 import { sourceUrl } from '../../lib/urls'
@@ -34,8 +34,10 @@ const black = {
 // sale de sus cabeceras (lichessUrl), que también dicen si la partida es de
 // lichess, como en el PGN que se descarga: también la de info64 que viene de
 // lichess. En info64 cada partida tiene su página /{torneo}/{ronda}/{tablero}.
-// Sólo se enlaza si es de una fuente (sourceUrl).
+// Las del archivo de la FCA, igual, por su cabecera Source (fcaUrl); se enlaza
+// la página del archivo. Sólo se enlaza si es de una fuente (sourceUrl).
 const fromLichess = lichessUrl(game.pgn)
+const fromFca = fcaUrl(game.pgn) !== null
 const lichessHref = sourceUrl(fromLichess)
 const sourceHref = sourceUrl(
 	game.tournamentSource === 'info64' ? `${game.tournamentUrl}/${game.round}/${game.board}` : game.tournamentUrl
@@ -158,6 +160,17 @@ const backLabel = back && `← Volver ${(ownBack && OWN_BACK_LABELS[back.kind]) 
 					)}
 					, con licencia <a href={CC_BY_SA} rel="license noopener">CC BY-SA 4.0</a>. Aquí se han completado sus
 					cabeceras (nombres, FIDE ID, ELO y apertura).
+				</>
+			) : fromFca ? (
+				<>
+					Partida del{' '}
+					{sourceHref ? (
+						<a href={sourceHref}>archivo de la Federación Cántabra de Ajedrez</a>
+					) : (
+						'archivo de la Federación Cántabra de Ajedrez'
+					)}
+					, con licencia <a href={CC_BY} rel="license noopener">CC BY 4.0</a>. Aquí se han completado sus cabeceras y
+					cada jugador se ha enlazado con su ficha FIDE por el nombre.
 				</>
 			) : game.tournamentSource === 'info64' ? (
 				<>

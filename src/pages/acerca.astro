@@ -1,7 +1,7 @@
 ---
 import Base from '../layouts/Base.astro'
 import { CONTACT } from '../lib/legal'
-import { CC_BY_SA, ENGINE_SOURCE, ENGINE_VERSION, SOURCE_CODE } from '../lib/licenses'
+import { CC_BY, CC_BY_SA, ENGINE_SOURCE, ENGINE_VERSION, SOURCE_CODE } from '../lib/licenses'
 ---
 
 <Base
@@ -58,6 +58,15 @@ import { CC_BY_SA, ENGINE_SOURCE, ENGINE_VERSION, SOURCE_CODE } from '../lib/lic
 				misma licencia; se han completado o corregido sus cabeceras (nombres, FIDE ID, ELO y apertura).
 			</li>
 			<li>
+				<strong>Partidas de Cantabria:</strong> el{' '}
+				<a href="https://www.fcajedrez.es/partidas/" rel="noopener">archivo de la Federación Cántabra de Ajedrez</a>,
+				con la Liga Regional y los campeonatos regionales de 2007 a 2010, de 2012 y de 2021, salvo las categorías hasta
+				Sub 14. La federación lo publica con licencia <a href={CC_BY} rel="license noopener">CC BY 4.0</a>. Aquí se ha
+				separado por torneo, se han completado sus cabeceras y cada jugador se ha enlazado con su ficha FIDE por el
+				nombre, sólo cuando casa con uno solo de la lista española y su año de nacimiento le deja haber jugado la
+				partida.
+			</li>
+			<li>
 				<strong>Jugadores y ELO:</strong> la{' '}
 				<a href="https://ratings.fide.com/download_lists.phtml" rel="noopener">lista de jugadores de la FIDE</a>,
 				filtrada a la federación española.
@@ -89,6 +98,10 @@ import { CC_BY_SA, ENGINE_SOURCE, ENGINE_VERSION, SOURCE_CODE } from '../lib/lic
 			<div>
 				<dt>Retransmisiones</dt>
 				<dd>Las de lichess, cada mañana.</dd>
+			</div>
+			<div>
+				<dt>Archivo de Cantabria</dt>
+				<dd>No cambia: se importa una vez, y otra si la federación lo amplía.</dd>
 			</div>
 			<div>
 				<dt>Jugadores y ELO</dt>

@@ -69,12 +69,43 @@ export function lichessUrl(pgn: string): string | null {
 }
 
 /**
- * El PGN guardado tal como se entrega: si es de lichess (lichessUrl), con
- * LICHESS_NOTICE en un comentario antes de la primera jugada. Los lectores de
- * PGN conservan los comentarios; una cabecera inventada, no siempre.
+ * Partidas del archivo de la Federación Cántabra de Ajedrez: CC BY 4.0 (el
+ * aviso legal de fcajedrez.es la da para todo lo publicado). Pide citar la
+ * fuente, enlazar la licencia y avisar de los cambios; no, publicar lo derivado
+ * con la misma.
+ */
+export const CC_BY = 'https://creativecommons.org/licenses/by/4.0/deed.es'
+
+/**
+ * Aviso de las partidas de la FCA en los PGN que se descargan o se copian: la
+ * fuente, la licencia con su enlace y qué se ha cambiado (ingest/fca: el
+ * torneo, las cabeceras y el FIDE ID de los jugadores, cruzado por el nombre).
+ */
+export const FCA_NOTICE = `Partida del archivo de la Federación Cántabra de Ajedrez (fcajedrez.es), con licencia CC BY 4.0 (${CC_BY}). MapleChess ha completado o corregido sus cabeceras y ha enlazado a los jugadores con su FIDE ID por el nombre.`
+
+/** Cabecera con el archivo de la FCA (FCA_SITE en urls.ts) de la partida. */
+const FCA_HEADER = /^\[Source "(https:\/\/www\.fcajedrez\.es\/[^"\\]*)"/m
+
+/**
+ * El archivo de la FCA del que sale la partida, o null si no es de la FCA. La
+ * importación (ingest/fca) lo pone en la cabecera Source; como con lichessUrl,
+ * así las descargas no leen el torneo.
+ */
+export function fcaUrl(pgn: string): string | null {
+	const headersEnd = pgn.indexOf('\n\n')
+	if (headersEnd === -1) return null
+	return FCA_HEADER.exec(pgn.slice(0, headersEnd))?.[1] ?? null
+}
+
+/**
+ * El PGN guardado tal como se entrega: si es de lichess (lichessUrl) o de la
+ * FCA (fcaUrl), con su aviso de licencia en un comentario antes de la primera
+ * jugada. Los lectores de PGN conservan los comentarios; una cabecera
+ * inventada, no siempre.
  */
 export function licensedPgn(pgn: string): string {
-	if (lichessUrl(pgn) === null) return pgn
+	const notice = lichessUrl(pgn) !== null ? LICHESS_NOTICE : fcaUrl(pgn) !== null ? FCA_NOTICE : null
+	if (notice === null) return pgn
 	const movetext = pgn.indexOf('\n\n') + 2
-	return `${pgn.slice(0, movetext)}{ ${LICHESS_NOTICE} } ${pgn.slice(movetext)}`
+	return `${pgn.slice(0, movetext)}{ ${notice} } ${pgn.slice(movetext)}`
 }
