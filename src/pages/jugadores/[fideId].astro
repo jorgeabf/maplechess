@@ -6,12 +6,13 @@ import Icon from '../../components/Icon.astro'
 import RitmoSelect from '../../components/RitmoSelect.astro'
 import Pagination from '../../components/Pagination.astro'
 import ProximasPartidas from '../../components/ProximasPartidas.astro'
+import TorneosJugador from '../../components/TorneosJugador.astro'
 import Base from '../../layouts/Base.astro'
 import { score } from '../../lib/chess/repertoire'
 import { searchGames } from '../../lib/db/games'
 import { getUpcomingGames } from '../../lib/db/pairings'
 import { getPlayer, getPlayerSummary, getPlayerTournaments } from '../../lib/db/players'
-import { displayName, formatNumber, formatPercent, formatPoints, formatRange } from '../../lib/format'
+import { displayName, formatNumber, formatPercent } from '../../lib/format'
 import { ME_COOKIE, ME_COOKIE_OPTIONS, ME_FIELD, claimCookieAction, isOwn, readMeField, resolveMe } from '../../lib/me'
 import { dossierHref, gameFilters, positiveInt, withParams } from '../../lib/params'
 
@@ -89,6 +90,14 @@ const dossierLinks = own
 const upcomingPrepares = own
 	? upcoming.some((g) => g.opponent.fideId && g.opponent.hasDossier === 1)
 	: upcoming.length > 0 && hasDossier
+// Los 20 torneos más recientes a la vista y los anteriores plegados: con 279,
+// la tabla medía 26.600 px a 375 de ancho (24-oct-2026). El gráfico de ELO usa
+// todos. Hasta 25 no se pliega: plegar cinco o menos costaría un toque y apenas
+// acortaría la página.
+const RECENT_TOURNAMENTS = 20
+const shownTournaments = tournaments.length > RECENT_TOURNAMENTS + 5 ? RECENT_TOURNAMENTS : tournaments.length
+const recent = tournaments.slice(0, shownTournaments)
+const older = tournaments.slice(shownTournaments)
 ---
 
 <Base
@@ -318,49 +327,15 @@ const upcomingPrepares = own
 		<GraficoElo tournaments={tournaments} />
 		{
 			tournaments.length > 0 ? (
-				<div class="table-wrap stack tournaments">
-					<table class="data-table">
-						<thead>
-							<tr>
-								<th scope="col">Torneo</th>
-								<th scope="col">Fechas</th>
-								<th scope="col">Lugar</th>
-								<th scope="col" class="end">ELO</th>
-								<th scope="col" class="end" title="Número inicial o, por equipos, tablero">Nº</th>
-								<th scope="col" class="end" title={`${own ? 'Tus' : 'Sus'} partidas con PGN en ese torneo`}>
-									Partidas
-								</th>
-								<th scope="col" class="end" title={`Puntos en ${own ? 'tus' : 'sus'} partidas con PGN y resultado`}>
-									Puntos
-								</th>
-							</tr>
-						</thead>
-						<tbody>
-							{tournaments.map((t) => {
-								const score = stats.byTournament.get(t.tournamentId)
-								return (
-									<tr>
-										<td class="wrap">
-											<a href={`/torneos/${t.tournamentId}`}>{t.tournamentName}</a>
-											{t.team && (
-												<span class="team">
-													<span class="tag">Equipos</span> <span class="muted">{t.team}</span>
-												</span>
-											)}
-										</td>
-										<td class="num">{formatRange(t.startDate, t.endDate)}</td>
-										<td>{t.city}</td>
-										{/* Apilada en el móvil (.stack): cada cifra lleva su rótulo, sólo si la hay. */}
-										<td class="end num stat">{t.rating && <><span class="cell-label" aria-hidden="true">ELO </span>{t.rating}</>}</td>
-										<td class="end num stat">{t.startRank && <><span class="cell-label" aria-hidden="true">Nº </span>{t.startRank}</>}</td>
-										<td class="end num stat">{score ? <><span class="cell-label" aria-hidden="true">Partidas </span>{formatNumber(score.games)}</> : null}</td>
-										<td class="end num stat">{score?.decided ? <><span class="cell-label" aria-hidden="true">Puntos </span>{`${formatPoints(score.points)} / ${score.decided}`}</> : null}</td>
-									</tr>
-								)
-							})}
-						</tbody>
-					</table>
-				</div>
+				<>
+					<TorneosJugador tournaments={recent} scores={stats.byTournament} />
+					{older.length > 0 && (
+						<details class="older">
+							<summary>Ver los {formatNumber(older.length)} anteriores</summary>
+							<TorneosJugador tournaments={older} scores={stats.byTournament} />
+						</details>
+					)}
+				</>
 			) : (
 				<p class="muted">No hay torneos suyos en las fuentes.</p>
 			)
@@ -552,27 +527,13 @@ const upcomingPrepares = own
 		margin-bottom: var(--space-4);
 	}
 
-	/* En los torneos por equipos, debajo del nombre del torneo: con qué equipo jugó. */
-	.team {
-		display: block;
+	.older {
+		margin-top: var(--space-3);
 	}
 
-	/*
-	 * Torneos apilados en el móvil (.stack, en global.css): sus cifras (ELO,
-	 * número, partidas y puntos) van en su propia línea, debajo de las fechas y
-	 * el lugar. El salto es el ::after de la fila, un elemento de todo el ancho
-	 * que order pone entre los dos grupos; el orden de lectura no cambia.
-	 */
-	@container (width < 60rem) {
-		.tournaments tr::after {
-			content: '';
-			flex-basis: 100%;
-			order: 1;
-		}
-
-		.tournaments .stat {
-			order: 2;
-		}
+	/* Que la zona que se pulsa llegue a los 24 px. */
+	.older > summary {
+		padding-block: var(--space-1);
 	}
 
 	.filters > a {
