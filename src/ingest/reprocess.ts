@@ -6,6 +6,8 @@
 // Workflow la recalcula a partir del PGN guardado y del ritmo del torneo, sin
 // volver a pedir nada a las fuentes. Recorre la tabla por id en
 // lotes y cada lote es un paso, así que si algo falla se reintenta sólo ese.
+// De paso cuenta las partidas de lichess de cada torneo (lichess_games), que
+// se guardan al final de la pasada.
 //
 // También aplica a lo guardado las reglas de los nombres de la ingesta
 // (nombres.ts): quita el año de los menores de los nombres de las partidas
@@ -27,6 +29,7 @@ import { parseGames } from '../lib/chess/pgn'
 import { timeClassOf } from '../lib/chess/timecontrol'
 import { madridYear } from '../lib/dates'
 import { withoutHomonymYear } from '../lib/format'
+import { lichessUrl } from '../lib/licenses'
 import { derivedColumns, type DerivedColumns } from './games'
 import { LICHESS_STEP, parseBroadcastUrl, resolveTourId, type BroadcastRef } from './lichess/api'
 import { isMinorsTournament } from './menores'
@@ -53,6 +56,7 @@ import {
 	renameParticipations,
 	renamePairings,
 	renamePlayers,
+	saveLichessGames,
 	updateDerivedColumns,
 	updateGamePlayers,
 	updatePairingPlayers,
@@ -64,7 +68,10 @@ import {
 import { looksSensitive } from './sensibles'
 
 export interface GamesReprocessParams {
-	/** Empieza después de este id (para retomar a mano una ejecución cortada). */
+	/**
+	 * Empieza después de este id (para retomar a mano una ejecución cortada).
+	 * Así no guarda las partidas de lichess de cada torneo (lichess_games): hay que contarlas todas.
+	 */
 	after?: number
 	/** Sólo aplica la lista de retiradas, sin recorrer todas las partidas: tras añadir a alguien. */
 	retiradas?: boolean
@@ -91,6 +98,8 @@ export interface ReprocessedBatch {
 	updated: number
 	/** Partidas cuyos nombres han cambiado (nombres.ts). */
 	renamed: number
+	/** Partidas de lichess del lote (lichessUrl), por torneo: [id del torneo, partidas]. */
+	lichess: [number, number][]
 	lastId: number
 }
 
@@ -111,6 +120,7 @@ export class GamesReprocessWorkflow extends WorkflowEntrypoint<Env, GamesReproce
 		if (all) {
 			let after = event.payload.after ?? 0
 			const totals = { games: 0, withMoves: 0, withTimeClass: 0, withClocks: 0, updated: 0, renamed: 0 }
+			const lichess = new Map<number, number>()
 			for (;;) {
 				const batch = await step.do(`lote ${after}`, () => reprocessGames(this.env.DB, after))
 				if (!batch) break
@@ -120,11 +130,16 @@ export class GamesReprocessWorkflow extends WorkflowEntrypoint<Env, GamesReproce
 				totals.withClocks += batch.withClocks
 				totals.updated += batch.updated
 				totals.renamed += batch.renamed
+				for (const [id, n] of batch.lichess) lichess.set(id, (lichess.get(id) ?? 0) + n)
 				after = batch.lastId
 			}
+			// Retomada con after, faltarían las partidas de los lotes de antes.
+			const lichessTournaments = event.payload.after
+				? null
+				: await step.do('partidas de lichess', () => saveLichessGames(this.env.DB, [...lichess]))
 			const participations = await step.do('nombres de participantes', () => renameStoredParticipations(this.env.DB))
 			const pairings = await step.do('nombres de emparejamientos', () => renameStoredPairings(this.env.DB))
-			console.log(`[reprocess] ${JSON.stringify({ ...totals, participations, pairings })}`)
+			console.log(`[reprocess] ${JSON.stringify({ ...totals, lichessTournaments, participations, pairings })}`)
 		}
 		if (all || retiradas) {
 			const retired = await step.do('retiradas', () => applyRetired(this.env.DB))
@@ -154,6 +169,10 @@ export async function reprocessGames(
 		return changed ? [{ id: g.id, ...names, pgn }] : []
 	})
 	await renameGames(db, renamed)
+	const lichess = new Map<number, number>()
+	for (const g of games) {
+		if (lichessUrl(g.pgn) !== null) lichess.set(g.tournamentId, (lichess.get(g.tournamentId) ?? 0) + 1)
+	}
 	return {
 		games: rows.length,
 		withMoves: rows.filter((r) => r.openingMoves !== null).length,
@@ -161,6 +180,7 @@ export async function reprocessGames(
 		withClocks: rows.filter((r) => r.clocks !== null).length,
 		updated: await updateDerivedColumns(db, rows),
 		renamed: renamed.length,
+		lichess: [...lichess],
 		lastId: games[games.length - 1].id
 	}
 }

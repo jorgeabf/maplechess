@@ -15,7 +15,7 @@ import {
 	type TournamentInput
 } from '../../src/ingest/repo'
 import type { FidePlayer } from '../../src/ingest/fide/parse'
-import { parseGames } from '../../src/lib/chess/pgn'
+import { parseGames, setPgnTags } from '../../src/lib/chess/pgn'
 import { getTotals, TOURNAMENT_ORDER } from '../../src/lib/db/tournaments'
 import gamesHtml from '../fixtures/info64/games.html?raw'
 import tournamentHtml from '../fixtures/info64/tournament.html?raw'
@@ -201,6 +201,25 @@ describe('repositorio de ingesta', () => {
 		expect(after.results).toEqual([before.results[0]])
 		const counter = await db.prepare('SELECT games_count FROM tournaments WHERE id = ?1').bind(id).first<{ games_count: number }>()
 		expect(counter?.games_count).toBe(rows.length)
+	})
+
+	it('cuenta las partidas de lichess por sus cabeceras, también si las publica info64', async () => {
+		const { id, rows } = await loadFixture()
+		const lichessGames = async () =>
+			(await db.prepare('SELECT lichess_games AS n FROM tournaments WHERE id = ?1').bind(id).first<{ n: number }>())?.n
+		await saveGames(db, id, rows, '2026-10-17T00:00:00.000Z', INFO64)
+		expect(await lichessGames()).toBe(0)
+
+		// El organizador sube a info64 algunas tal como salen de lichess, con su Site.
+		const exported = rows.map((row, i) =>
+			i < 3 ? { ...row, pgn: setPgnTags(row.pgn, { Site: `https://lichess.org/broadcast/ce-inventado/round-1/AbCdEfGh/Partida${i}` }) } : row
+		)
+		await saveGames(db, id, exported, '2026-10-18T00:00:00.000Z', INFO64)
+		expect(await lichessGames()).toBe(3)
+
+		// Una lectura vacía no se guarda, y el recuento se queda como estaba.
+		expect(await saveGames(db, id, [], '2026-10-19T00:00:00.000Z', INFO64)).toBe(false)
+		expect(await lichessGames()).toBe(3)
 	})
 
 	it('marcar como revisado no toca las partidas', async () => {
