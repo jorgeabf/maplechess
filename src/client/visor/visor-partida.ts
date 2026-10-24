@@ -626,18 +626,20 @@ class VisorPartida extends HTMLElement {
 	 * La franja de la variante propia, con sus jugadas: se pinta al empezarla o
 	 * cambiarla (play), y se oculta fuera de ella. Los números, como en la
 	 * lista: el de cada jugada de las blancas y, si empieza por una de las
-	 * negras, el suyo («16…»).
+	 * negras, el suyo («16…»), con su jugada en un .ply.
 	 */
 	private renderVariant(): void {
 		const box = this.variantBox
 		box.hidden = this.variant.length === 0
 		const items: HTMLElement[] = []
 		this.variant.forEach((move, i) => {
+			const ply = document.createElement('span')
+			ply.className = 'ply'
 			if (move.ply % 2 === 1 || i === 0) {
 				const label = document.createElement('span')
 				label.className = 'num-label'
 				label.textContent = formatMove(move.ply, '')
-				items.push(label)
+				ply.append(label)
 			}
 			const button = document.createElement('button')
 			button.type = 'button'
@@ -645,7 +647,8 @@ class VisorPartida extends HTMLElement {
 			button.dataset.step = String(i + 1)
 			button.tabIndex = -1
 			button.textContent = move.san
-			items.push(button)
+			ply.append(button)
+			items.push(ply)
 		})
 		box.querySelector('[data-variant-moves]')!.replaceChildren(...items)
 	}

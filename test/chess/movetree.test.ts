@@ -13,8 +13,7 @@ const PGN = `[Event "Prueba"]
 function flat(items: MoveItem[]): string {
 	return items
 		.map((i) => {
-			if (i.kind === 'number') return i.text
-			if (i.kind === 'move') return i.san + i.glyphs
+			if (i.kind === 'move') return (i.number ? `${i.number} ` : '') + i.san + i.glyphs
 			if (i.kind === 'comment') return `{${i.text}}`
 			return `(${flat(i.items)})`
 		})
