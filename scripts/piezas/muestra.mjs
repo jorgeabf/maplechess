@@ -94,34 +94,56 @@ function tablaContraste(filas, letras) {
 	return `<div class="ancho"><table><thead><tr><th></th>${cab}</tr></thead><tbody>${cuerpo.join('')}</tbody></table></div>`
 }
 
-/**
- * La figura recortada a su tinta, de 0,76 em de alto y con 0,04 em de margen
- * a cada lado, como en la fuente de figuras (scripts/fuente-figuras.py): en
- * la notación todas miden lo mismo, no como en el tablero.
- */
-function figura(pieza, hueca) {
+/** La caja de la tinta de una figura, en unidades del lienzo. */
+function cajaFigura(pieza) {
 	const d = pieza.figura ?? pieza.partes.join('')
-	const caja = new Resvg(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 ${BASE}"><path d="${d}"/></svg>`).getBBox()
-	const alto = caja ? BASE - caja.y : BASE
-	const margen = (0.04 * alto) / 0.76
-	const [x, y, ancho] = caja ? [caja.x - margen, caja.y, caja.width + 2 * margen] : [0, 0, 100]
-	const pintura = hueca ? 'fill="none" stroke="currentColor" stroke-width="8" stroke-linejoin="round"' : 'fill="currentColor"'
-	return `<svg class="fig" viewBox="${x.toFixed(1)} ${y.toFixed(1)} ${ancho.toFixed(1)} ${alto.toFixed(1)}" style="width:${((0.76 * ancho) / alto).toFixed(3)}em" aria-hidden="true"><path ${pintura} d="${d}"/></svg>`
+	return new Resvg(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 ${BASE}"><path d="${d}"/></svg>`).getBBox()
+}
+
+/**
+ * Cómo se reparten la altura las figuras en el texto, con 0,76 em para la
+ * más alta (scripts/fuente-figuras.py): con las proporciones del tablero, la
+ * torre se queda en tres cuartos del rey; todas iguales, la torre pesa como el
+ * rey; la intermedia toma la raíz de la proporción.
+ */
+const ESCALAS = {
+	comun: { nombre: 'Escala común: las proporciones del tablero', alto: (a, max) => (0.76 * a) / max },
+	intermedia: { nombre: 'Intermedia: la raíz de la proporción del tablero', alto: (a, max) => 0.76 * Math.sqrt(a / max) },
+	igual: { nombre: 'Todas a 0,76 em', alto: () => 0.76 }
+}
+
+/** La figura recortada a su tinta, `em` de alto y con 0,04 em de margen a cada lado, como en la fuente. */
+function figura(pieza, em) {
+	const d = pieza.figura ?? pieza.partes.join('')
+	const caja = cajaFigura(pieza)
+	const alto = BASE - caja.y
+	const margen = (0.04 * alto) / em
+	const [x, ancho] = [caja.x - margen, caja.width + 2 * margen]
+	return `<svg class="fig" viewBox="${x.toFixed(1)} ${caja.y.toFixed(1)} ${ancho.toFixed(1)} ${alto.toFixed(1)}" style="height:${em.toFixed(3)}em;width:${((em * ancho) / alto).toFixed(3)}em" aria-hidden="true"><path fill="currentColor" d="${d}"/></svg>`
 }
 
 const JUGADAS =
 	'1.e4 e5 2.Nf3 Nc6 3.Bb5 a6 4.Ba4 Nf6 5.O-O Be7 6.Re1 b5 7.Bb3 d6 8.c3 O-O 9.h3 Nb8 10.d4 Nbd7 11.Nbd2 Bb7 12.Bc2 Re8 13.Nf1 Bf8 14.Ng3 g6 15.Bg5 h6 16.Bd2 Bg7 17.a4 c5 18.d5 c4 19.b4 Nh7 20.Be3 h5 21.Qd2 Rf8 22.Ra3 Ndf6 23.Rea1 Qd7 24.R1a2 Rfc8 25.Qc1 Bf8 26.Qa1 Qe8 27.Nf5 gxf5 28.exf5 e4 29.Bxe4 Nxe4 30.Kh2 f6 31.Qxf6 Kg8'
 
-/** Las jugadas con las figuras que haya; las que falten, con su letra. */
-function lista(piezas, hueca) {
-	return esc(JUGADAS).replace(/[KQRBN]/g, (l) => (piezas[l]?.figura !== null && piezas[l] ? figura(piezas[l], hueca) : l))
+/** Las jugadas con las figuras que haya, a la escala dada; las que falten, con su letra. */
+function lista(piezas, escala) {
+	const conFigura = Object.keys(piezas).filter((l) => 'KQRBN'.includes(l) && piezas[l].figura !== null)
+	const altos = Object.fromEntries(conFigura.map((l) => [l, BASE - cajaFigura(piezas[l]).y]))
+	const max = Math.max(...Object.values(altos))
+	const figuras = Object.fromEntries(conFigura.map((l) => [l, figura(piezas[l], ESCALAS[escala].alto(altos[l], max))]))
+	// Cada jugada en un bloque que no parte: con la fuente, la figura es una
+	// letra más; aquí es un <svg>, y el navegador podría partir línea tras ella.
+	return JUGADAS.split(' ')
+		.map((jugada) => `<span class="jugada">${esc(jugada).replace(/[KQRBN]/g, (l) => figuras[l] ?? l)}</span>`)
+		.join(' ')
 }
 
 /**
  * @param {object} hoja
  * @param {string} hoja.titulo
  * @param {string} hoja.intro HTML
- * @param {{ nombre: string, nota?: string, piezas: Record<string, object>, opciones?: object }[]} hoja.juegos
+ * @param {{ nombre: string, nota?: string, piezas: Record<string, object>, opciones?: object, escalas?: string[] }[]} hoja.juegos
+ *   `escalas`: cómo se reparten la altura las figuras en el texto (ESCALAS); por defecto, la común
  * @param {boolean} [hoja.artifact] sin el esqueleto del documento (doctype, html, head, body), que pone el Artifact al publicar
  */
 export function hojaMuestra({ titulo, intro = '', juegos, artifact = false }) {
@@ -147,14 +169,14 @@ export function hojaMuestra({ titulo, intro = '', juegos, artifact = false }) {
 		const franjas = letras
 			.flatMap((l) => ['w', 'b'].map((c) => `<div class="fila"><span>${c === 'w' ? 'blanca' : 'negra'} ${l}</span>${franja(blancas[`${c}${l}`], 41)}</div>`))
 			.join('')
-		const textos = [false, true]
+		const textos = (juego.escalas ?? ['comun'])
 			.map(
-				(hueca) =>
-					`<h4>Figuras ${hueca ? 'huecas' : 'macizas'}</h4><div class="textos">` +
+				(escala) =>
+					`<h4>${ESCALAS[escala].nombre}</h4><div class="textos">` +
 					['claro', 'oscuro']
 						.map(
 							(tema) =>
-								`<div class="texto ${tema}"><p class="sans s14">${lista(juego.piezas, hueca)}</p><p class="sans s16">${lista(juego.piezas, hueca)}</p><p class="serif s16">${lista(juego.piezas, hueca)}</p></div>`
+								`<div class="texto ${tema}"><p class="sans s14">${lista(juego.piezas, escala)}</p><p class="sans s16">${lista(juego.piezas, escala)}</p><p class="serif s16">${lista(juego.piezas, escala)}</p></div>`
 						)
 						.join('') +
 					'</div>'
@@ -177,6 +199,7 @@ ${juego.nota ? `<p>${juego.nota}</p>` : ''}
 			.map((t) => `${t.css} px a ${t.dpr}×`)
 			.join(', ')}. Debajo, el peor a 1× con casillas de 32 y 41 px, sólo como dato.</p>
 ${tablaContraste(filas, letras)}
+<h3>Figuras en la notación</h3>
 ${textos}
 </section>`
 	})
@@ -265,7 +288,8 @@ td.mal { color: var(--mal); font-weight: 600; }
 .serif { font-family: var(--serif); font-weight: 600; }
 .s14 { font-size: 14px; }
 .s16 { font-size: 16px; }
-.fig { height: 0.76em; vertical-align: baseline; overflow: visible; }
+.fig { vertical-align: baseline; overflow: visible; }
+.jugada { white-space: nowrap; }
 </style>
 <main>
 <h1>${esc(titulo)}</h1>
