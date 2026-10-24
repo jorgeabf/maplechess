@@ -258,6 +258,17 @@
 		background: var(--bg);
 		/* Casillas, radios, range y progress nativos, en el color del acento. */
 		accent-color: var(--accent);
+		/*
+		 * Barras de desplazamiento con los colores de la página: el pulgar, del
+		 * borde de los campos (3:1 sobre --bg y --surface), y el carril, el fondo
+		 * de lo que se desplaza. Se hereda: vale para la barra de la página y
+		 * para las de dentro. Donde el sistema las superpone (macOS, los
+		 * móviles), el carril no se ve y el pulgar sólo al desplazar. Con
+		 * forced-colors el navegador vuelve a las del sistema. Desde Chrome 121,
+		 * Firefox 64 y Safari 26.2; antes, las del navegador, que ya siguen el
+		 * modo oscuro por color-scheme.
+		 */
+		scrollbar-color: var(--border-strong) transparent;
 	}
 
 	*,
@@ -271,6 +282,15 @@
 		min-height: 100dvh;
 		display: flex;
 		flex-direction: column;
+	}
+
+	/*
+	 * Lo que se desplaza dentro de la página (las tablas, la lista de jugadas,
+	 * el explorador), con la barra fina. La de la página conserva su ancho, que
+	 * es más fácil de agarrar.
+	 */
+	body * {
+		scrollbar-width: thin;
 	}
 
 	h1,
