@@ -75,7 +75,7 @@ De quien puede ser menor de edad (cumple 18 años o menos este año, según la l
 ### Partidas y torneos
 
 - **Partidas:** búsqueda por jugador, rival, color, resultado, ECO, ritmo, fechas y torneo. Antes de buscar, las partidas de más nivel de la semana.
-- **Torneos:** búsqueda por nombre, fechas y modalidad, en la que una provincia o una comunidad se encuentra por cualquiera de sus nombres («Álava», «alavesa» o «Araba»). De cada torneo, clasificación con los desempates del torneo (la final o la de la última ronda jugada), participantes, plantillas de los torneos por equipos, ritmo, partidas por ronda y emparejamientos de la próxima. También están los torneos con españoles que no están en info64 pero sí en las retransmisiones oficiales de lichess, en España y en el extranjero; de esos sólo se guardan las partidas de los jugadores españoles.
+- **Torneos:** búsqueda por nombre, fechas y modalidad, en la que una provincia o una comunidad se encuentra por cualquiera de sus nombres («Álava», «alavesa» o «Araba»). De cada torneo, clasificación con los desempates del torneo, cada uno explicado (la final o la de la última ronda jugada), participantes, plantillas de los torneos por equipos, ritmo, partidas por ronda y emparejamientos de la próxima. También están los torneos con españoles que no están en info64 pero sí en las retransmisiones oficiales de lichess, en España y en el extranjero; de esos sólo se guardan las partidas de los jugadores españoles.
 - **Visor:** tablero con variantes, comentarios y tiempos de reloj, que se maneja con el teclado y, en el móvil, deslizando sobre el tablero.
   - **Stockfish 19** funciona en el propio navegador: las 3 mejores líneas, la barra de evaluación y la mejor jugada como flecha. Analiza cada posición hasta 10 s o hasta la profundidad 22, para no agotar la batería del móvil; «Seguir analizando» continúa sin límite. Con la pestaña oculta se para y, al volver, sigue.
   - Si la fuente anota evaluaciones, un gráfico las muestra jugada a jugada.
@@ -271,6 +271,7 @@ Necesita una cuenta de Cloudflare con **Workers Paid**: la importación de la li
 
 - **Un fallo de seguridad** no se publica en una incidencia: avísalo en privado desde la pestaña [Security](https://github.com/jorgeabf/maplechess/security) del repositorio, con «Report a vulnerability».
 - **Para que se retiren tus datos** (o los de un menor a tu cargo), la [política de privacidad](https://maplechess.es/privacidad#oposicion) explica cómo pedirlo.
+- **Para corregir un dato tuyo que está mal** (una partida que no es tuya, tu nombre, tu ELO o un resultado), [también](https://maplechess.es/privacidad#derechos). La corrección se mantiene aunque la fuente se vuelva a leer.
 - Los ficheros de prueba (`test/fixtures/`) no llevan datos de personas reales: tienen la estructura de las fuentes, con nombres y FIDE ID inventados.
 
 ## Licencia
@@ -279,6 +280,6 @@ Necesita una cuenta de Cloudflare con **Workers Paid**: la importación de la li
 
 - **Aperturas:** nombres de dominio público (CC0).
 - **Datos de jugadores, torneos y partidas:** pertenecen a sus fuentes y se muestran tal como ellas los publican. La [política de privacidad](https://maplechess.es/privacidad#oposicion) explica cómo pedir que se retire alguno.
-- **Partidas de las retransmisiones de lichess:** licencia [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/deed.es); aquí se ofrecen con la misma licencia.
+- **Partidas de las retransmisiones de lichess:** licencia [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/deed.es); aquí se ofrecen con la misma licencia, y cada una lo dice en su PGN.
 - **Tipografía de los titulares:** Source Serif 4 de Adobe ([SIL Open Font License 1.1](public/fonts/OFL.txt)), modificada y renombrada «Titulares».
 - **Piezas del tablero** (`src/assets/pieces/mpchess/`): mpchess, de Maxime Chupin, con licencia GPL-3.0.
