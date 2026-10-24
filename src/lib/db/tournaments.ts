@@ -16,6 +16,8 @@ export interface TournamentRow {
 	gamesSource: string | null
 	gamesSourceUrl: string | null
 	gamesCount: number
+	/** Cuántas de ellas son de lichess, por sus cabeceras (lichessUrl): también en las de info64. */
+	lichessGames: number
 	url: string
 	source: string
 }
@@ -39,7 +41,7 @@ export interface TournamentFilters {
 }
 
 const COLUMNS = `t.id, t.name, t.type, t.city, t.start_date AS startDate, t.end_date AS endDate,
-	t.time_control AS timeControl, t.games_count AS gamesCount, t.url, t.source,
+	t.time_control AS timeControl, t.games_count AS gamesCount, t.lichess_games AS lichessGames, t.url, t.source,
 	t.games_source AS gamesSource, t.games_source_url AS gamesSourceUrl`
 
 /**

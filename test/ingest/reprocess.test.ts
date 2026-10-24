@@ -3,8 +3,8 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { buildGameRows } from '../../src/ingest/games'
 import { parseGamesPage, parseTournamentPage } from '../../src/ingest/info64/parse'
 import { reprocessGames } from '../../src/ingest/reprocess'
-import { loadParticipants, replaceParticipations, saveGames, upsertTournament } from '../../src/ingest/repo'
-import { parseGames } from '../../src/lib/chess/pgn'
+import { loadParticipants, replaceParticipations, saveGames, saveLichessGames, upsertTournament } from '../../src/ingest/repo'
+import { parseGames, setPgnTags } from '../../src/lib/chess/pgn'
 import { explore, parseLine } from '../../src/lib/chess/repertoire'
 import { getGamesByIds } from '../../src/lib/db/games'
 import { getPlayerGames, repertoireGames } from '../../src/lib/db/repertoire'
@@ -96,6 +96,54 @@ describe('opening_moves', () => {
 
 		// Repetirlo no reescribe ninguna fila.
 		expect(await reprocessGames(db, 0, 1000)).toMatchObject({ games: expected.length, updated: 0 })
+	})
+
+	it('el reprocesado cuenta por lotes las partidas de lichess de cada torneo y guarda el recuento', async () => {
+		await loadTournament()
+		const lichessGames = async () =>
+			(await db.prepare('SELECT id, lichess_games AS n FROM tournaments ORDER BY id').all<{ id: number; n: number }>()).results
+		const [{ id }] = await lichessGames()
+		// Treinta, como si el organizador las hubiera subido tal como salen de
+		// lichess, guardadas antes de que se contaran.
+		const { results } = await db.prepare('SELECT id, pgn FROM games ORDER BY id LIMIT 30').all<{ id: number; pgn: string }>()
+		await db.batch(
+			results.map((g) =>
+				db
+					.prepare('UPDATE games SET pgn = ?2 WHERE id = ?1')
+					.bind(g.id, setPgnTags(g.pgn, { Site: `https://lichess.org/broadcast/ce-inventado/round-1/AbCdEfGh/Partida${g.id}` }))
+			)
+		)
+		// Y otro torneo con un recuento que ya no vale.
+		const other = await upsertTournament(db, {
+			source: 'info64',
+			key: 'open-inventado',
+			type: 'individual',
+			name: 'Open Inventado',
+			city: 'Albacete',
+			startDate: '2026-09-24',
+			endDate: '2026-09-27',
+			timeControl: '60+30',
+			url: 'https://info64.org/open-inventado',
+			syncedAt: '2026-10-17T00:00:00.000Z'
+		})
+		await db.prepare('UPDATE tournaments SET lichess_games = 5 WHERE id = ?1').bind(other).run()
+
+		// Las treinta caen en dos lotes.
+		const counts = new Map<number, number>()
+		let after = 0
+		for (let batch = await reprocessGames(db, after, 25); batch; batch = await reprocessGames(db, after, 25)) {
+			for (const [tournament, n] of batch.lichess) counts.set(tournament, (counts.get(tournament) ?? 0) + n)
+			after = batch.lastId
+		}
+		expect([...counts]).toEqual([[id, 30]])
+
+		expect(await saveLichessGames(db, [...counts])).toBe(2)
+		expect(await lichessGames()).toEqual([
+			{ id, n: 30 },
+			{ id: other, n: 0 }
+		])
+		// Repetirlo no reescribe ninguno.
+		expect(await saveLichessGames(db, [...counts])).toBe(0)
 	})
 
 	it('el repertorio lee las partidas del jugador por color, periodo, ritmo y ELO del rival', async () => {

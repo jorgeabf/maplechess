@@ -285,6 +285,6 @@ Necesita una cuenta de Cloudflare con **Workers Paid**: la importación de la li
 
 - **Aperturas:** nombres de dominio público (CC0).
 - **Datos de jugadores, torneos y partidas:** pertenecen a sus fuentes y se muestran tal como ellas los publican. La [política de privacidad](https://maplechess.es/privacidad#oposicion) explica cómo pedir que se retire alguno.
-- **Partidas de las retransmisiones de lichess:** licencia [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/deed.es); aquí se ofrecen con la misma licencia, y cada una lo dice en su PGN.
+- **Partidas de las retransmisiones de lichess:** licencia [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/deed.es); aquí se ofrecen con la misma licencia, y cada una lo dice en su PGN y en su página. También las que info64 publica tal como salen de lichess; la página del torneo dice cuántas son.
 - **Tipografía de los titulares:** Source Serif 4 de Adobe ([SIL Open Font License 1.1](public/fonts/OFL.txt)), modificada y renombrada «Titulares».
 - **Piezas del tablero** (`src/assets/pieces/maple/`, generadas por `scripts/piezas.mjs`): propias, con la licencia del proyecto.

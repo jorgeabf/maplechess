@@ -68,6 +68,15 @@ const indexable = isIndexableTournament(tournament.gamesCount, players)
 // Las páginas del torneo y de su retransmisión, sólo si son de una fuente.
 const tournamentUrl = sourceUrl(tournament.url)
 const broadcastUrl = sourceUrl(tournament.gamesSourceUrl)
+// Partidas de lichess que publica info64: las que el organizador sube tal como
+// salen de su retransmisión (el CE Absoluto 2025), todas o sólo algunas. Las
+// cuenta la ingesta al guardarlas (lichess_games), así que aquí no se leen los PGN.
+const lichessShare =
+	tournament.gamesSource === 'info64' && tournament.lichessGames > 0
+		? tournament.lichessGames === tournament.gamesCount
+			? 'Sus partidas son'
+			: `${formatNumber(tournament.lichessGames)} de sus ${formatNumber(tournament.gamesCount)} partidas ${tournament.lichessGames === 1 ? 'es' : 'son'}`
+		: null
 const standingsTitle = standings && standingsHeading(standings, tournament.endDate, madridDate(new Date()))
 // «La publica info64, con los desempates del torneo por orden: BH (Buchholz), WON (partidas ganadas).»
 const standingsNote =
@@ -156,16 +165,21 @@ const standingsNote =
 					y sólo están las que juega algún
 					jugador español. Licencia <a href={CC_BY_SA} rel="license noopener">CC BY-SA 4.0</a>.
 				</p>
+			) : tournament.gamesSource === 'lichess' ? (
+				<p class="muted">
+					{tournament.source} no publica las partidas de este torneo; vienen de su{' '}
+					{broadcastUrl ? (
+						<a href={broadcastUrl} rel="noopener">retransmisión en lichess</a>
+					) : (
+						'retransmisión en lichess'
+					)}
+					, que suele cubrir sólo las mesas con tablero electrónico. Licencia{' '}
+					<a href={CC_BY_SA} rel="license noopener">CC BY-SA 4.0</a>.
+				</p>
 			) : (
-				tournament.gamesSource === 'lichess' && (
+				lichessShare && (
 					<p class="muted">
-						{tournament.source} no publica las partidas de este torneo; vienen de su{' '}
-						{broadcastUrl ? (
-							<a href={broadcastUrl} rel="noopener">retransmisión en lichess</a>
-						) : (
-							'retransmisión en lichess'
-						)}
-						, que suele cubrir sólo las mesas con tablero electrónico. Licencia{' '}
+						{lichessShare} de una retransmisión de lichess publicada en info64 (FEDA), con licencia{' '}
 						<a href={CC_BY_SA} rel="license noopener">CC BY-SA 4.0</a>.
 					</p>
 				)

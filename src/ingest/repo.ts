@@ -7,6 +7,7 @@ import { normalizeName } from '../lib/chess/names'
 import { setPgnTags } from '../lib/chess/pgn'
 import { madridYear } from '../lib/dates'
 import { withoutHomonymYear } from '../lib/format'
+import { lichessUrl } from '../lib/licenses'
 import type { FidePlayer } from './fide/parse'
 import type { DerivedColumns, GameRow, Participant, TournamentContext } from './games'
 import type { Pairing, PairedPlayer, StandingsPage, TournamentPlayer, TournamentType } from './info64/parse'
@@ -302,7 +303,9 @@ export interface GamesSource {
 /**
  * Guarda las partidas del torneo en una sola transacción: upsert por
  * (ronda, tablero, seq) para conservar los id, borrado de las que la fuente
- * ya no publica y actualización del contador y la fuente del torneo.
+ * ya no publica y actualización del contador y la fuente del torneo. También
+ * cuenta las que son de lichess (lichess_games, por sus cabeceras), para que la
+ * página del torneo cite la licencia sin leer los PGN.
  *
  * Una lectura sin partidas, o con menos de la mitad de las guardadas, no se
  * guarda: es más probable una página vacía, cortada o con otra forma que un
@@ -344,6 +347,7 @@ export async function saveGames(
 	// Sin partidas no hay fuente que mostrar.
 	const sourceName = saved.length > 0 ? source.name : null
 	const sourceUrl = saved.length > 0 ? source.url : null
+	const lichessGames = saved.filter((game) => lichessUrl(game.pgn) !== null).length
 	await db.batch([
 		...chunkByJsonSize(saved).map((json) =>
 			db
@@ -400,10 +404,11 @@ export async function saveGames(
 					games_count = (SELECT count(*) FROM games WHERE tournament_id = ?1),
 					games_checked_at = ?2,
 					games_source = ?3,
-					games_source_url = ?4
+					games_source_url = ?4,
+					lichess_games = ?5
 				WHERE id = ?1`
 			)
-			.bind(tournamentId, checkedAt, sourceName, sourceUrl),
+			.bind(tournamentId, checkedAt, sourceName, sourceUrl, lichessGames),
 		...markApplied(db, appliedRows(rectifications, hits, 'partidas'), checkedAt)
 	])
 	return true
@@ -450,6 +455,7 @@ export async function markGamesChecked(db: D1Database, tournamentId: number, che
 
 export interface StoredGame {
 	id: number
+	tournamentId: number
 	whiteName: string
 	blackName: string
 	pgn: string
@@ -461,7 +467,8 @@ export interface StoredGame {
 export async function loadGamesForReprocess(db: D1Database, after: number, limit: number): Promise<StoredGame[]> {
 	const { results } = await db
 		.prepare(
-			`SELECT g.id, g.white_name AS whiteName, g.black_name AS blackName, g.pgn, t.time_control AS timeControl
+			`SELECT g.id, g.tournament_id AS tournamentId, g.white_name AS whiteName, g.black_name AS blackName, g.pgn,
+				t.time_control AS timeControl
 			FROM games g JOIN tournaments t ON t.id = g.tournament_id
 			WHERE g.id > ?1 ORDER BY g.id LIMIT ?2`
 		)
@@ -935,6 +942,33 @@ export async function updateDerivedColumns(db: D1Database, rows: ({ id: number }
 				.bind(json)
 		)
 	)
+	return results.reduce((n, r) => n + r.meta.changes, 0)
+}
+
+/**
+ * Guarda las partidas de lichess de cada torneo (lichess_games), contadas en
+ * todas las partidas guardadas: `counts` son pares [id del torneo, partidas]
+ * y los torneos que no salen se quedan en 0. Como updateDerivedColumns, sólo
+ * reescribe los que cambian; devuelve cuántos. Recorre la tabla de torneos.
+ */
+export async function saveLichessGames(db: D1Database, counts: [number, number][]): Promise<number> {
+	const json = JSON.stringify(counts)
+	const results = await db.batch([
+		db
+			.prepare(
+				`UPDATE tournaments SET lichess_games = 0
+				WHERE lichess_games <> 0 AND id NOT IN (SELECT json_extract(value, '$[0]') FROM json_each(?1))`
+			)
+			.bind(json),
+		db
+			.prepare(
+				`UPDATE tournaments SET lichess_games = json_extract(j.value, '$[1]')
+				FROM json_each(?1) AS j
+				WHERE tournaments.id = json_extract(j.value, '$[0]')
+					AND tournaments.lichess_games <> json_extract(j.value, '$[1]')`
+			)
+			.bind(json)
+	])
 	return results.reduce((n, r) => n + r.meta.changes, 0)
 }
 
