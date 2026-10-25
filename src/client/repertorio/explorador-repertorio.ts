@@ -6,13 +6,15 @@
 // primera jugada, como moverla en el tablero.
 import { Chessground } from '@lichess-org/chessground'
 import type { Api } from '@lichess-org/chessground/api'
+import type { Config } from '@lichess-org/chessground/config'
 import type { DrawShape } from '@lichess-org/chessground/draw'
 import type { Key } from '@lichess-org/chessground/types'
 import { Chess, normalizeMove } from 'chessops/chess'
 import { chessgroundDests } from 'chessops/compat'
 import { parseFen } from 'chessops/fen'
-import { parseSquare, parseUci } from 'chessops/util'
+import { parseUci, roleToChar } from 'chessops/util'
 import { standardUci } from '../../lib/chess/uci'
+import { choosePromotion, promotes } from '../visor/coronacion'
 import { EnginePanel } from '../visor/panel-motor'
 
 const squares = (uci: string): [Key, Key] => [uci.slice(0, 2) as Key, uci.slice(2, 4) as Key]
@@ -37,25 +39,19 @@ class ExploradorRepertorio extends HTMLElement {
 		const created = Chess.fromSetup(setup.value)
 		if (created.isErr) return
 		const pos = created.value
-		const lastMove = this.dataset.lastMove
-		// Al llegar a la última jugada del repertorio ya no se mueve (ni se pulsan las líneas del motor).
-		const movable = this.dataset.movable !== 'false'
+		const position = this.position(pos)
 		const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)')
 
 		this.cg = Chessground(this.querySelector<HTMLElement>('.board')!, {
-			fen,
+			...position,
 			animation: { enabled: !reducedMotion.matches },
 			orientation: this.dataset.orientation === 'black' ? 'black' : 'white',
-			turnColor: pos.turn,
-			check: pos.isCheck(),
-			lastMove: lastMove ? squares(lastMove) : undefined,
 			coordinates: true,
 			movable: {
+				...position.movable,
 				free: false,
-				color: movable ? pos.turn : undefined,
-				dests: chessgroundDests(pos),
 				showDests: true,
-				events: { after: (orig, dest) => this.play(pos, orig, dest) }
+				events: { after: (orig, dest) => void this.play(pos, orig, dest) }
 			},
 			premovable: { enabled: false },
 			drawable: { enabled: false, visible: true }
@@ -80,7 +76,7 @@ class ExploradorRepertorio extends HTMLElement {
 				},
 				// Las líneas llevan su primera jugada en data-uci: al señalarlas, la
 				// flecha gris de showArrow, como las jugadas de la tabla.
-				onLine: movable ? (_fen, moves) => this.go(pos, moves[0].uci) : undefined
+				onLine: this.movable ? (_fen, moves) => this.go(pos, moves[0].uci) : undefined
 			},
 			signal
 		)
@@ -92,6 +88,28 @@ class ExploradorRepertorio extends HTMLElement {
 		this.abort.abort()
 		this.panel?.destroy()
 		this.cg?.destroy()
+	}
+
+	/** Al llegar a la última jugada del repertorio ya no se mueve (ni se pulsan las líneas del motor). */
+	private get movable(): boolean {
+		return this.dataset.movable !== 'false'
+	}
+
+	/**
+	 * La posición de la página en el tablero: el FEN, el turno, el jaque, la
+	 * última jugada y los destinos. Con ella se monta el tablero y se devuelve
+	 * la pieza si se cancela la coronación: tras mover, chessground ya ha
+	 * cambiado el turno y quitado los destinos.
+	 */
+	private position(pos: Chess): Config {
+		const lastMove = this.dataset.lastMove
+		return {
+			fen: this.dataset.fen,
+			turnColor: pos.turn,
+			check: pos.isCheck(),
+			lastMove: lastMove ? squares(lastMove) : undefined,
+			movable: { color: this.movable ? pos.turn : undefined, dests: chessgroundDests(pos) }
+		}
 	}
 
 	/** Flecha de la jugada de la tabla sobre la que está el puntero o el foco. */
@@ -110,12 +128,12 @@ class ExploradorRepertorio extends HTMLElement {
 		this.cg?.setAutoShapes([this.engineShape, this.hoverShape].filter((s): s is DrawShape => s !== null))
 	}
 
-	/** Jugada hecha en el tablero. */
-	private play(pos: Chess, orig: Key, dest: Key): void {
-		// Un peón que llega a la última fila corona dama: para explorar basta.
-		const from = parseSquare(orig)
-		const promotes = from !== undefined && pos.board.getRole(from) === 'pawn' && /[18]$/.test(dest)
-		this.go(pos, `${orig}${dest}${promotes ? 'q' : ''}`)
+	/** Jugada hecha en el tablero: un peón que corona, a la pieza que se elija; si se cancela, vuelve. */
+	private async play(pos: Chess, orig: Key, dest: Key): Promise<void> {
+		const dialog = this.querySelector<HTMLDialogElement>('[data-promotion]')!
+		const promotion = promotes(pos, orig, dest) ? await choosePromotion(dialog, pos.turn) : undefined
+		if (promotion === null) this.cg?.set(this.position(pos))
+		else this.go(pos, `${orig}${dest}${promotion ? roleToChar(promotion) : ''}`)
 	}
 
 	/** Se va a la página de la posición tras la jugada (UCI), si es legal. */

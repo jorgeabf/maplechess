@@ -42,25 +42,30 @@ cg-board {
  * negra, para que destaquen sobre las dos casillas (13,7:1 sobre el arce y
  * 4,8:1 sobre el nogal). Las genera scripts/piezas.mjs, que también las mide.
  * Ninguna llega a los 4 KB de assetsInlineLimit, así que Vite las incrusta en
- * este CSS: llegan con él, sin peticiones aparte.
+ * este CSS: llegan con él, sin peticiones aparte. Las del diálogo de coronar
+ * (Coronacion.astro) van en las mismas reglas, para no incrustarlas dos veces.
  */
 .cg-wrap piece.pawn.white {
 	background-image: url('../../assets/pieces/maple/wP.svg');
 }
 
-.cg-wrap piece.knight.white {
+.cg-wrap piece.knight.white,
+.promotion[data-color='white'] .promotion-piece.knight {
 	background-image: url('../../assets/pieces/maple/wN.svg');
 }
 
-.cg-wrap piece.bishop.white {
+.cg-wrap piece.bishop.white,
+.promotion[data-color='white'] .promotion-piece.bishop {
 	background-image: url('../../assets/pieces/maple/wB.svg');
 }
 
-.cg-wrap piece.rook.white {
+.cg-wrap piece.rook.white,
+.promotion[data-color='white'] .promotion-piece.rook {
 	background-image: url('../../assets/pieces/maple/wR.svg');
 }
 
-.cg-wrap piece.queen.white {
+.cg-wrap piece.queen.white,
+.promotion[data-color='white'] .promotion-piece.queen {
 	background-image: url('../../assets/pieces/maple/wQ.svg');
 }
 
@@ -72,19 +77,23 @@ cg-board {
 	background-image: url('../../assets/pieces/maple/bP.svg');
 }
 
-.cg-wrap piece.knight.black {
+.cg-wrap piece.knight.black,
+.promotion[data-color='black'] .promotion-piece.knight {
 	background-image: url('../../assets/pieces/maple/bN.svg');
 }
 
-.cg-wrap piece.bishop.black {
+.cg-wrap piece.bishop.black,
+.promotion[data-color='black'] .promotion-piece.bishop {
 	background-image: url('../../assets/pieces/maple/bB.svg');
 }
 
-.cg-wrap piece.rook.black {
+.cg-wrap piece.rook.black,
+.promotion[data-color='black'] .promotion-piece.rook {
 	background-image: url('../../assets/pieces/maple/bR.svg');
 }
 
-.cg-wrap piece.queen.black {
+.cg-wrap piece.queen.black,
+.promotion[data-color='black'] .promotion-piece.queen {
 	background-image: url('../../assets/pieces/maple/bQ.svg');
 }
 

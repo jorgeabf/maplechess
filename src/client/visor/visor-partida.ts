@@ -14,6 +14,7 @@ import type { ViewerNode } from '../../lib/chess/movetree'
 import { annotatedScore, formatScore, positionOf, sideToMove } from '../../lib/chess/uci'
 import { enterVariation, exitVariation } from '../../lib/chess/variations'
 import { formatMove } from '../../lib/format'
+import { choosePromotion, promotes } from './coronacion'
 import { EnginePanel, type EngineView } from './panel-motor'
 import { boardMove, extendVariant, type LineMove } from './variante'
 
@@ -75,6 +76,10 @@ class VisorPartida extends HTMLElement {
 		return this.querySelector('[data-variant]')!
 	}
 
+	private get promotionDialog(): HTMLDialogElement {
+		return this.querySelector('[data-promotion]')!
+	}
+
 	private get shown(): Shown {
 		return this.step ? this.variant[this.step - 1] : this.nodes[this.current]
 	}
@@ -97,7 +102,7 @@ class VisorPartida extends HTMLElement {
 			orientation: this.dataset.orientation === 'black' ? 'black' : 'white',
 			coordinates: true,
 			animation: { enabled: !reducedMotion.matches, duration: 180 },
-			movable: { free: false, showDests: true, events: { after: (orig, dest) => this.onBoardMove(orig, dest) } },
+			movable: { free: false, showDests: true, events: { after: (orig, dest) => void this.onBoardMove(orig, dest) } },
 			premovable: { enabled: false },
 			drawable: { enabled: false, visible: true }
 		})
@@ -218,12 +223,16 @@ class VisorPartida extends HTMLElement {
 	 * letra en toda la página lo puede disparar sin querer quien navega por
 	 * voz o con un lector de pantalla (WCAG 2.1.4). En los campos las teclas
 	 * son suyas; no en una casilla (el interruptor del motor), donde las
-	 * flechas no hacen nada y el foco se queda al pulsarla.
+	 * flechas no hacen nada y el foco se queda al pulsarla. Con el diálogo de
+	 * coronar abierto, tampoco: la partida no se mueve detrás.
 	 */
 	private onKey(event: KeyboardEvent): void {
 		if (event.altKey || event.ctrlKey || event.metaKey) return
 		const target = event.target
-		if (target instanceof Element && target.closest("input:not([type='checkbox']), select, textarea, [contenteditable]")) {
+		if (
+			target instanceof Element &&
+			target.closest("input:not([type='checkbox']), select, textarea, [contenteditable], dialog")
+		) {
 			return
 		}
 		const key = event.key.length === 1 ? event.key.toLowerCase() : event.key
@@ -417,13 +426,17 @@ class VisorPartida extends HTMLElement {
 	}
 
 	/**
-	 * Jugada hecha en el tablero. Los destinos ya son los legales: si aun así
-	 * no lo fuera, el tablero vuelve a la posición.
+	 * Jugada hecha en el tablero. Un peón que llega a la última fila corona a
+	 * la pieza que se elija en el diálogo. Si se cancela, o si la jugada no
+	 * fuera legal (los destinos ya lo son), el tablero vuelve a lo que se ve.
 	 */
-	private onBoardMove(orig: Key, dest: Key): void {
-		const move = boardMove(this.shown.fen, orig, dest)
+	private async onBoardMove(orig: Key, dest: Key): Promise<void> {
+		const fen = this.shown.fen
+		const pos = positionOf(fen)
+		const promotion = pos && promotes(pos, orig, dest) ? await choosePromotion(this.promotionDialog, pos.turn) : undefined
+		const move = promotion === null || fen !== this.shown.fen ? null : boardMove(fen, orig, dest, promotion)
 		if (move) this.play([move])
-		else this.cg?.set({ fen: this.shown.fen })
+		else this.setBoard()
 	}
 
 	/** El foco, en la jugada actual: la de la franja dentro de la variante y, si no, la de la lista. */
@@ -433,10 +446,12 @@ class VisorPartida extends HTMLElement {
 	}
 
 	/**
-	 * La posición que se ve en el tablero, sus destinos (se mueve el bando al
-	 * que le toca), la jugada actual, los extremos de los botones y el motor.
+	 * El tablero con lo que se ve: la posición, el turno, el jaque, la última
+	 * jugada y los destinos (se mueve el bando al que le toca). Tras mover una
+	 * pieza, chessground ya ha cambiado el turno y quitado los destinos: para
+	 * devolverla hay que ponerlo todo, no sólo el FEN.
 	 */
-	private showPosition(): void {
+	private setBoard(): void {
 		const shown = this.shown
 		const pos = positionOf(shown.fen)
 		const turn = sideToMove(shown.fen)
@@ -447,12 +462,17 @@ class VisorPartida extends HTMLElement {
 			lastMove: shown.uci ? [shown.uci.slice(0, 2) as Key, shown.uci.slice(2, 4) as Key] : undefined,
 			movable: { color: pos ? turn : undefined, dests: pos ? chessgroundDests(pos) : new Map() }
 		})
+	}
+
+	/** La posición que se ve (setBoard), la jugada actual, los extremos de los botones y el motor. */
+	private showPosition(): void {
+		this.setBoard()
 		this.engineShape = null
 		this.previewShape = null
 		this.drawShapes()
 		this.showCurrent()
 		this.markEnds()
-		this.panel?.show(shown.fen)
+		this.panel?.show(this.shown.fen)
 	}
 
 	/**

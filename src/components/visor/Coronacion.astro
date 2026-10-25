@@ -1,0 +1,107 @@
+---
+// Diálogo para elegir la pieza al coronar, en el visor y en el explorador del
+// repertorio. Lo abre choosePromotion (src/client/visor/coronacion.ts) con el
+// color del peón. Es un formulario con method="dialog": cada pieza lo cierra
+// con su nombre en returnValue, y Cancelar o Esc, sin ninguna. Las piezas son
+// las del tablero (board.css). El foco va a la dama, la habitual: con el
+// teclado, Intro corona dama. Sin autofocus, Chrome enfoca el diálogo.
+const PIECES = [
+	['queen', 'Dama'],
+	['rook', 'Torre'],
+	['bishop', 'Alfil'],
+	['knight', 'Caballo']
+] as const
+---
+
+<dialog class="promotion" aria-labelledby="coronar" data-promotion>
+	<form method="dialog">
+		<h2 id="coronar">Coronar</h2>
+		<div class="choices">
+			{
+				PIECES.map(([role, name]) => (
+					<button type="submit" class="choice" value={role} autofocus={role === 'queen'}>
+						<span class:list={['promotion-piece', role]} aria-hidden="true" />
+						{name}
+					</button>
+				))
+			}
+		</div>
+		<div class="actions">
+			<button type="submit" class="button secondary" value="">Cancelar</button>
+		</div>
+	</form>
+</dialog>
+
+<style>
+	/*
+	 * Centrado en la pantalla, como lo pone el navegador a un diálogo modal
+	 * (position: fixed, inset: 0, margin: auto), con la página atenuada detrás.
+	 */
+	.promotion {
+		padding: var(--space-4);
+		border: 1px solid var(--border);
+		border-radius: var(--radius-l);
+		background: var(--surface);
+		color: var(--text);
+		box-shadow: var(--shadow-m);
+	}
+
+	.promotion::backdrop {
+		background: var(--backdrop);
+	}
+
+	h2 {
+		font-size: var(--text-m);
+	}
+
+	/*
+	 * Las cuatro en una fila. Con «Caballo» (57 px), los huecos, el relleno y el
+	 * margen que deja el navegador al diálogo, la fila pide 324 px de pantalla:
+	 * por debajo van de dos en dos. En rem, para que el corte crezca con la
+	 * letra, como los botones.
+	 */
+	.choices {
+		display: grid;
+		grid-template-columns: repeat(4, minmax(0, 4.5rem));
+		gap: var(--space-2);
+	}
+
+	@media (width < 20.5rem) {
+		.choices {
+			grid-template-columns: repeat(2, minmax(0, 4.5rem));
+		}
+	}
+
+	.choice {
+		display: grid;
+		justify-items: center;
+		gap: var(--space-1);
+		padding: var(--space-2) var(--space-1);
+		border: 1px solid var(--border-strong);
+		border-radius: var(--radius-m);
+		background: var(--surface);
+		font-size: var(--text-s);
+		font-weight: var(--weight-strong);
+		cursor: pointer;
+	}
+
+	.choice:hover {
+		background: var(--surface-hover);
+	}
+
+	/* Sobre una casilla clara, como en el tablero: las piezas están medidas sobre el arce. */
+	.promotion-piece {
+		inline-size: 100%;
+		aspect-ratio: 1;
+		border-radius: var(--radius-s);
+		background-color: var(--board-light);
+		background-size: cover;
+		forced-color-adjust: none;
+	}
+
+	.actions {
+		display: flex;
+		justify-content: end;
+		margin-block-start: var(--space-3);
+	}
+</style>

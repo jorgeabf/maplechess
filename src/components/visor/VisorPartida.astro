@@ -8,6 +8,7 @@ import { toViewerNodes, type GameTree } from '../../lib/chess/movetree'
 import { formatResult } from '../../lib/format'
 import Icon from '../Icon.astro'
 import PlayerName from '../PlayerName.astro'
+import Coronacion from './Coronacion.astro'
 import EvalChart from './EvalChart.astro'
 import MoveLine from './MoveLine.astro'
 import PanelMotor from './PanelMotor.astro'
@@ -152,6 +153,7 @@ const hasVariations = tree.nodes.some((n) => n.children.length > 1)
 		)
 	}
 
+	<Coronacion />
 	<script type="application/json" data-game set:html={data} />
 </visor-partida>
 
