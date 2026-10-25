@@ -25,14 +25,15 @@ const tournament = (
 	key: string,
 	startDate = '2026-10-17',
 	endDate = '2026-10-18',
-	type: 'individual' | 'team' = 'individual'
+	type: 'individual' | 'team' = 'individual',
+	city: string | null = null
 ) =>
 	upsertTournament(db, {
 		source: 'info64',
 		key,
 		type,
 		name: key,
-		city: null,
+		city,
 		startDate,
 		endDate,
 		timeControl: null,
@@ -153,7 +154,7 @@ describe('searchTournaments', () => {
 	})
 })
 
-describe('searchTournaments por provincia o comunidad', () => {
+describe('searchTournaments por sitio', () => {
 	const search = async (q: string) => {
 		const result = await searchTournaments(
 			db,
@@ -162,29 +163,53 @@ describe('searchTournaments por provincia o comunidad', () => {
 		)
 		return result.rows.map((t) => t.name).sort()
 	}
+	const at = (name: string, city: string | null) => tournament(name, '2026-10-17', '2026-10-18', 'individual', city)
 
 	beforeEach(async () => {
-		await tournament('Cto Individual Preferente Alavesa 2026')
-		await tournament('Cto de Alava de veteranos 2026')
-		await tournament('Arabako Txapelketa 2026')
-		await tournament('Cto de Castilla y León 2026')
-		await tournament('Cto Castellano-Leonés Sub-12 2026')
-		await tournament('Open de León 2026')
-		await tournament('Open de Lugo 2026')
+		// Sin ciudad: el sitio lo dice el nombre.
+		await at('Cto Individual Preferente Alavesa 2026', null)
+		await at('Arabako Txapelketa 2026', null)
+		await at('Cto de Castilla y León 2026', null)
+		await at('Cto Castellano-Leonés Sub-12 2026', null)
+		// Con ciudad: manda ella.
+		await at('Open Inventado 2026', 'Vitoria-Gasteiz')
+		await at('Memorial Gallego 2026', 'Gijón')
+		await at('Torneo de Navidad 2026', 'Ferrol')
+		await at('Open de Lugo 2026', 'Lugo')
+		await at('Open Ciudad de Segovia 2026', 'Segovia')
+		await at('Open Internacional de Castilla y León 2026', 'Segovia')
 	})
 
-	it('cualquiera de sus nombres encuentra los demás', async () => {
-		const alava = ['Arabako Txapelketa 2026', 'Cto Individual Preferente Alavesa 2026', 'Cto de Alava de veteranos 2026']
+	it('una provincia: los torneos que se juegan en ella, por su ciudad o, si no la dice, por su nombre', async () => {
+		const alava = ['Arabako Txapelketa 2026', 'Cto Individual Preferente Alavesa 2026', 'Open Inventado 2026']
 		expect(await search('alava')).toEqual(alava)
 		expect(await search('alavesa 2026')).toEqual(alava)
 	})
 
-	it('una comunidad de varias palabras, entera', async () => {
-		expect(await search('castilla y leon')).toEqual(['Cto Castellano-Leonés Sub-12 2026', 'Cto de Castilla y León 2026'])
-		expect(await search('castilla y leon 2026')).toEqual([
+	it('una comunidad, con todas sus provincias', async () => {
+		expect(await search('galicia')).toEqual(['Open de Lugo 2026', 'Torneo de Navidad 2026'])
+		expect(await search('castilla y leon')).toEqual([
 			'Cto Castellano-Leonés Sub-12 2026',
-			'Cto de Castilla y León 2026'
+			'Cto de Castilla y León 2026',
+			'Open Ciudad de Segovia 2026',
+			'Open Internacional de Castilla y León 2026'
 		])
+	})
+
+	it('la palabra escrita encuentra el nombre, aunque el torneo se juegue en otro sitio', async () => {
+		expect(await search('memorial gallego')).toEqual(['Memorial Gallego 2026'])
+		// «león» es la provincia; el open de Castilla y León se juega en Segovia, pero lo dice el nombre.
+		expect(await search('leon')).toEqual([
+			'Cto Castellano-Leonés Sub-12 2026',
+			'Cto de Castilla y León 2026',
+			'Open Internacional de Castilla y León 2026'
+		])
+	})
+
+	it('las demás palabras, en el nombre o en la ciudad', async () => {
+		expect(await search('gijon')).toEqual(['Memorial Gallego 2026'])
+		expect(await search('navidad ferrol')).toEqual(['Torneo de Navidad 2026'])
+		expect(await search('open segovia')).toEqual(['Open Ciudad de Segovia 2026', 'Open Internacional de Castilla y León 2026'])
 	})
 })
 

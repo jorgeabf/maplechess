@@ -25,7 +25,7 @@ const tabHref = (id: string) => withParams(Astro.url, { cuando: id, p: null, ...
 	<form method="get" role="search" class="filters form-row">
 		{filters.upcoming && <input type="hidden" name="cuando" value="proximos" />}
 		<label class="grow">
-			Nombre
+			Nombre o lugar
 			<input name="q" type="search" value={filters.q} placeholder="Campeonato, open, ciudad…" autocomplete="off" />
 		</label>
 		<label>

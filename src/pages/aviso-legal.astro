@@ -1,7 +1,16 @@
 ---
 import Base from '../layouts/Base.astro'
 import { CONTACT, OWNERS } from '../lib/legal'
-import { CC_BY, CC_BY_SA, ENGINE_SOURCE, ENGINE_VERSION, SOURCE_CODE, SOURCE_LICENSE } from '../lib/licenses'
+import {
+	CC_BY,
+	CC_BY_SA,
+	ENGINE_SOURCE,
+	ENGINE_VERSION,
+	IGN_NUCLEOS,
+	INE_MUNICIPIOS,
+	SOURCE_CODE,
+	SOURCE_LICENSE
+} from '../lib/licenses'
 ---
 
 <Base
@@ -80,6 +89,17 @@ import { CC_BY, CC_BY_SA, ENGINE_SOURCE, ENGINE_VERSION, SOURCE_CODE, SOURCE_LIC
 					<a href="https://www.fcajedrez.es/partidas/" rel="noopener">Federación Cántabra de Ajedrez</a> su archivo. Aquí
 					se ha separado por torneo, se han completado sus cabeceras y cada jugador se ha enlazado con su FIDE ID por el
 					nombre.
+				</dd>
+			</div>
+			<div>
+				<dt>Municipios y núcleos de población</dt>
+				<dd>
+					<a href={CC_BY} rel="license noopener">CC BY 4.0</a>, como publican el INE su{' '}
+					<a href={INE_MUNICIPIOS.url} rel="noopener">relación de municipios</a> (a {INE_MUNICIPIOS.date}; fuente: sitio
+					web del INE, www.ine.es) y el Instituto Geográfico Nacional los{' '}
+					<a href={IGN_NUCLEOS} rel="noopener">núcleos de población</a> de su Nomenclátor Geográfico de Municipios y
+					Entidades de Población (© Instituto Geográfico Nacional). Aquí se han normalizado sus nombres para saber de qué
+					provincia es cada torneo.
 				</dd>
 			</div>
 			<div>

@@ -15,7 +15,7 @@
 // y anonimiza a los retirados (tabla retiradas). Oculta el sexo y el año de
 // quien lo ha pedido (tabla ocultaciones), también el del nombre. Y borra los
 // torneos sensibles (tabla torneos_sensibles) y los de menores (menores.ts),
-// que no se guardan.
+// que no se guardan. Y vuelve a decidir dónde se juega cada torneo (lugares.ts).
 //
 //   POST /api/admin/sync  {"workflow":"reprocess"}
 //   wrangler workflows trigger games-reprocess '{}'
@@ -23,6 +23,7 @@
 //   wrangler workflows trigger games-reprocess '{"ocultaciones":true}' (sólo el sexo y el año ocultos)
 //   wrangler workflows trigger games-reprocess '{"sensibles":true}'    (sólo los torneos sensibles)
 //   wrangler workflows trigger games-reprocess '{"menores":true}'      (sólo los torneos de menores)
+//   wrangler workflows trigger games-reprocess '{"lugares":true}'      (sólo dónde se juegan los torneos)
 import { WorkflowEntrypoint, type WorkflowEvent, type WorkflowStep } from 'cloudflare:workers'
 import { normalizeName } from '../lib/chess/names'
 import { parseGames } from '../lib/chess/pgn'
@@ -30,6 +31,7 @@ import { timeClassOf } from '../lib/chess/timecontrol'
 import { madridYear } from '../lib/dates'
 import { withoutHomonymYear } from '../lib/format'
 import { lichessUrl } from '../lib/licenses'
+import { tournamentPlace } from '../lib/lugares'
 import { derivedColumns, type DerivedColumns } from './games'
 import { LICHESS_STEP, parseBroadcastUrl, resolveTourId, type BroadcastRef } from './lichess/api'
 import { isMinorsTournament } from './menores'
@@ -50,6 +52,7 @@ import {
 	loadPairingNames,
 	loadPairingPlayers,
 	loadRetired,
+	loadTournamentPlaces,
 	proposeSensitive,
 	refreshTotals,
 	renameGames,
@@ -60,6 +63,7 @@ import {
 	updateDerivedColumns,
 	updateGamePlayers,
 	updatePairingPlayers,
+	updateTournamentPlaces,
 	withoutHiddenYears,
 	withoutRetired,
 	type BroadcastKey,
@@ -81,6 +85,8 @@ export interface GamesReprocessParams {
 	sensibles?: boolean
 	/** Sólo los torneos de menores (applyMinorsTournaments), sin recorrer las partidas: si cambia la regla. */
 	menores?: boolean
+	/** Sólo dónde se juegan los torneos (applyPlaces), sin recorrer las partidas: tras la migración o si cambian los datos. */
+	lugares?: boolean
 }
 
 /** Partidas por paso: unos 2 MB de PGN y unas décimas de segundo de CPU. */
@@ -105,8 +111,8 @@ export interface ReprocessedBatch {
 
 export class GamesReprocessWorkflow extends WorkflowEntrypoint<Env, GamesReprocessParams> {
 	async run(event: WorkflowEvent<GamesReprocessParams>, step: WorkflowStep): Promise<void> {
-		const { retiradas, ocultaciones, sensibles, menores } = event.payload
-		const all = !retiradas && !ocultaciones && !sensibles && !menores
+		const { retiradas, ocultaciones, sensibles, menores, lugares } = event.payload
+		const all = !retiradas && !ocultaciones && !sensibles && !menores && !lugares
 		// Lo primero: las partidas de los torneos borrados ya no se recorren.
 		if (all || sensibles) {
 			// Puede preguntar a lichess de qué torneo es una ronda: con sus reintentos.
@@ -116,6 +122,10 @@ export class GamesReprocessWorkflow extends WorkflowEntrypoint<Env, GamesReproce
 		if (all || menores) {
 			const minors = await step.do('torneos de menores', () => applyMinorsTournaments(this.env.DB))
 			console.log(`[reprocess] torneos de menores: ${JSON.stringify(minors)}`)
+		}
+		if (all || lugares) {
+			const places = await step.do('lugares de los torneos', () => applyPlaces(this.env.DB))
+			console.log(`[reprocess] lugares de los torneos: ${JSON.stringify(places)}`)
 		}
 		if (all) {
 			let after = event.payload.after ?? 0
@@ -388,6 +398,34 @@ async function excludedBroadcasts(
 		if (id && !found.has(id)) found.set(id, link.name)
 	}
 	return [...found].map(([key, name]) => ({ key, name }))
+}
+
+/** Lo que applyPlaces ha hecho. */
+export interface PlacesCleanup {
+	/** Torneos con provincia, sólo con comunidad y sin sitio, tras la pasada. */
+	province: number
+	community: number
+	nowhere: number
+	/** Torneos cuyo sitio ha cambiado. */
+	updated: number
+}
+
+/**
+ * Vuelve a decidir dónde se juega cada torneo guardado (tournamentPlace), como
+ * upsertTournament al guardarlo: tras la migración que añade las columnas, si
+ * cambian los datos de lugares.json o si cambia la regla. Recorre la tabla de
+ * torneos y sólo reescribe los que cambian. Repetirlo no cambia nada.
+ */
+export async function applyPlaces(db: D1Database): Promise<PlacesCleanup> {
+	const stored = await loadTournamentPlaces(db)
+	const places = stored.map((t) => ({ id: t.id, ...tournamentPlace(t.city, t.name) }))
+	const changed = places.filter((p, i) => p.province !== stored[i].province || p.community !== stored[i].community)
+	return {
+		province: places.filter((p) => p.province).length,
+		community: places.filter((p) => !p.province && p.community).length,
+		nowhere: places.filter((p) => !p.community).length,
+		updated: await updateTournamentPlaces(db, changed)
+	}
 }
 
 /**

@@ -69,12 +69,22 @@ export function lichessUrl(pgn: string): string | null {
 }
 
 /**
- * Partidas del archivo de la Federación Cántabra de Ajedrez: CC BY 4.0 (el
- * aviso legal de fcajedrez.es la da para todo lo publicado). Pide citar la
- * fuente, enlazar la licencia y avisar de los cambios; no, publicar lo derivado
- * con la misma.
+ * CC BY 4.0: las partidas del archivo de la Federación Cántabra de Ajedrez (el
+ * aviso legal de fcajedrez.es la da para todo lo publicado), y los municipios
+ * del INE y los núcleos de población del IGN con los que se saca la provincia
+ * de los torneos (data/lugares/). Pide citar la fuente, enlazar la licencia y
+ * avisar de los cambios; no, publicar lo derivado con la misma.
  */
 export const CC_BY = 'https://creativecommons.org/licenses/by/4.0/deed.es'
+
+/** La relación de municipios del INE (data/lugares/municipios.tsv): la cita pide su fecha. */
+export const INE_MUNICIPIOS = {
+	url: 'https://www.ine.es/daco/daco42/codmun/26codmun.xlsx',
+	date: '1 de enero de 2026'
+}
+
+/** Los núcleos de población del Nomenclátor del IGN (data/lugares/nucleos.tsv). */
+export const IGN_NUCLEOS = 'https://api-features.ign.es/collections/nuc'
 
 /**
  * Aviso de las partidas de la FCA en los PGN que se descargan o se copian: la

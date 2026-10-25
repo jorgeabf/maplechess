@@ -1,6 +1,6 @@
 // Consultas de torneos.
 import { madridYear } from '../dates'
-import { placeTerms } from './fts'
+import { tournamentTerms } from './fts'
 import { offset, PAGE_SIZE, toPage, type Page } from './pagination'
 import { hasDossierSql, minorsBornSince } from './players'
 
@@ -76,8 +76,17 @@ export async function searchTournaments(
 		params.push(value)
 		return `?${params.length}`
 	}
-	const terms = placeTerms(f.q)
-	if (terms) where.push(`t.id IN (SELECT rowid FROM tournaments_fts WHERE tournaments_fts MATCH ${p(terms)})`)
+	const fts = (match: string) => `t.id IN (SELECT rowid FROM tournaments_fts WHERE tournaments_fts MATCH ${p(match)})`
+	const terms = tournamentTerms(f.q)
+	if (terms?.text) where.push(fts(terms.text))
+	// Un sitio: los torneos que se juegan en él (por su índice) o que lo dicen en el nombre.
+	for (const place of terms?.places ?? []) {
+		const located = [
+			...(place.provinces.length > 0 ? [`t.provincia IN (${place.provinces.map(p).join(', ')})`] : []),
+			...(place.communities.length > 0 ? [`t.comunidad IN (${place.communities.map(p).join(', ')})`] : [])
+		]
+		where.push(`(${[...located, fts(place.name)].join(' OR ')})`)
+	}
 	if (f.from) where.push(`t.end_date >= ${p(f.from)}`)
 	if (f.to) where.push(`t.start_date <= ${p(f.to)}`)
 	if (f.type) where.push(`t.type = ${p(f.type)}`)
