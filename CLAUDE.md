@@ -117,7 +117,9 @@ MapleChess es un buscador de jugadores españoles (lista FIDE, federación ESP),
       - Siguen las coincidencias de la propia palabra (unas 20, como «Sevilla la Nueva» con «sevilla»), como en cualquier búsqueda por nombre.
       - Por provincias se pasa de 1.934 resultados a 8.004, y por comunidades, de 477 a 5.891.
       - Una comunidad va por su índice (`tournaments_comunidad_start_date`) y no por sus provincias: con `IN` habría que ordenarlas todas.
-      - Una búsqueda por sitio lee unas 3.000–4.500 filas (lista, próximos y recuento), medidas en local. El FTS cuenta igual en remoto.
+      - En remoto, una búsqueda por sitio lee de 840 a 1.510 filas en los recuentos y de 4.100 a 5.300 en la lista de 50 («asturias», 4.655).
+        - La lista elige primero los id de la página y sólo después cuenta los participantes de esos 50 (`searchTournaments`).
+        - Antes los contaba de todos los torneos que casaban, porque al ordenar SQLite calcula las columnas de cada fila antes del `LIMIT`. Así llegaba a leer 72.310 filas («madrid»).
     - **Los datos** están en `data/lugares/` (INE e IGN, CC BY 4.0). Los citan `/acerca` y `/aviso-legal`, con `INE_MUNICIPIOS` e `IGN_NUCLEOS` de `licenses.ts`.
       - `node scripts/lugares.mjs` genera `src/lib/lugares.json`.
       - Cada febrero, cuando el INE publica la relación del año: `--descargar <año>`, después la fecha y el enlace de `INE_MUNICIPIOS`, y luego el reprocesado `{"lugares":true}`.
@@ -405,6 +407,7 @@ curl -X POST localhost:4321/api/admin/sync -H "Authorization: Bearer $TOKEN" \
   - Cuenta las entradas de índice recorridas, no las lecturas de la fila por rowid: medido en producción, 228 partidas por `games_white` son 229 filas, se pidan las columnas que se pidan. Un índice cubriente no abarata nada.
   - Ordenar sin índice vuelve a contar cada fila, aunque haya `LIMIT`, y una función de ventana, otras dos más. Medido el 21-oct-2026 con las 872 partidas de una semana por `games_date`: 872 filas leerlas, 1.731 con `ORDER BY … LIMIT 10` y 3.471 con `ROW_NUMBER() OVER (PARTITION BY tournament_id …)`. Para elegir unas pocas de unos cientos, mejor leerlas sin ordenar y elegir en TS.
   - Sí cuentan la búsqueda de cada fila por su clave primaria (`json_each` → `games`: dos por partida), cada coincidencia que da el FTS y la lista que materializa `x IN (SELECT …)`.
+  - Si una consulta hay que ordenarla, una columna con subconsulta (un recuento) se calcula para cada fila que casa, antes del `LIMIT`. Hay que elegir primero la página de id y calcularla sólo para ella. En `searchTournaments` (25-oct-2026), la lista de «madrid» pasó así de 72.310 filas a 5.146.
   - **Búsquedas** (`searchGames`, `searchPlayers`, `findPlayersByName`; 22-oct-2026):
     - el orden, sin `date IS NULL` ni `rating_std IS NULL`: en DESC, SQLite ya deja los NULL al final y puede seguir el índice;
     - las búsquedas, con tope: el recuento para en 1.001 filas (`countSql`) y las páginas en la 20 (`SEARCH_PAGES`, `searchPage`); por encima, «más de 1000». Si el nombre es el único filtro, se cuenta en el FTS. La ficha (`searchGames` con un jugador, también con un torneo o una lista) no lleva tope: su recuento va por su índice y es barato, así que da el total exacto y todas sus páginas. `pageParam` no pone tope, ni tampoco los torneos;
