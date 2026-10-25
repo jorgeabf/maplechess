@@ -341,6 +341,80 @@ const positionHref = (moves: string[]) => `${lineHref(moves)}#${ANCHOR}`
 		}
 	}
 
+	/*
+	 * Más estrecha, ni las tres columnas caben: sólo las cabeceras y su relleno
+	 * piden 183 px, y la barra con su puntuación no baja de 104 (a 250 px la
+	 * tarjeta deja 184, y la puntuación quedaba tras el scroll). Cada jugada
+	 * pasa a dos líneas: la jugada y sus partidas, y debajo la barra, a lo
+	 * ancho. Cada fila es una rejilla con sus áreas, como GamesTable en el
+	 * móvil, y la tabla conserva su semántica. La cabecera de la barra
+	 * («Resultado») queda sólo para los lectores de pantalla: la explica la
+	 * leyenda de debajo.
+	 *
+	 * Media query y no container query: con container-type, la tarjeta dejaba
+	 * de aportar el mínimo de la tabla a la columna lateral, y a 960 px la
+	 * tabla se desplazaba 36 px. Por debajo de 60rem la tarjeta ocupa todo el
+	 * ancho y por dentro mide la ventana menos 4rem y 2 px: 19.5rem de ventana
+	 * son 15.5rem de tarjeta, lo que piden las tres columnas (de 224 a 246 px
+	 * en 102 posiciones de seis repertorios, 25-oct-2026). A 320 px siguen.
+	 */
+	@media (width < 19.5rem) {
+		.moves-table tr {
+			display: grid;
+			grid-template-columns: 1fr auto;
+			grid-template-areas:
+				'move games'
+				'result result';
+			gap: var(--space-1) var(--space-3);
+			padding-block: var(--space-2);
+			border-bottom: 1px solid var(--border);
+		}
+
+		.moves-table thead tr {
+			grid-template-areas: 'move games';
+			border-bottom-color: var(--border-strong);
+		}
+
+		.moves-table tbody tr:last-child {
+			border-bottom: 0;
+		}
+
+		.moves-table tfoot tr {
+			border-top: 1px solid var(--border-strong);
+			border-bottom: 0;
+		}
+
+		/* Entre las celdas hay huecos: el relleno y las rayas van en la fila. */
+		.moves-table :is(th, td) {
+			padding: 0;
+			border: 0;
+		}
+
+		.moves-table :is(th, td):nth-child(1) {
+			grid-area: move;
+		}
+
+		.moves-table :is(th, td):nth-child(2) {
+			grid-area: games;
+		}
+
+		/* Rejilla: la barra se estira (hasta su máximo) y la puntuación va al final. */
+		.moves-table td:nth-child(3) {
+			grid-area: result;
+			display: grid;
+		}
+
+		/* Como .visually-hidden: fuera de la vista, pero en el árbol de accesibilidad. */
+		.moves-table thead th:nth-child(3) {
+			position: absolute;
+			inline-size: 1px;
+			block-size: 1px;
+			overflow: hidden;
+			clip-path: inset(50%);
+			white-space: nowrap;
+		}
+	}
+
 	.moves-table td.move a {
 		display: block;
 		font-family: var(--font-moves);
