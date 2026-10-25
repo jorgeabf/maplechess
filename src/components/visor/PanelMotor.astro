@@ -69,6 +69,21 @@
 		display: none;
 	}
 
+	/*
+	 * Terminada la búsqueda, el estado lleva detrás «Seguir analizando» y pide
+	 * unos 16,5rem: 258 px con Segoe UI y 263 con Arial (medido el 25-oct-2026).
+	 * En un panel más estrecho (pantallas de menos de unos 324 px, o 375 con la
+	 * letra a partir del 116 %) partía en dos renglones al terminar y volvía a
+	 * uno al pasar de jugada: lo de debajo bajaba y subía 18 px con cada
+	 * jugada. Ahí guarda siempre el sitio de los dos. Hasta 18rem, por las
+	 * fuentes de otros sistemas.
+	 */
+	@container (width < 18rem) {
+		.engine-status {
+			min-block-size: 2lh;
+		}
+	}
+
 	.engine-lines {
 		display: grid;
 		gap: var(--space-1);
