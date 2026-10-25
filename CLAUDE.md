@@ -167,6 +167,11 @@ MapleChess es un buscador de jugadores españoles (lista FIDE, federación ESP),
 - `src/client/`: código de navegador (`<visor-partida>`, motor, `<explorador-repertorio>` y el cierre del panel de búsqueda). Tiene **su propio `tsconfig`** y se incluye con `<script src>`; ver «Trampas».
   - `visor/panel-motor.ts` (`EnginePanel`) y `components/visor/PanelMotor.astro`: el panel de Stockfish que comparten el visor y el explorador.
   - **Los dos tableros, en un solo script:** `src/client/tableros.ts`, que carga `components/visor/ScriptTableros.astro` en el visor y en el explorador. Con un script por componente, Vite sacaba lo común (chessground, chessops, el panel del motor) a otro archivo que el navegador sólo pedía tras leer el primero, y Astro no emite `modulepreload`. Cada página trae así el código del otro elemento: 1,8 KB comprimidos más en el repertorio.
+  - **Antes de montarse chessground** (decidido con Jorge el 25-oct-2026):
+    - `.board` lleva las casillas de `board.css` (`.board:not(.cg-wrap)`);
+    - chessground se crea ya en la posición que va a enseñar, la del `#j` o la final (`linkTarget` en `visor-partida.ts`).
+    - Antes, en un móvil lento, el hueco quedaba vacío de 0,3 a 0,55 s y las piezas entraban volando desde la salida.
+    - Pintar en el servidor el tablero del visor se descartó: el servidor no ve el `#j`, y con un enlace a una jugada enseñaría otra posición durante unos 0,3 s.
   - **Teclado del visor:**
     - ← y → valen en toda la página.
     - ↑, ↓, Inicio, Fin y F (girar), sólo con el foco en el visor: un atajo de una letra en toda la página incumple WCAG 2.1.4.
