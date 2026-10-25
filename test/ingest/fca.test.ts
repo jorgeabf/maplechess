@@ -150,11 +150,16 @@ describe('importFile', () => {
 		expect(results.some((r) => String(r.white).startsWith('Menor'))).toBe(false)
 	})
 
+	// Sólo los id: el resultado entero de D1 lleva también lo que ha tardado la
+	// consulta (meta.duration), que a veces pasa de 0 a 1 ms entre dos iguales.
+	const gameIds = async () =>
+		(await db.prepare('SELECT id FROM games ORDER BY id').all<{ id: number }>()).results.map((r) => r.id)
+
 	it('relanzarla no duplica nada', async () => {
 		await importFile(db, FILE, archivoPgn, '2026-10-24T20:00:00.000Z')
-		const before = await db.prepare('SELECT id FROM games ORDER BY id').all()
+		const before = await gameIds()
 		await importFile(db, FILE, archivoPgn, '2026-10-24T21:00:00.000Z')
-		expect(await db.prepare('SELECT id FROM games ORDER BY id').all()).toEqual(before)
+		expect(await gameIds()).toEqual(before)
 		expect(await db.prepare('SELECT count(*) AS n FROM tournaments').first('n')).toBe(3)
 	})
 })
