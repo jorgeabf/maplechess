@@ -67,7 +67,8 @@ describe('Info64SyncWorkflow', () => {
 
 		await workflow.run(event, step)
 
-		expect(steps).toEqual(['pendientes', 'torneo sano', 'clasificación sano', 'partidas sano', 'totales'])
+		// La franja de info64 se mira siempre primero (sus pasos de espera no hacen nada aquí).
+		expect(steps).toEqual(['franja de info64', 'pendientes', 'torneo sano', 'clasificación sano', 'partidas sano', 'totales'])
 	})
 })
 

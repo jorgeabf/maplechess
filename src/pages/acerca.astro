@@ -87,21 +87,21 @@ import { CC_BY, CC_BY_SA, ENGINE_SOURCE, ENGINE_VERSION, IGN_NUCLEOS, INE_MUNICI
 			</li>
 		</ul>
 
-		{/* Las horas de los emparejamientos son las de PAIRINGS_HOURS (src/ingest/schedule.ts): si cambian, aquí también. */}
+		{/* Las horas son las de CRON_INFO64_DAILY (src/ingest/schedule.ts): si cambian, aquí también. */}
 		<h2 id="actualizacion">Cuándo se actualizan</h2>
 		<dl class="def-list">
 			<div>
 				<dt>Torneos</dt>
 				<dd>
-					Cada mañana se revisan los de info64 con rondas en los dos últimos meses: participantes, clasificación y
-					partidas. Las partidas llegan cuando el torneo las publica.
+					Cada noche, hacia la 1:00 (las 2:00 en verano), se revisan los de info64 con rondas en los dos últimos meses:
+					participantes, clasificación y partidas. Las partidas llegan cuando el torneo las publica.
 				</dd>
 			</div>
 			<div>
 				<dt>Emparejamientos</dt>
 				<dd>
-					Los de la próxima ronda de los torneos individuales que se juegan en los próximos días: cada mañana y otra vez
-					a las 15:00, para la ronda de la tarde, y a las 22:00, para la de la mañana siguiente (hora peninsular).
+					Los de la próxima ronda de los torneos individuales que se juegan en los próximos días, en la misma pasada de
+					cada noche: la ronda de la mañana suele estar emparejada la noche antes.
 				</dd>
 			</div>
 			<div>

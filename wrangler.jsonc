@@ -82,12 +82,11 @@
 		}
 	],
 	"triggers": {
-		// 05:00 UTC a diario: info64 (últimos 60 días y emparejamientos).
+		// 00:00 UTC a diario: info64 (últimos 60 días y emparejamientos). Es la 01:00
+		// de Madrid en invierno y las 02:00 en verano: info64 sólo admite robots de
+		// 00:00 a 06:00 (src/ingest/info64/sync.ts, INFO64_HOURS).
 		// 06:30 UTC a diario: retransmisiones de lichess (después de info64, que también les pide).
-		// 15:00 y 22:00 de Madrid a diario: emparejamientos de info64. Son las 13:00 y
-		// 20:00 UTC en verano y las 14:00 y 21:00 en invierno: salta a las cuatro y
-		// src/ingest/schedule.ts sólo lanza la pasada en las dos que tocan.
 		// 06:00 UTC el día 3 de cada mes: lista FIDE (se publica a primeros de mes).
-		"crons": ["0 5 * * *", "30 6 * * *", "0 13,14,20,21 * * *", "0 6 3 * *"]
+		"crons": ["0 0 * * *", "30 6 * * *", "0 6 3 * *"]
 	}
 }
