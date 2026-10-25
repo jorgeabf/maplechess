@@ -14,6 +14,7 @@ import { chessgroundDests } from 'chessops/compat'
 import { parseFen } from 'chessops/fen'
 import { parseUci, roleToChar } from 'chessops/util'
 import { standardUci } from '../../lib/chess/uci'
+import { MoveInput } from '../visor/campo-jugada'
 import { choosePromotion, promotes } from '../visor/coronacion'
 import { EnginePanel } from '../visor/panel-motor'
 
@@ -23,6 +24,13 @@ function arrow(uci: string): { orig: Key; dest: Key } {
 	const [orig, dest] = squares(uci)
 	return { orig, dest }
 }
+
+/**
+ * Ancla de la página que sigue a una jugada escrita en el campo: ningún
+ * elemento la lleva, así que el navegador no se desplaza, y el explorador se
+ * pone a la vista y devuelve el foco al campo para escribir la siguiente.
+ */
+const MOVE_INPUT_HASH = 'jugada'
 
 class ExploradorRepertorio extends HTMLElement {
 	private cg?: Api
@@ -82,6 +90,20 @@ class ExploradorRepertorio extends HTMLElement {
 		)
 		this.panel.show(fen)
 		this.panel.restore()
+
+		// El campo para escribir jugadas no está en la última jugada del repertorio.
+		const form = this.querySelector<HTMLFormElement>('[data-move-input]')
+		if (!form) return
+		const moveInput = new MoveInput(
+			form,
+			this.querySelector<HTMLDialogElement>('[data-promotion]')!,
+			{ fen: () => fen, play: (uci) => this.go(pos, uci, MOVE_INPUT_HASH) },
+			signal
+		)
+		if (location.hash === `#${MOVE_INPUT_HASH}`) {
+			this.scrollIntoView()
+			moveInput.focus({ preventScroll: true })
+		}
 	}
 
 	disconnectedCallback(): void {
@@ -136,8 +158,11 @@ class ExploradorRepertorio extends HTMLElement {
 		else this.go(pos, `${orig}${dest}${promotion ? roleToChar(promotion) : ''}`)
 	}
 
-	/** Se va a la página de la posición tras la jugada (UCI), si es legal. */
-	private go(pos: Chess, uci: string): void {
+	/**
+	 * Se va a la página de la posición tras la jugada (UCI), si es legal, con
+	 * el explorador en el mismo sitio (`hash`).
+	 */
+	private go(pos: Chess, uci: string, hash = this.id): void {
 		const parsed = parseUci(uci)
 		if (!parsed) return
 		const move = normalizeMove(pos, parsed)
@@ -148,7 +173,7 @@ class ExploradorRepertorio extends HTMLElement {
 		url.searchParams.set('jugadas', [...moves, standardUci(pos, move)].join(' '))
 		url.searchParams.delete('p')
 		// Como los enlaces de la tabla: la página nueva se abre con el explorador en el mismo sitio.
-		url.hash = this.id
+		url.hash = hash
 		location.assign(url)
 	}
 }

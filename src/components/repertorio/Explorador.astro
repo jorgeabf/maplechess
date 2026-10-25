@@ -7,6 +7,7 @@ import '../visor/board.css'
 import { OPENING_MOVES_PLIES } from '../../lib/chess/pgn'
 import type { Color, Exploration, Line } from '../../lib/chess/repertoire'
 import { formatDate, formatMove, formatNumber, formatPercent } from '../../lib/format'
+import CampoJugada from '../visor/CampoJugada.astro'
 import Coronacion from '../visor/Coronacion.astro'
 import PanelMotor from '../visor/PanelMotor.astro'
 import ScriptTableros from '../visor/ScriptTableros.astro'
@@ -76,6 +77,7 @@ const positionHref = (moves: string[]) => `${lineHref(moves)}#${ANCHOR}`
 			</p>
 			{last && <a class="button secondary" href={positionHref(moves.slice(0, -1))} rel="nofollow">← Atrás</a>}
 		</div>
+		{!atLimit && <CampoJugada />}
 
 		<section class="card moves-card" aria-labelledby="turno">
 			<h2 id="turno">

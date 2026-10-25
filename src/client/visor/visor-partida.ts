@@ -2,8 +2,9 @@
 // evaluación anotada y análisis con Stockfish. El árbol de jugadas (FEN de
 // cada nodo, UCI, reloj…) llega ya calculado del servidor en un
 // <script type="application/json">. En el tablero se pueden mover las piezas
-// para probar una idea, y pulsar una línea del motor para recorrerla: las dos
-// cosas hacen una variante propia, que no se guarda ni cambia el PGN.
+// para probar una idea (o escribir la jugada en su campo), y pulsar una línea
+// del motor para recorrerla: las dos cosas hacen una variante propia, que no
+// se guarda ni cambia el PGN.
 import { Chessground } from '@lichess-org/chessground'
 import type { Api } from '@lichess-org/chessground/api'
 import type { DrawShape } from '@lichess-org/chessground/draw'
@@ -14,9 +15,10 @@ import type { ViewerNode } from '../../lib/chess/movetree'
 import { annotatedScore, formatScore, positionOf, sideToMove } from '../../lib/chess/uci'
 import { enterVariation, exitVariation } from '../../lib/chess/variations'
 import { formatMove } from '../../lib/format'
+import { MoveInput } from './campo-jugada'
 import { choosePromotion, promotes } from './coronacion'
 import { EnginePanel, type EngineView } from './panel-motor'
-import { boardMove, extendVariant, followLink, makeLink, parseLink, type LineMove } from './variante'
+import { boardMove, extendVariant, followLink, makeLink, parseLink, playLine, type LineMove } from './variante'
 
 /** "1:23:05" o "4:07" a partir de segundos. */
 function formatClock(seconds: number): string {
@@ -53,6 +55,7 @@ class VisorPartida extends HTMLElement {
 	private step: number | null = null
 	private cg?: Api
 	private panel?: EnginePanel
+	private moveInput?: MoveInput
 	private movesResize?: ResizeObserver
 	private copiedTimer?: ReturnType<typeof setTimeout>
 	/** Escritura pendiente de la jugada en la URL (URL_DELAY_MS). */
@@ -151,6 +154,13 @@ class VisorPartida extends HTMLElement {
 					if (fen === this.shown.fen) this.play(moves)
 				}
 			},
+			signal
+		)
+		// Una jugada escrita, como una hecha en el tablero.
+		this.moveInput = new MoveInput(
+			this.querySelector<HTMLFormElement>('[data-move-input]')!,
+			this.promotionDialog,
+			{ fen: () => this.shown.fen, play: (uci) => this.play(playLine(this.shown.fen, [uci])) },
 			signal
 		)
 		// En dos columnas la lista llena el alto que deja el resto: al encender
@@ -481,7 +491,10 @@ class VisorPartida extends HTMLElement {
 		})
 	}
 
-	/** La posición que se ve (setBoard), la jugada actual, los extremos de los botones y el motor. */
+	/**
+	 * La posición que se ve (setBoard), la jugada actual, los extremos de los
+	 * botones, las sugerencias del campo de jugadas y el motor.
+	 */
 	private showPosition(): void {
 		this.setBoard()
 		this.engineShape = null
@@ -489,6 +502,7 @@ class VisorPartida extends HTMLElement {
 		this.drawShapes()
 		this.showCurrent()
 		this.markEnds()
+		this.moveInput?.update()
 		this.panel?.show(this.shown.fen)
 	}
 
