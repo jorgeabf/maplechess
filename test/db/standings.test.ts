@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import type { StandingsPage, TournamentPlayer } from '../../src/ingest/info64/parse'
 import { RETIRED_NAME } from '../../src/ingest/nombres'
 import { replaceParticipations, replaceStandings, upsertTournament } from '../../src/ingest/repo'
-import { getTournamentStandings, standingsHeading } from '../../src/lib/db/standings'
+import { getTournamentStandings, standingProgress, standingsHeading, standingsOver } from '../../src/lib/db/standings'
 
 const db = env.DB
 
@@ -156,5 +156,33 @@ describe('standingsHeading', () => {
 		expect(standingsHeading({ round: null, rounds: null }, null, today)).toBe('Clasificación')
 		expect(standingsHeading({ round: 5, rounds: null }, '2026-10-01', today)).toBe('Clasificación final')
 		expect(standingsHeading({ round: 5, rounds: null }, '2026-10-30', today)).toBe('Clasificación tras la ronda 5')
+	})
+})
+
+describe('standingsOver', () => {
+	const today = '2026-10-23'
+
+	it('la regla del título: tras la última ronda o, sin ronda o sin rondas, cuando el torneo ha terminado', () => {
+		expect(standingsOver({ round: 9, rounds: 9 }, '2026-10-30', today)).toBe(true)
+		expect(standingsOver({ round: 8, rounds: 9 }, '2026-10-01', today)).toBe(false)
+		expect(standingsOver({ round: null, rounds: 7 }, '2026-10-22', today)).toBe(true)
+		expect(standingsOver({ round: null, rounds: 7 }, today, today)).toBe(false)
+		expect(standingsOver({ round: null, rounds: null }, null, today)).toBe(false)
+	})
+})
+
+describe('standingProgress', () => {
+	const today = '2026-10-23'
+
+	it('final: sin nota, y los puntos sobre las rondas del torneo', () => {
+		expect(standingProgress({ round: 9, rounds: 9 }, '2026-10-20', today)).toEqual({ note: null, played: 9 })
+		expect(standingProgress({ round: null, rounds: 7 }, '2026-10-22', today)).toEqual({ note: null, played: 7 })
+		expect(standingProgress({ round: 5, rounds: null }, '2026-10-01', today)).toEqual({ note: null, played: 5 })
+	})
+
+	it('sin terminar: tras qué ronda va y los puntos sobre las jugadas; sin ronda (por equipos), en juego', () => {
+		expect(standingProgress({ round: 5, rounds: 9 }, '2026-10-30', today)).toEqual({ note: 'tras la ronda\u00a05', played: 5 })
+		expect(standingProgress({ round: null, rounds: 7 }, '2027-03-31', today)).toEqual({ note: 'en juego', played: null })
+		expect(standingProgress({ round: null, rounds: null }, null, today)).toEqual({ note: 'en juego', played: null })
 	})
 })

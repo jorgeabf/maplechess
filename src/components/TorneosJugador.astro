@@ -1,8 +1,10 @@
 ---
 // Tabla de torneos de la ficha. La ficha la usa dos veces: los más recientes
 // a la vista y los anteriores plegados.
+import { madridDate } from '../lib/dates'
 import type { ParticipationRow, TournamentScore } from '../lib/db/players'
-import { formatNumber, formatPoints, formatRange } from '../lib/format'
+import { standingProgress } from '../lib/db/standings'
+import { formatNumber, formatPlace, formatPoints, formatRange } from '../lib/format'
 
 interface Props {
 	tournaments: ParticipationRow[]
@@ -13,6 +15,10 @@ interface Props {
 }
 
 const { tournaments, scores, fideId } = Astro.props
+const today = madridDate(new Date())
+
+/** Puntos sobre partidas o rondas, sin partir (ver .standing): «6½ / 9». */
+const outOf = (points: number, of: number | null) => (of ? `${formatPoints(points)} / ${of}` : formatPoints(points))
 ---
 
 <div class="table-wrap stack tournaments">
@@ -25,23 +31,29 @@ const { tournaments, scores, fideId } = Astro.props
 				<th scope="col" class="end">ELO</th>
 				<th scope="col" class="end">Nº<br />inicial</th>
 				<th scope="col" class="end">Partidas<br />con PGN</th>
-				<th scope="col" class="end">Puntos</th>
+				<th scope="col" class="end standing">Puesto<br />y puntos</th>
 			</tr>
 		</thead>
 		<tbody>
 			{
 				tournaments.map((t) => {
 					const score = scores.get(t.tournamentId)
+					// «tras la ronda 5» o «en juego» si no es la final (standingProgress).
+					const { note, played } = standingProgress({ round: t.standingsRound, rounds: t.rounds }, t.endDate, today)
 					return (
 						<tr>
 							<td class="wrap">
 								<a href={`/torneos/${t.tournamentId}`}>{t.tournamentName}</a>
-								{/* En los torneos por equipos, el número es el tablero: va con el equipo. */}
+								{/*
+									En los torneos por equipos, el número es el tablero: va con el
+									equipo, y el puesto, que es el del equipo, también.
+								*/}
 								{t.team && (
 									<span class="team">
 										<span class="tag">Equipos</span>{' '}
 										<span class="muted">
 											{t.team}
+											{t.pos !== null && ` (${formatPlace(t.pos)}${note ? `, ${note}` : ''})`}
 											{t.startRank ? ` · tablero ${t.startRank}` : null}
 										</span>
 									</span>
@@ -62,7 +74,18 @@ const { tournaments, scores, fideId } = Astro.props
 									</a>
 								) : null}
 							</td>
-							<td class="end num stat">{score?.decided ? <><span class="cell-label" aria-hidden="true">Puntos </span>{`${formatPoints(score.points)} / ${score.decided}`}</> : null}</td>
+							{/* Los de la clasificación o, sin ella, los de sus partidas con PGN. */}
+							<td class="end num stat standing">
+								{t.pos !== null && t.points !== null ? (
+									<>
+										<span class="cell-label" aria-hidden="true">Clasificación </span>
+										{`${formatPlace(t.pos)} · ${outOf(t.points, played)}`}
+										{note && <span class="round-note">{note}</span>}
+									</>
+								) : score?.decided ? (
+									<><span class="cell-label" aria-hidden="true">Puntos </span>{outOf(score.points, score.decided)}</>
+								) : null}
+							</td>
 						</tr>
 					)
 				})
@@ -73,9 +96,10 @@ const { tournaments, scores, fideId } = Astro.props
 
 <style>
 	/*
-	 * «Nº inicial» y «Partidas con PGN» van en dos líneas (br): en una, le
-	 * quitaban unos 100 px a la columna del torneo, que partía más nombres. El
-	 * lector de pantalla los oye igual. Todos los rótulos se apoyan en la raya.
+	 * «Nº inicial», «Partidas con PGN» y «Puesto y puntos» van en dos líneas
+	 * (br): en una, le quitaban unos 100 px a la columna del torneo, que partía
+	 * más nombres. El lector de pantalla los oye igual. Todos los rótulos se
+	 * apoyan en la raya.
 	 */
 	.tournaments thead th {
 		vertical-align: bottom;
@@ -84,6 +108,27 @@ const { tournaments, scores, fideId } = Astro.props
 	/* En los torneos por equipos, debajo del nombre del torneo: con qué equipo jugó. */
 	.team {
 		display: block;
+	}
+
+	/*
+	 * El puesto y los puntos parten línea antes que ensanchar la tabla, que en
+	 * paralelo ya pedía 958 px de los 960: tras «1.º ·», en la nota y en el
+	 * rótulo, que entonces va en tres líneas. Así la columna no pide más que
+	 * cuando sólo decía los puntos («Puntos», «6½ / 9»). Con sitio, en una
+	 * línea y el rótulo en dos.
+	 */
+	.tournaments .standing {
+		white-space: normal;
+	}
+
+	/*
+	 * Una clasificación que no es la final: «tras la ronda 5», debajo del
+	 * puesto y los puntos. Apilada, detrás y tras una coma.
+	 */
+	.round-note {
+		display: block;
+		font-size: var(--text-xs);
+		color: var(--text-muted);
 	}
 
 	/*
@@ -101,6 +146,14 @@ const { tournaments, scores, fideId } = Astro.props
 
 		.tournaments .stat {
 			order: 2;
+		}
+
+		.round-note {
+			display: inline;
+		}
+
+		.round-note::before {
+			content: ', ';
 		}
 	}
 </style>
