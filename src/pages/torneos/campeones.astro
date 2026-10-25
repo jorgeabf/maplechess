@@ -1,0 +1,127 @@
+---
+import { env } from 'cloudflare:workers'
+import IndicePagina from '../../components/IndicePagina.astro'
+import PlayerName from '../../components/PlayerName.astro'
+import Base from '../../layouts/Base.astro'
+import { CATEGORIES } from '../../lib/campeonatos'
+import { getChampions } from '../../lib/db/campeones'
+import { formatPoints } from '../../lib/format'
+
+const champions = await getChampions(env.DB)
+// Una tabla por categoría, en el orden de CATEGORIES (el absoluto primero), y
+// sólo las que tienen alguna edición guardada.
+const byCategory = Map.groupBy(champions, (c) => c.category)
+const categories = CATEGORIES.filter(({ id }) => byCategory.has(id))
+const first = Math.min(...champions.map((c) => c.year))
+---
+
+<Base
+	title="Campeones de España"
+	section="torneos"
+	description="Campeones de España de ajedrez desde 2015: absoluto, femenino, rápido, relámpago, veteranos y División de Honor, con sus torneos y sus partidas."
+>
+	<header class="page-head">
+		<h1>Campeones de España</h1>
+		{champions.length > 0 && <p class="page-meta">Desde {first}, según la clasificación final de cada campeonato</p>}
+	</header>
+
+	<IndicePagina items={categories.map(({ id, label }) => ({ href: `#${id}`, label }))} />
+
+	<div class="categories">
+		{
+			categories.map(({ id, label, holder }) => (
+				<section id={id}>
+					<h2>{label}</h2>
+					<div class="table-wrap">
+						<table class="data-table">
+							<thead>
+								<tr>
+									<th scope="col">Año</th>
+									<th scope="col">{holder}</th>
+									<th scope="col" class="end">Pts.</th>
+								</tr>
+							</thead>
+							<tbody>
+								{byCategory.get(id)!.map((c) => (
+									<tr>
+										<th scope="row" class="num">{c.year}</th>
+										<td class="champion">
+											{/* Sin nombre si puede ser menor o ya no está entre los participantes: la raya de una celda vacía. */}
+											{!c.name ? (
+												<span class="muted">—</span>
+											) : holder === 'Equipo' ? (
+												<span>{c.name}</span>
+											) : (
+												<PlayerName name={c.name} title={c.title} fideId={c.fideId} />
+											)}
+											{c.note && <span class="muted"> · {c.note}</span>}
+											<span class="tournament">
+												<a href={`/torneos/${c.tournamentId}`}>{c.tournamentName}</a>
+												{c.fideId && c.gamesCount > 0 && (
+													<>
+														{' · '}
+														<a href={`/jugadores/${c.fideId}?torneo=${c.tournamentId}#partidas`} rel="nofollow">
+															sus partidas
+														</a>
+													</>
+												)}
+											</span>
+										</td>
+										<td class="end num">{formatPoints(c.points)}</td>
+									</tr>
+								))}
+							</tbody>
+						</table>
+					</div>
+				</section>
+			))
+		}
+	</div>
+	{champions.length === 0 && <p>Aún no hay ningún campeonato guardado.</p>}
+</Base>
+
+<style>
+	/*
+	 * Dos tablas por fila donde caben (el absoluto junto al femenino, el
+	 * rápido junto al relámpago, los veteranos juntos); en el móvil, una debajo
+	 * de otra.
+	 */
+	.categories {
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(min(100%, 26rem), 1fr));
+		gap: var(--space-7) var(--space-6);
+	}
+
+	/*
+	 * Como la clasificación del torneo: en un hueco de menos de 26rem (el
+	 * móvil), el relleno se estrecha y el campeón se queda con lo que gana.
+	 */
+	.table-wrap {
+		container-type: inline-size;
+	}
+
+	@container (width < 26rem) {
+		th,
+		td {
+			padding-inline: var(--space-2);
+		}
+	}
+
+	/* El año se lee como un dato, alineado arriba con el nombre. */
+	th[scope='row'],
+	td {
+		vertical-align: top;
+	}
+
+	td.champion {
+		white-space: normal;
+	}
+
+	/* El torneo, en su línea y en pequeño, bajo el campeón. */
+	.tournament {
+		display: block;
+		margin-top: var(--space-1);
+		color: var(--text-muted);
+		font-size: var(--text-xs);
+	}
+</style>
