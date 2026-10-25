@@ -127,6 +127,24 @@ describe('parseTournamentPage', () => {
 		// El título sigue siendo el h1, aunque las pestañas vayan antes.
 		expect(page.name).toBe('I Blitz Odiseo Chess Masters')
 	})
+
+	it('lee los enlaces de las pestañas como la URL del calendario', async () => {
+		const tab = (href: string, label: string) => `<li><a href="${href}">${label}</a></li>`
+		const html = tournamentHtml.replace(
+			/<ul class="nav nav-tabs">[\s\S]*?<\/ul>/,
+			`<ul class="nav nav-tabs">${[
+				tab(' /open-inventado-a?hl=es ', 'A &amp; B'),
+				tab('//info64.org/open-inventado-b#ronda', 'B'),
+				tab('/Open-Inventado.C/', 'C'),
+				tab('mailto:arbitro@example.org', 'Correo')
+			].join('')}</ul>`
+		)
+		expect((await parseTournamentPage(html)).related).toEqual([
+			{ key: 'open-inventado-a', label: 'A & B' },
+			{ key: 'open-inventado-b', label: 'B' },
+			{ key: 'Open-Inventado.C', label: 'C' }
+		])
+	})
 })
 
 describe('relatedGroup', () => {

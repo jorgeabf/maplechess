@@ -304,14 +304,21 @@ export async function parseTournamentPage(html: string): Promise<TournamentPage>
 }
 
 // Una clave de torneo de info64, como la de EventTournament: «slug» o «team/slug».
-const INFO64_KEY = /^(?:team\/)?[a-z0-9_-]+$/
+const INFO64_KEY = /^(?:team\/)?[^/?#:\s]+$/
 
-/** Las pestañas que llevan a un torneo de info64, sin repetir, con el rótulo limpio. */
+/**
+ * Las pestañas que llevan a un torneo de info64, sin repetir, con el rótulo
+ * limpio. El enlace se lee como la URL del calendario (parseEvents): sin el
+ * dominio, la consulta, el ancla ni las barras de los extremos. Si se perdiera
+ * la del propio torneo, relatedGroup no guardaría el grupo.
+ */
 function relatedTournaments(tabs: { href: string; label: string }[]): RelatedTournament[] {
 	const byKey = new Map<string, RelatedTournament>()
 	for (const tab of tabs) {
 		const key = decodeEntities(tab.href)
-			.replace(/^https?:\/\/(?:www\.)?info64\.org/, '')
+			.trim()
+			.replace(/[?#].*$/, '')
+			.replace(/^(?:https?:)?\/\/(?:www\.)?info64\.org(?=\/|$)/i, '')
 			.replace(/^\/+|\/+$/g, '')
 		if (INFO64_KEY.test(key) && !byKey.has(key)) byKey.set(key, { key, label: clean(tab.label) })
 	}

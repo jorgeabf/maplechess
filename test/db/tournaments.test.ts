@@ -376,6 +376,22 @@ describe('grupo del torneo', () => {
 		// Sólo los de la misma fuente.
 		expect(await getTournamentGroup(db, 'lichess', group)).toEqual([])
 	})
+
+	it('un rótulo que dice menores o parece sensible no se enseña: va el nombre', async () => {
+		const absoluto = await tournament('cto-inventado-absoluto-2026')
+		const navidad = await tournament('torneo-de-navidad-grupo-c')
+		const otro = await tournament('torneo-de-navidad-grupo-d')
+		const labelled = [
+			{ key: 'cto-inventado-absoluto-2026', label: 'Absoluto' },
+			{ key: 'torneo-de-navidad-grupo-c', label: 'Sub 12' },
+			{ key: 'torneo-de-navidad-grupo-d', label: 'Ciegos' }
+		]
+		expect(await getTournamentGroup(db, 'info64', labelled)).toEqual([
+			{ id: absoluto, label: 'Absoluto' },
+			{ id: navidad, label: 'torneo-de-navidad-grupo-c' },
+			{ id: otro, label: 'torneo-de-navidad-grupo-d' }
+		])
+	})
 })
 
 describe('groupLabels', () => {
@@ -405,6 +421,15 @@ describe('groupLabels', () => {
 	it('recorta menos, primero por el principio, si a alguno no le queda una palabra que diga algo', () => {
 		expect(groupLabels(['Grupo A', 'Grupo B'])).toEqual(['Grupo A', 'Grupo B'])
 		expect(groupLabels(['Open A 2026', 'Open B 2026'])).toEqual(['Open A', 'Open B'])
+		expect(groupLabels(['Torneo Sub 2000', 'Torneo Sub 1600'])).toEqual(['Sub 2000', 'Sub 1600'])
+	})
+
+	it('recorta menos si dos rótulos quedan iguales', () => {
+		expect(groupLabels(['CE de Veteranos', 'CE Veteranos', 'CE Absoluto'])).toEqual([
+			'CE de Veteranos',
+			'CE Veteranos',
+			'CE Absoluto'
+		])
 	})
 })
 

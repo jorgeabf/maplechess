@@ -506,12 +506,15 @@ export function selectPending(
  * por el nombre y la fecha de la página, es de menores: con keys sólo se sabía
  * el slug, sin fecha, y el calendario quita el último paréntesis del título,
  * que puede ser el de los años de nacimiento («Cat. A (2019-2018-2017)»).
+ * También si lo dice el rótulo de su pestaña en el grupo, que es otro nombre
+ * que pone el organizador y puede decir lo que el título calla («Sub 12»).
  */
 async function syncTournament(db: D1Database, candidate: EventTournament): Promise<SyncedTournament | null> {
 	const url = `${INFO64_URL}/${candidate.key}`
 	const page = await parseTournamentPage(await fetchText(url))
 	const startDate = page.startDate ?? validDate(candidate.firstRound)
-	if (isMinorsTournament(page.name, startDate)) {
+	const label = page.related.find((r) => r.key === candidate.key)?.label ?? ''
+	if (isMinorsTournament(page.name, startDate) || isMinorsTournament(label, startDate)) {
 		console.log(`[info64] ${candidate.key}: de menores por su página; no se guarda`)
 		return null
 	}
@@ -528,8 +531,12 @@ async function syncTournament(db: D1Database, candidate: EventTournament): Promi
 		syncedAt: new Date().toISOString(),
 		related: relatedGroup(page.related, candidate.key)
 	})
-	// Si lo parece, se apunta para revisarlo; hasta entonces se guarda como los demás.
-	if (looksSensitive(page.name)) await proposeSensitive(db, [{ source: SOURCE, key: candidate.key, name: page.name }])
+	// Si lo parece, por el nombre o por el rótulo, se apunta para revisarlo;
+	// hasta entonces se guarda como los demás.
+	if (looksSensitive(page.name) || looksSensitive(label)) {
+		const name = looksSensitive(page.name) ? page.name : `${page.name} (pestaña «${label}»)`
+		await proposeSensitive(db, [{ source: SOURCE, key: candidate.key, name }])
+	}
 	// En los torneos por equipos la página principal no trae jugadores: la
 	// plantilla se guarda en su propio paso (syncTeamRoster).
 	const kept = candidate.type === 'individual' && !(await replaceParticipations(db, id, page.players))

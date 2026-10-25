@@ -90,8 +90,9 @@ const indexable = isIndexableTournament(tournament.gamesCount, players)
 // La línea de resumen, de las filas ya leídas: «100 jugadores · 7 GM · 16 IM ·
 // ELO medio 2211». En uno por equipos, los equipos, los títulos de las
 // plantillas y la media del ELO medio de cada equipo, el de la clasificación.
-// Los propios de lichess no la llevan: sus jugadores son sólo los de sus
-// partidas, no los del torneo.
+// Los propios de lichess no la llevan: sus jugadores son sólo los de las
+// partidas de algún español, no los del torneo. Los de la FCA sí: su archivo
+// trae todas las partidas del torneo, aunque sin títulos.
 const teamsInField = standings ? standings.rows.length : teamCount
 const summary = fromLichess
 	? null

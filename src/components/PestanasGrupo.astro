@@ -48,11 +48,16 @@ const { tabs, current } = Astro.props
 	 * La raya de debajo es el primer fondo y no un borde: la lista recorta lo
 	 * que sale de su caja, y así el subrayado de la actual la tapa, como en
 	 * PestanasJugador.
+	 *
+	 * Por lo mismo, el anillo de foco va por dentro del enlace, que lleva un
+	 * relleno a los lados para no pisar el texto. El hueco entre pestañas es
+	 * el de PestanasJugador menos ese relleno, y el margen negativo deja la
+	 * primera a plomo con el título.
 	 */
 	ul {
 		display: flex;
-		gap: 0 var(--space-5);
-		margin: 0;
+		gap: 0 var(--space-4);
+		margin: 0 calc(-1 * var(--space-1));
 		padding: 0;
 		scroll-padding-inline: var(--space-5);
 		list-style: none;
@@ -76,6 +81,7 @@ const { tabs, current } = Astro.props
 		display: flex;
 		align-items: center;
 		min-block-size: 2.75rem;
+		padding-inline: var(--space-1);
 		border-block-end: 3px solid transparent;
 		color: var(--text-muted);
 		font-size: var(--text-s);
@@ -84,7 +90,6 @@ const { tabs, current } = Astro.props
 		white-space: nowrap;
 	}
 
-	/* La lista recorta lo que sale de ella: el anillo de foco va por dentro. */
 	a:focus-visible {
 		outline-offset: -2px;
 	}
