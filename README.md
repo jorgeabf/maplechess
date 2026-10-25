@@ -24,6 +24,13 @@
   <img src="https://img.shields.io/badge/Stockfish-19-1f4e79" alt="Stockfish 19">
 </p>
 
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/capturas/visor-oscuro.webp">
+    <img src="docs/capturas/visor-claro.webp" width="880" alt="El visor de MapleChess con una partida entre los grandes maestros Anton Guijarro y Gukesh: el tablero con la flecha de la mejor jugada, el campo «Tu jugada», las tres líneas de Stockfish y la lista de jugadas con figuras">
+  </picture>
+</p>
+
 ---
 
 Saber contra quién te toca en la próxima ronda, ver qué aperturas juega y dónde se separan de las tuyas, si suele apurarse de tiempo, repasar sus partidas con un motor y descargarlas en PGN. **Sin registro y sin anuncios.**
@@ -35,6 +42,23 @@ Saber contra quién te toca en la próxima ronda, ver qué aperturas juega y dó
 | **Prepara al rival** | Un dossier por color: su primera jugada, sus líneas principales, qué ha cambiado este año, cómo puntúa según el rival, sus apuros de tiempo y dónde te separas tú. |
 | **Analiza** | Visor con piezas propias, variantes, comentarios y relojes, en el que puedes probar tus propias jugadas y compartirlas con un enlace, y Stockfish 19 en el propio navegador. |
 | **Descarga** | PGN completos, con ELO, FIDE ID, ECO y apertura, de una partida, un torneo, un jugador o una búsqueda. |
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/capturas/portada-oscuro.webp">
+    <img src="docs/capturas/portada-claro.webp" width="260" alt="La portada en el móvil: «¿Contra quién juegas?», el buscador y los últimos torneos con partidas">
+  </picture>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/capturas/dossier-oscuro.webp">
+    <img src="docs/capturas/dossier-claro.webp" width="260" alt="El dossier en el móvil: su primera jugada con blancas, con el porcentaje y la puntuación de cada una, y sus líneas principales">
+  </picture>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/capturas/visor-movil-oscuro.webp">
+    <img src="docs/capturas/visor-movil-claro.webp" width="260" alt="El visor en el móvil, con una variante propia que sale de una línea de Stockfish, el campo «Tu jugada» y el análisis del motor">
+  </picture>
+</p>
+
+<p align="center"><sub>En el móvil: la portada, el dossier para preparar a un rival y el visor con una variante propia.</sub></p>
 
 ## Qué ofrece
 
@@ -242,6 +266,7 @@ curl -X POST localhost:4321/api/admin/sync -H "Authorization: Bearer $TOKEN" \
 ```
 migrations/        Esquema de D1
 data/openings/     Aperturas de lichess (TSV, CC0)
+docs/capturas/     Capturas de este README, en claro y en oscuro
 scripts/           Copia del motor, aperturas, iconos y tarjeta para compartir, rondas de lichess, piezas del tablero y fuentes de los titulares y de las figuras
 src/worker.ts      Entrypoint: web, crons y Workflows
 src/ingest/        Ingesta: info64, lista FIDE, lichess, el archivo de Cantabria y escritura en D1
