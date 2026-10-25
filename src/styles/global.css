@@ -575,6 +575,17 @@
 	}
 
 	/*
+	 * Un enlace en la fila («Quitar filtros», «Mi ficha»), también a la altura
+	 * de los campos: alineado por abajo, su texto quedaba más bajo que el del
+	 * botón de al lado.
+	 */
+	.form-row > a {
+		display: inline-flex;
+		align-items: center;
+		min-height: var(--control-height);
+	}
+
+	/*
 	 * «Más filtros»: se despliega sin JavaScript, con el color de lo que se
 	 * pulsa. En una fila de campos va siempre en su propia línea, después de
 	 * «Buscar», que se queda junto a los campos principales.

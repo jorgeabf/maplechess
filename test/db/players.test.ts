@@ -1,10 +1,12 @@
 import { env } from 'cloudflare:workers'
 import { beforeEach, describe, expect, it } from 'vitest'
-import { upsertTournament } from '../../src/ingest/repo'
+import { replaceParticipations, upsertTournament } from '../../src/ingest/repo'
 import {
 	FIDE_LIST_KEY,
+	fideIdQuery,
 	findPlayersByName,
 	getPlayer,
+	hasProfile,
 	getRanking,
 	mayBeMinor,
 	PLAYER_ORDER,
@@ -188,6 +190,18 @@ describe('searchPlayers', () => {
 		expect((await getPlayer(db, 9000003, 2026))?.birthYear).toBe(2007)
 	})
 
+	it('un FIDE ID tiene ficha si está en la lista española o en algún torneo, como en getPlayer', async () => {
+		const tournament = (await db.prepare('SELECT id FROM tournaments').first<{ id: number }>())!.id
+		await replaceParticipations(db, tournament, [
+			{ startRank: 1, team: null, title: null, name: 'Extranjero Inventado, Otro', fed: 'FRA', rating: null, fideId: 9100001 }
+		])
+		expect(await hasProfile(db, 9000003)).toBe(true)
+		expect(await hasProfile(db, 9100001)).toBe(true)
+		expect(await hasProfile(db, 9100002)).toBe(false)
+		expect(await getPlayer(db, 9100001)).not.toBeNull()
+		expect(await getPlayer(db, 9100002)).toBeNull()
+	})
+
 	it('la ficha dice quién puede ser menor; sin año, como un adulto', async () => {
 		await db.batch([
 			db.prepare('UPDATE players SET birth_year = 2008 WHERE fide_id = 9000001'),
@@ -198,6 +212,18 @@ describe('searchPlayers', () => {
 		expect(await minor(9000001, 2027)).toBe(false)
 		expect(await minor(9000003, 2026)).toBe(false)
 		expect(await minor(9000002, 2026)).toBe(false)
+	})
+})
+
+describe('fideIdQuery', () => {
+	it('sólo cifras, de 4 a 10, es un FIDE ID', () => {
+		expect(fideIdQuery('2285525')).toBe(2285525)
+		expect(fideIdQuery('1234')).toBe(1234)
+		expect(fideIdQuery('123')).toBeNull()
+		expect(fideIdQuery('12345678901')).toBeNull()
+		expect(fideIdQuery('garcia 2011')).toBeNull()
+		expect(fideIdQuery('22 85525')).toBeNull()
+		expect(fideIdQuery('0000')).toBeNull()
 	})
 })
 

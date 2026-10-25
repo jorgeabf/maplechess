@@ -52,10 +52,28 @@ describe('tournamentTerms', () => {
 
 	it('las demás palabras, como en prefixTerms, en el nombre o en la ciudad', () => {
 		expect(tournamentTerms('open lugo 2026')).toEqual({
-			text: '"open"* "2026"*',
+			text: '"open"* AND "2026"*',
 			places: [place(['27'], [], '"lugo"*', '"lugo"* OR "lucense"*')]
 		})
-		expect(tournamentTerms('open gijon')).toEqual({ text: '"open"* "gijon"*', places: [] })
+		expect(tournamentTerms('open gijon')).toEqual({ text: '"open"* AND "gijon"*', places: [] })
 		expect(tournamentTerms('a')).toBeNull()
+	})
+
+	it('los torneos internacionales, también por su nombre en inglés, en singular y en plural', () => {
+		expect(tournamentTerms('Campeonato Europeo')?.text).toBe('"campeonato"* AND ("europeo"* OR "europe"*)')
+		expect(tournamentTerms('mundiales')?.text).toBe('("mundiales"* OR "world"*)')
+		expect(tournamentTerms('olimpiada')?.text).toBe('("olimpiada"* OR "olympiad"*)')
+		expect(tournamentTerms('copas galicia')).toEqual({
+			text: '("copas"* OR "cup"*)',
+			places: [place([], ['12'], '"galicia"*', '"galicia"* OR "gallego"* OR "gallega"* OR "galego"* OR "galega"*')]
+		})
+		// «ce» no: como prefijo, sería también «Cervera».
+		expect(tournamentTerms('ce')?.text).toBe('"ce"*')
+	})
+
+	it('sólo las palabras de la lista tienen equivalente, no las propiedades de un objeto', () => {
+		// Con un objeto, EQUIVALENTS['constructor'] era la función Object, también en plural.
+		expect(tournamentTerms('constructor')?.text).toBe('"constructor"*')
+		expect(tournamentTerms('constructores')?.text).toBe('"constructores"*')
 	})
 })

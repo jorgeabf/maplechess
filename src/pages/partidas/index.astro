@@ -1,6 +1,7 @@
 ---
 import { env } from 'cloudflare:workers'
 import Emparejamientos from '../../components/Emparejamientos.astro'
+import FiltrosPlegables from '../../components/FiltrosPlegables.astro'
 import GamesTable from '../../components/GamesTable.astro'
 import Icon from '../../components/Icon.astro'
 import Pagination from '../../components/Pagination.astro'
@@ -10,6 +11,7 @@ import { addDays, madridDate } from '../../lib/dates'
 import { exportLimit, getTopRecentGames, searchGames } from '../../lib/db/games'
 import { getTopUpcomingPairings } from '../../lib/db/pairings'
 import { formatDate, formatNumber } from '../../lib/format'
+import { timeClassSummary } from '../../lib/options'
 import { gameFilters, gameSearchKind } from '../../lib/params'
 
 const params = Astro.url.searchParams
@@ -36,57 +38,112 @@ pgnQuery.delete('p')
 // La descarga lleva las mismas que la búsqueda: con «más de 1.000», las 1.000 primeras.
 const pgnLimit = exportLimit(filters)
 const advancedOpen = Boolean(filters.eco || filters.from || filters.to || filters.result || filters.timeClass)
+// Lo que no es el jugador: «Quitar filtros» lo quita todo menos él.
+const filtered = advancedOpen || filters.color !== 'any' || Boolean(filters.opponent || filters.tournamentId)
+const unfiltered = filters.player ? `/partidas?${new URLSearchParams({ jugador: filters.player })}` : '/partidas'
+// En la pestaña y en el historial, la búsqueda: «Partidas: anton guijarro contra …».
+const searchedNames = [filters.player, filters.opponent && `contra ${filters.opponent}`].filter(Boolean).join(' ')
+// Con resultados en la página, el formulario se pliega en el móvil y el resumen
+// dice lo buscado. Sin nada que decir (sólo ?torneo=) o sin filas (una página
+// de más), no.
+const RESULT_SUMMARY = {
+	'1-0': 'resultado 1-0',
+	'1/2-1/2': 'resultado ½-½',
+	'0-1': 'resultado 0-1',
+	win: 'ganadas',
+	draw: 'tablas',
+	loss: 'perdidas'
+} as const
+const searchSummary = [
+	filters.player,
+	filters.color !== 'any' && `con ${filters.color === 'white' ? 'blancas' : 'negras'}`,
+	filters.opponent && `contra ${filters.opponent}`,
+	filters.result && RESULT_SUMMARY[filters.result],
+	filters.timeClass && timeClassSummary(filters.timeClass),
+	filters.eco && `ECO ${filters.eco}`,
+	filters.from && `desde el ${formatDate(filters.from)}`,
+	filters.to && `hasta el ${formatDate(filters.to)}`
+].filter((part): part is string => Boolean(part))
 ---
 
-<Base title="Partidas" section="partidas" noindex={kind !== 'empty'}>
+<Base title={searchedNames ? `Partidas: ${searchedNames}` : 'Partidas'} section="partidas" noindex={kind !== 'empty'}>
 	<h1>Partidas</h1>
-	<form method="get" role="search" class="filters form-row">
-		<label class="grow">
-			Jugador
-			<input name="jugador" type="search" value={filters.player} placeholder="Apellidos o nombre" autocomplete="off" />
-		</label>
-		<label>
-			Con
-			<select name="color">
-				<option value="any">Cualquier color</option>
-				<option value="white" selected={filters.color === 'white'}>Blancas</option>
-				<option value="black" selected={filters.color === 'black'}>Negras</option>
-			</select>
-		</label>
-		<label class="grow">
-			Rival
-			<input name="rival" type="search" value={filters.opponent} placeholder="Opcional" autocomplete="off" />
-		</label>
-		<button class="button" type="submit">Buscar</button>
-		<details open={advancedOpen}>
-			<summary>Más filtros</summary>
-			<div class="form-row">
-				<label>
-					Resultado
-					<select name="resultado">
-						<option value="">Cualquiera</option>
-						<option value="1-0" selected={filters.result === '1-0'}>1-0</option>
-						<option value="1/2-1/2" selected={filters.result === '1/2-1/2'}>½-½</option>
-						<option value="0-1" selected={filters.result === '0-1'}>0-1</option>
-					</select>
-				</label>
-				<RitmoSelect value={filters.timeClass} />
-				<label>
-					ECO
-					<input name="eco" value={filters.eco} placeholder="B90, B9…" size="6" maxlength="3" pattern="[A-Ea-e][0-9]{0,2}" />
-				</label>
-				<label>
-					Desde
-					<input name="desde" type="date" value={filters.from} />
-				</label>
-				<label>
-					Hasta
-					<input name="hasta" type="date" value={filters.to} />
-				</label>
-			</div>
-		</details>
-		{filters.tournamentId && <input type="hidden" name="torneo" value={filters.tournamentId} />}
-	</form>
+	<FiltrosPlegables label="Búsqueda" summary={searchSummary} fold={searchSummary.length > 0 && Boolean(result?.rows.length)}>
+		<form method="get" role="search" class="filters form-row">
+			<label class="grow">
+				Jugador
+				<input
+					name="jugador"
+					type="search"
+					value={filters.player}
+					placeholder="Apellidos o nombre"
+					autocomplete="off"
+					autocorrect="off"
+					spellcheck="false"
+					minlength="2"
+				/>
+			</label>
+			<label>
+				Con
+				<select name="color">
+					<option value="any">Cualquier color</option>
+					<option value="white" selected={filters.color === 'white'}>Blancas</option>
+					<option value="black" selected={filters.color === 'black'}>Negras</option>
+				</select>
+			</label>
+			<label class="grow">
+				Rival
+				<input
+					name="rival"
+					type="search"
+					value={filters.opponent}
+					placeholder="Opcional"
+					autocomplete="off"
+					autocorrect="off"
+					spellcheck="false"
+					minlength="2"
+				/>
+			</label>
+			<button class="button" type="submit">Buscar</button>
+			{filtered && <a href={unfiltered}>Quitar filtros</a>}
+			<details open={advancedOpen}>
+				<summary>Más filtros</summary>
+				<div class="form-row">
+					<label>
+						Resultado
+						<select name="resultado">
+							<option value="">Cualquiera</option>
+							<option value="1-0" selected={filters.result === '1-0'}>1-0</option>
+							<option value="1/2-1/2" selected={filters.result === '1/2-1/2'}>½-½</option>
+							<option value="0-1" selected={filters.result === '0-1'}>0-1</option>
+						</select>
+					</label>
+					<RitmoSelect value={filters.timeClass} />
+					<label>
+						ECO
+						<input
+							name="eco"
+							value={filters.eco}
+							placeholder="B90, B9…"
+							size="6"
+							maxlength="3"
+							pattern="[A-Ea-e][0-9]{0,2}"
+							title="Una letra de la A a la E y hasta dos cifras, como B90"
+						/>
+					</label>
+					<label>
+						Desde
+						<input name="desde" type="date" value={filters.from} />
+					</label>
+					<label>
+						Hasta
+						<input name="hasta" type="date" value={filters.to} />
+					</label>
+				</div>
+			</details>
+			{filters.tournamentId && <input type="hidden" name="torneo" value={filters.tournamentId} />}
+		</form>
+	</FiltrosPlegables>
 
 	{
 		upcomingGroups.length > 0 && (
@@ -123,9 +180,9 @@ const advancedOpen = Boolean(filters.eco || filters.from || filters.to || filter
 	{
 		result && (
 			<>
-				<div class="result-head">
-					<Pagination page={result.page} pages={result.pages} total={result.total} capped={result.capped} noun={['partida', 'partidas']} />
-					{result.total > 0 && (
+				{result.total > 0 && (
+					<div class="result-head">
+						<Pagination page={result.page} pages={result.pages} total={result.total} capped={result.capped} noun={['partida', 'partidas']} />
 						<a class="button secondary" href={`/partidas.pgn?${pgnQuery}`} download>
 							<Icon name="download" />
 							<span>
@@ -135,10 +192,19 @@ const advancedOpen = Boolean(filters.eco || filters.from || filters.to || filter
 								)}
 							</span>
 						</a>
-					)}
-				</div>
+					</div>
+				)}
 				{result.rows.length > 0 ? <GamesTable games={result.rows} /> : <p>No hay partidas con esos filtros.</p>}
-				<Pagination page={result.page} pages={result.pages} total={result.total} capped={result.capped} noun={['partida', 'partidas']} />
+				{result.pages > 1 && (
+					<Pagination
+						page={result.page}
+						pages={result.pages}
+						total={result.total}
+						capped={result.capped}
+						noun={['partida', 'partidas']}
+						refine="Hay más: afina con el rival, el ritmo o las fechas."
+					/>
+				)}
 			</>
 		)
 	}

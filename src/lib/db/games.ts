@@ -215,6 +215,19 @@ export async function searchGames(db: D1Database, f: GameFilters, page: number):
 	return toCappedPage(rows, count, at)
 }
 
+/**
+ * Cuántas partidas juega alguien con ese nombre, con el tope de las búsquedas
+ * (countSql): para ofrecerlas cuando /jugadores no lo encuentra (es de otra
+ * federación o el apellido tiene una errata). Una fila por coincidencia de
+ * games_fts, como mucho COUNT_LIMIT + 1. Null si el nombre no tiene palabras.
+ */
+export async function countGamesByName(db: D1Database, name: string): Promise<{ total: number; capped: boolean } | null> {
+	const names = gamesNameQuery(name, '', 'any')
+	if (!names) return null
+	const { n } = (await db.prepare(countSql('FROM games_fts WHERE games_fts MATCH ?1')).bind(names).first<{ n: number }>())!
+	return n > COUNT_LIMIT ? { total: COUNT_LIMIT, capped: true } : { total: n, capped: false }
+}
+
 export interface RoundGames {
 	round: number
 	games: number

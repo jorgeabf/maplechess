@@ -5,6 +5,7 @@ import BuscadorJugadores from '../components/BuscadorJugadores.astro'
 import Icon from '../components/Icon.astro'
 import Logo from '../components/Logo.astro'
 import { CC_BY, CC_BY_SA, SOURCE_CODE } from '../lib/licenses'
+import { ME_COOKIE, resolveMe } from '../lib/me'
 import { THEME_COLOR } from '../lib/theme-color'
 import { canonicalHref } from '../lib/urls'
 import '../styles/global.css'
@@ -44,6 +45,12 @@ const nav = [
 	{ href: '/partidas', label: 'Partidas', id: 'partidas' },
 	{ href: '/torneos', label: 'Torneos', id: 'torneos' }
 ] as const
+// La pestaña de la sección: «page» en la página de la sección y «true» en lo
+// que cuelga de ella (una ficha, una partida), que no es esa página.
+const path = Astro.url.pathname.replace(/(.)\/$/, '$1')
+const current = (item: (typeof nav)[number]) => (section !== item.id ? undefined : path === item.href ? 'page' : 'true')
+// Quien ha dicho quién es (cookie yo) tiene su ficha en el panel de la lupa. Sin D1.
+const me = resolveMe(null, Astro.cookies.get(ME_COOKIE)?.value).fideId
 ---
 
 <!doctype html>
@@ -106,7 +113,7 @@ const nav = [
 							{
 								nav.map((item) => (
 									<li>
-										<a href={item.href} aria-current={section === item.id ? 'page' : undefined}>
+										<a href={item.href} aria-current={current(item)}>
 											{item.label}
 										</a>
 									</li>
@@ -115,7 +122,7 @@ const nav = [
 						</ul>
 					</nav>
 					{/* Popover nativo: se abre sin JS, con el campo enfocado, y se cierra con Esc o tocando fuera. */}
-					<button class="search-toggle" type="button" popovertarget="buscar-jugador">
+					<button class="search-toggle" type="button" popovertarget="buscar-jugador" title="Buscar jugador">
 						<Icon name="search" />
 						<span class="visually-hidden">Buscar jugador</span>
 					</button>
@@ -123,6 +130,7 @@ const nav = [
 						<button class="button secondary" type="button" popovertarget="buscar-jugador" popovertargetaction="hide">
 							Cerrar
 						</button>
+						{me && <a class="mine" href={`/jugadores/${me}`}>Mi ficha</a>}
 					</BuscadorJugadores>
 					{/* Lo cierra también cuando el foco sale de él (src/client/panel-busqueda.ts). */}
 					<script src="../client/panel-busqueda.ts"></script>
@@ -266,6 +274,11 @@ const nav = [
 	 * La lista es la zona que se desplaza. Por la izquierda llega hasta el
 	 * borde de la pantalla (margen negativo) y su padding deja el texto de la
 	 * primera pestaña a plomo con el logo. Por la derecha acaba en la lupa.
+	 *
+	 * Si no caben (a 250 px, que es la letra al 150 % en el móvil), una sombra
+	 * en el borde dice que hay más por ese lado, como en .table-wrap
+	 * (global.css): sombras fijas y, encima, tapas del color de la cabecera que
+	 * se desplazan con la lista y las cubren en cada extremo.
 	 */
 	.tabs ul {
 		display: flex;
@@ -273,10 +286,18 @@ const nav = [
 		margin-inline-start: calc(-1 * var(--space-4));
 		padding: 0;
 		padding-inline-start: calc(var(--space-4) - var(--space-3));
+		/* Al abrirse en la pestaña activa (scroll-initial-target), con el mismo hueco:
+		   si no, Chromium la pega al borde y la primera se mueve 4 px. */
+		scroll-padding-inline-start: calc(var(--space-4) - var(--space-3));
 		list-style: none;
 		overflow-x: auto;
 		overscroll-behavior-x: contain;
 		scrollbar-width: none;
+		background:
+			linear-gradient(to right, var(--surface) var(--space-3), transparent) left / var(--space-6) 100% no-repeat local,
+			linear-gradient(to left, var(--surface) var(--space-3), transparent) right / var(--space-6) 100% no-repeat local,
+			linear-gradient(to right, var(--border-strong), transparent) left / var(--space-3) 100% no-repeat,
+			linear-gradient(to left, var(--border-strong), transparent) right / var(--space-3) 100% no-repeat;
 	}
 
 	.tabs li {
@@ -307,9 +328,15 @@ const nav = [
 		color: var(--text);
 	}
 
-	.tabs a[aria-current='page'] {
+	/*
+	 * La sección actual, también desde una ficha o una partida. Si las pestañas
+	 * no caben, la lista se abre desplazada hasta ella (en el eje de la lista,
+	 * lo justo para verla): sin la propiedad, empieza por la primera.
+	 */
+	.tabs a[aria-current] {
 		border-block-end-color: var(--accent);
 		color: var(--accent);
+		scroll-initial-target: nearest;
 	}
 
 	/*
@@ -356,9 +383,16 @@ const nav = [
 			border-color: Canvas;
 		}
 
-		.tabs a[aria-current='page'] {
+		.tabs a[aria-current] {
 			border-block-end-color: Highlight;
 		}
+	}
+
+	/* «Mi ficha», en la fila de los botones del panel de la lupa, al final. */
+	.mine {
+		align-self: center;
+		margin-inline-start: auto;
+		font-size: var(--text-s);
 	}
 
 	main {

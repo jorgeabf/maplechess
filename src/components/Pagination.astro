@@ -13,9 +13,11 @@ interface Props {
 	anchor?: string
 	/** El recuento llegó al tope (Page.capped): hay más de `total`, y las páginas acaban ahí. */
 	capped?: boolean
+	/** Cómo afinar la búsqueda: se dice en la última página de una con tope, que no llega a las demás. */
+	refine?: string
 }
 
-const { page, pages, total, noun, anchor, capped = false } = Astro.props
+const { page, pages, total, noun, anchor, capped = false, refine } = Astro.props
 const url = Astro.url
 const link = (p: number) => `${withParams(url, { p: p === 1 ? null : p })}${anchor ? `#${anchor}` : ''}`
 ---
@@ -55,6 +57,7 @@ const link = (p: number) => `${withParams(url, { p: p === 1 ? null : p })}${anch
 		)
 	}
 </nav>
+{capped && refine && page === pages && <p class="note">{refine}</p>}
 
 <style>
 	.pagination {

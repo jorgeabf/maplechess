@@ -2,7 +2,7 @@
 // Buscador de jugadores: formulario GET a /jugadores, sin JS. Lo usan el panel
 // de la cabecera (Base.astro) y el 404; la portada tiene el suyo, más grande.
 // Los demás atributos (id, popover…) van al <form>, y el hueco, tras «Buscar»,
-// es para lo que añada quien lo usa (el «Cerrar» del panel).
+// es para lo que añada quien lo usa (el «Cerrar» y «Mi ficha» del panel).
 import type { HTMLAttributes } from 'astro/types'
 
 interface Props extends HTMLAttributes<'form'> {
@@ -24,8 +24,11 @@ const { autofocus = false, ...rest } = Astro.props
 			<input
 				name="q"
 				type="search"
-				placeholder="Apellidos o nombre"
+				placeholder="Nombre o FIDE ID"
 				autocomplete="off"
+				autocorrect="off"
+				spellcheck="false"
+				minlength="2"
 				enterkeyhint="search"
 				required
 				autofocus={autofocus}

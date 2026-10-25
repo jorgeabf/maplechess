@@ -1,7 +1,7 @@
 // Consultas de torneos.
 import { madridYear } from '../dates'
 import { tournamentTerms } from './fts'
-import { offset, PAGE_SIZE, toPage, type Page } from './pagination'
+import { COUNT_LIMIT, countSql, offset, PAGE_SIZE, toPage, type Page } from './pagination'
 import { hasDossierSql, minorsBornSince } from './players'
 
 export interface TournamentRow {
@@ -63,15 +63,12 @@ export const TOURNAMENT_ORDER = `ORDER BY ${NEWEST_FIRST}`
 const SOONEST_FIRST = 't.start_date, t.id'
 
 /**
- * Torneos ya empezados (los que empiezan `today` o antes) o, con `f.upcoming`,
- * los próximos. Da también cuántos próximos cumplen los filtros, para su
- * pestaña: son pocos (los anunciados), así que contarlos es barato.
+ * Lo que filtra la búsqueda de torneos, sin la pestaña: las palabras y los
+ * sitios (tournamentTerms), las fechas y la modalidad. Da también `p`, que
+ * añade un parámetro, y `fts`, que busca en tournaments_fts, para lo que
+ * venga detrás.
  */
-export async function searchTournaments(
-	db: D1Database,
-	f: TournamentFilters,
-	today: string
-): Promise<Page<TournamentListRow> & { upcoming: number }> {
+function tournamentsWhere(f: Pick<TournamentFilters, 'q' | 'from' | 'to' | 'type'>) {
 	const where: string[] = []
 	const params: unknown[] = []
 	const p = (value: unknown) => {
@@ -92,6 +89,20 @@ export async function searchTournaments(
 	if (f.from) where.push(`t.end_date >= ${p(f.from)}`)
 	if (f.to) where.push(`t.start_date <= ${p(f.to)}`)
 	if (f.type) where.push(`t.type = ${p(f.type)}`)
+	return { where, params, p, fts, terms }
+}
+
+/**
+ * Torneos ya empezados (los que empiezan `today` o antes) o, con `f.upcoming`,
+ * los próximos. Da también cuántos próximos cumplen los filtros, para su
+ * pestaña: son pocos (los anunciados), así que contarlos es barato.
+ */
+export async function searchTournaments(
+	db: D1Database,
+	f: TournamentFilters,
+	today: string
+): Promise<Page<TournamentListRow> & { upcoming: number }> {
+	const { where, params, p, fts, terms } = tournamentsWhere(f)
 	const filtered = where.length > 0 || f.withGames
 	const day = p(today)
 	const upcomingSql = `WHERE ${[...where, `t.start_date > ${day}`].join(' AND ')}`
@@ -138,6 +149,24 @@ export async function searchTournaments(
 	const upcoming = count(upcomingCount)
 	const total = f.upcoming ? upcoming : filtered ? count(startedCount) : count(startedCount) - upcoming
 	return { ...toPage(rows.results as TournamentListRow[], total, f.page), upcoming }
+}
+
+/**
+ * Cuántos torneos ya empezados encuentra /torneos?q=`name`, lo mismo que su
+ * pestaña por defecto (con sitios y equivalencias), con el tope de las
+ * búsquedas (countSql): para ofrecerlos cuando /jugadores no encuentra a nadie
+ * con ese nombre. Null si el nombre no tiene palabras.
+ */
+export async function countTournamentsByName(
+	db: D1Database,
+	name: string,
+	today: string
+): Promise<{ total: number; capped: boolean } | null> {
+	const { where, params, p, terms } = tournamentsWhere({ q: name, from: '', to: '', type: null })
+	if (!terms) return null
+	const started = [...where, `t.start_date <= ${p(today)}`].join(' AND ')
+	const { n } = (await db.prepare(countSql(`FROM tournaments t WHERE ${started}`)).bind(...params).first<{ n: number }>())!
+	return n > COUNT_LIMIT ? { total: COUNT_LIMIT, capped: true } : { total: n, capped: false }
 }
 
 export async function getTournament(db: D1Database, id: number): Promise<TournamentRow | null> {
