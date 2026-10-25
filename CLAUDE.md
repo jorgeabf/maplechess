@@ -42,6 +42,11 @@ MapleChess es un buscador de jugadores españoles (lista FIDE, federación ESP),
     - Pesa 1,2 KB: Vite la incrusta en el CSS como `data:`, de ahí el `font-src 'self' data:` de la CSP. Con `font-display: block` no asoma la letra. El script falla si llega a 4 KB.
     - Las figuras salen de las piezas (`scripts/piezas/figuras/`). Si cambia una, `node scripts/piezas.mjs <pieza>` y `python scripts/fuente-figuras.py`.
   - Flechas: la mejor jugada del motor, en `paleBlue` en el visor y en el explorador; la vista previa (una jugada del explorador, la línea del motor señalada), en `paleGrey`. Nunca en verde, que es el de los resultados.
+  - **Tablero pintado en el servidor, en el explorador** (`components/visor/Tablero.astro` y `src/lib/chess/tablero.ts`; decidido con Jorge el 25-oct-2026): el explorador pinta la posición con el mismo marcado que chessground 10.4 (`cg-board`, `piece`, `square` y `coords`). Cada pieza lleva un `transform: translate` en tantos por ciento de su casilla, que la CSP admite en `style-src-attr`. Después chessground se monta en el mismo `.board`.
+    - Así se ve desde el primer pintado, también sin JavaScript. Cada jugada es una página nueva, y en un móvil lento el tablero tardaba de 0,2 a 0,9 s en aparecer en cada clic.
+    - En frío, el primer pintado llega unos 0,15 s más tarde, porque las SVG de las piezas se preparan antes de pintar.
+    - Si chessground cambia de versión, hay que comprobar que su marcado siga siendo el mismo.
+    - En el visor no se usa: el servidor no ve el `#j` del enlace (ver «Antes de montarse chessground»).
 - **Aperturas:** TSV de lichess (CC0) en `data/openings/`. `pnpm openings` regenera `src/lib/chess/openings.json`.
 
 ## Estructura
