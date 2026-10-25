@@ -60,8 +60,7 @@ const details = new Map((await getGamesByIds(env.DB, [...plies.keys()])).map((g)
 const rows = listed.rows.map((g) => details.get(g.id)).filter((g): g is GameListRow => g !== undefined)
 
 // Enlaces: la página siempre vuelve a la primera de partidas. Blancas y
-// "todas" son los valores por defecto y no van en la URL. En el enlace al
-// dossier el color sí: sin él, abriría con el de vuestra partida.
+// "todas" son los valores por defecto y no van en la URL.
 const link = (changes: Record<string, string | null>) => withParams(Astro.url, { ...changes, p: null })
 const lineHref = (ucis: string[]) => link({ jugadas: ucis.join(' ') || null })
 const colors: { id: RepertoireSearch['color']; label: string }[] = [
@@ -70,11 +69,6 @@ const colors: { id: RepertoireSearch['color']; label: string }[] = [
 ]
 const eloFiltered = minElo !== null || maxElo !== null
 const filtered = period !== '' || timeClass !== null || eloFiltered
-const dossierHref = withParams(new URL(`/jugadores/${fideId}/preparar`, Astro.url), {
-	color,
-	periodo: period || null,
-	ritmo: timeClass
-})
 const pgnHref = withParams(new URL(`/jugadores/${fideId}/repertorio.pgn${Astro.url.search}`, Astro.url), { p: null })
 
 const name = displayName(player.name)
@@ -103,29 +97,10 @@ const summary = [
 	description={`Aperturas de ${name} (FIDE ${fideId}) con ${colorText}: jugadas, resultados y partidas.`}
 	noindex
 >
-	<CabeceraJugador fideId={fideId} name={name} title={title} own={own}>
+	<CabeceraJugador fideId={fideId} title={title} view="repertorio" filters={{ color, period, timeClass }} own={own}>
 		{formatGames(playerGames.length)} con {colorText}
 		{filterText}
-		{games.length < playerGames.length && ` (${formatNumber(games.length)} con jugadas)`}.{' '}
-		{
-			own ? (
-				<>
-					Lo que ven tus rivales, resumido en{' '}
-					<a href={dossierHref} rel="nofollow">
-						Mi dossier
-					</a>
-					.
-				</>
-			) : (
-				<>
-					Resumen para preparar la partida en su{' '}
-					<a href={dossierHref} rel="nofollow">
-						dossier
-					</a>
-					.
-				</>
-			)
-		}
+		{games.length < playerGames.length && ` (${formatNumber(games.length)} con jugadas)`}.
 	</CabeceraJugador>
 
 	<FiltrosPlegables summary={summary}>

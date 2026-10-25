@@ -220,7 +220,7 @@ alternatives.push({
 	description={`Dossier de ${name} (FIDE ${fideId}) con ${colorText}: líneas principales, cambios y resultados.`}
 	noindex
 >
-	<CabeceraJugador fideId={fideId} name={name} title={title} own={own}>
+	<CabeceraJugador fideId={fideId} title={title} view="preparar" filters={{ color, period, timeClass }} own={own}>
 		{own && 'Lo que ven tus rivales al prepararse contra ti: '}
 		{formatCount(games.length, `partida ${own ? 'tuya' : 'suya'}`, `partidas ${yours}`)} con {colorText}{filterText}
 		{withMoves.length < games.length && ` (${formatNumber(withMoves.length)} con jugadas)`}
@@ -632,6 +632,18 @@ alternatives.push({
 	.links {
 		display: inline-flex;
 		gap: var(--space-3);
+	}
+
+	/* «PGN» con el icono de descargar delante, a la altura de su texto. */
+	.download {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--space-1);
+	}
+
+	.download :global(.icon) {
+		inline-size: 1em;
+		block-size: 1em;
 	}
 
 	.small {

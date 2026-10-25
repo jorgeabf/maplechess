@@ -6,6 +6,7 @@ import Icon from '../../components/Icon.astro'
 import IndicePagina from '../../components/IndicePagina.astro'
 import RitmoSelect from '../../components/RitmoSelect.astro'
 import Pagination from '../../components/Pagination.astro'
+import PestanasJugador from '../../components/PestanasJugador.astro'
 import ProximasPartidas from '../../components/ProximasPartidas.astro'
 import TorneosJugador from '../../components/TorneosJugador.astro'
 import Base from '../../layouts/Base.astro'
@@ -179,24 +180,21 @@ const pageIndex = [
 		</dl>
 	</header>
 
+	{hasDossier && <PestanasJugador fideId={fideId} current="ficha" own={own} />}
+
 	<IndicePagina items={pageIndex} />
 
 	<ProximasPartidas class="upcoming" games={upcoming} you={own} owner={{ fideId, name, hasDossier }} />
 
 	{
 		hasDossier && (
-			<nav class="prepare" aria-label={own ? 'Mi dossier y mi repertorio' : 'Preparar una partida'}>
+			<nav class="prepare" aria-label={own ? 'Mi dossier' : 'Preparar una partida'}>
 				<span class="muted">{own ? 'Mi dossier:' : 'Preparar una partida:'}</span>
 				{dossierLinks.map((l) => (
 					<a class:list={['button', { secondary: upcomingPrepares }]} href={dossierHref(fideId, l.color)} rel="nofollow">
 						{l.label}
 					</a>
 				))}
-				<span class="repertoire">
-					<span class="muted">{own ? 'Mi repertorio:' : 'Su repertorio:'}</span>
-					<a href={`/jugadores/${fideId}/repertorio`} rel="nofollow">con blancas</a>
-					<a href={`/jugadores/${fideId}/repertorio?color=black`} rel="nofollow">con negras</a>
-				</span>
 			</nav>
 		)
 	}
@@ -259,12 +257,25 @@ const pageIndex = [
 									<th scope="col" class="end">Puntuación</th>
 								</tr>
 							</thead>
-							{/* Un grupo por color; cada apertura enlaza a sus partidas con ese color y ese ECO. */}
+							{/*
+								Un grupo por color; cada apertura enlaza a sus partidas con ese
+								color y ese ECO, y el grupo, a su repertorio con ese color: aquí el
+								color es el suyo, como en el repertorio. En la fila de preparar es
+								el tuyo, y «con blancas» llevaba a sitios opuestos.
+							*/}
 							{openingGroups.map((group) => (
 								<tbody>
 									<tr class="group-row">
 										<th scope="rowgroup" colspan="3">
-											Con {colorName[group.color].toLowerCase()}
+											<span class="group-head">
+												<span>Con {colorName[group.color].toLowerCase()}</span>
+												{hasDossier && (
+													<a href={`/jugadores/${fideId}/repertorio${group.color === 'black' ? '?color=black' : ''}`} rel="nofollow">
+														Explorar {own ? 'mi' : 'su'} repertorio
+														<span class="visually-hidden"> con {colorName[group.color].toLowerCase()}</span>
+													</a>
+												)}
+											</span>
 										</th>
 									</tr>
 									{group.openings.map((o) => (
@@ -468,18 +479,9 @@ const pageIndex = [
 		font-size: var(--text-s);
 	}
 
-	/* Va junta: si no cabe en la línea, baja entera; si ni sola cabe (con la
-	   letra muy grande), parte entre sus enlaces, nunca dentro de uno. */
-	.repertoire {
-		display: inline-flex;
-		flex-wrap: wrap;
-		gap: var(--space-2);
-		white-space: nowrap;
-	}
-
 	/*
-	 * En el móvil, el rótulo, los dos botones en dos columnas iguales y el
-	 * repertorio debajo: en una fila que se partía quedaba un botón solo.
+	 * En el móvil, el rótulo y debajo los dos botones, en dos columnas
+	 * iguales: en una fila que se partía quedaba un botón solo.
 	 */
 	@media (width < 40rem) {
 		.prepare {
@@ -487,8 +489,7 @@ const pageIndex = [
 			grid-template-columns: repeat(2, minmax(0, 1fr));
 		}
 
-		.prepare > .muted,
-		.repertoire {
+		.prepare > .muted {
 			grid-column: 1 / -1;
 		}
 	}
@@ -563,6 +564,20 @@ const pageIndex = [
 	.by-color td,
 	.stats td.opening {
 		white-space: normal;
+	}
+
+	/* El color a la izquierda y su repertorio a la derecha; si no caben, el enlace baja. */
+	.group-head {
+		display: flex;
+		flex-wrap: wrap;
+		justify-content: space-between;
+		align-items: baseline;
+		gap: var(--space-1) var(--space-3);
+	}
+
+	.group-head a {
+		font-size: var(--text-s);
+		font-weight: normal;
 	}
 
 	.filters {

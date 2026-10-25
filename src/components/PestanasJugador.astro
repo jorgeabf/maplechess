@@ -10,7 +10,7 @@
 import type { TimeClass } from '../lib/chess/timecontrol'
 import { withParams } from '../lib/params'
 
-export type PlayerView = 'ficha' | 'preparar' | 'repertorio'
+type PlayerView = 'ficha' | 'preparar' | 'repertorio'
 
 interface Props {
 	fideId: number
@@ -56,14 +56,16 @@ const tabs: { id: PlayerView; label: string; href: string }[] = [
 </nav>
 
 <style>
+	/* Justo bajo la cabecera de la página (.page-head), más cerca de ella que del contenido. */
 	.player-tabs {
-		margin-bottom: var(--space-5);
+		margin: calc(-1 * var(--space-3)) 0 var(--space-5);
 	}
 
 	/*
-	 * La raya de debajo va en la lista (una sombra por dentro) y la de la
-	 * pestaña actual, en su enlace, encima. Si no caben (con la letra muy
-	 * grande), bajan de línea enteras.
+	 * La raya de debajo es el borde de la lista, y la de la pestaña actual va
+	 * encima, en su enlace, que baja un píxel sobre ella. Con una sombra por
+	 * dentro, en escritorio asomaba una raya vertical en el extremo derecho.
+	 * Si no caben (tus páginas, con la letra al 150 %), bajan de línea enteras.
 	 */
 	ul {
 		display: flex;
@@ -71,8 +73,8 @@ const tabs: { id: PlayerView; label: string; href: string }[] = [
 		gap: 0 var(--space-5);
 		margin: 0;
 		padding: 0;
+		border-block-end: 1px solid var(--border);
 		list-style: none;
-		box-shadow: inset 0 -1px 0 var(--border);
 	}
 
 	li {
@@ -84,6 +86,7 @@ const tabs: { id: PlayerView; label: string; href: string }[] = [
 		display: flex;
 		align-items: center;
 		min-block-size: 2.75rem;
+		margin-block-end: -1px;
 		border-block-end: 3px solid transparent;
 		color: var(--text-muted);
 		font-size: var(--text-s);
