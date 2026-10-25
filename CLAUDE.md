@@ -113,11 +113,16 @@ MapleChess es un buscador de jugadores españoles (lista FIDE, federación ESP),
     - **En `/torneos`** (`tournamentTerms`, en `fts.ts`), una provincia o una comunidad se busca por dónde se juega el torneo o por la palabra escrita en su nombre (la columna `name` del FTS). Así «galicia» no encuentra el Memorial Gallego de Gijón, y «memorial gallego» sí.
       - Gana el nombre más largo («castilla y leon» frente a «leon») y vale el plural («gallegos»).
       - Las demás palabras se buscan en el nombre y en la ciudad, que está en el FTS («gijon»). El rótulo del campo es «Nombre o lugar».
+      - **Primero van los torneos que nombran el sitio** (decidido con Jorge el 25-oct-2026): por cualquiera de sus nombres o gentilicios, como prefijo, y aparte el plural en -ces («andaluces»; `named` en `tournamentTerms`). Después, el orden de siempre por fecha, en las dos pestañas.
+        - Con «campeonato andalucia», los Campeonatos de Andalucía salen antes que los provinciales.
+        - Esos nombres sólo ordenan: no cuelan torneos de otro sitio.
+        - Con dos sitios, va antes el que nombra más de los buscados.
+        - La clave va en la subconsulta que elige la página (`page.named`). Los recuentos no la llevan.
       - Sólo se perdieron los 13 resultados de otro sitio que traían los gentilicios.
       - Siguen las coincidencias de la propia palabra (unas 20, como «Sevilla la Nueva» con «sevilla»), como en cualquier búsqueda por nombre.
       - Por provincias se pasa de 1.934 resultados a 8.004, y por comunidades, de 477 a 5.891.
       - Una comunidad va por su índice (`tournaments_comunidad_start_date`) y no por sus provincias: con `IN` habría que ordenarlas todas.
-      - En remoto, una búsqueda por sitio lee de 840 a 1.510 filas en los recuentos y de 4.100 a 5.300 en la lista de 50 («asturias», 4.655).
+      - En remoto, una búsqueda por sitio lee de 840 a 1.510 filas en los recuentos y de 6.200 a 13.100 en la lista de 50 («asturias», 13.078). La mayoría son los participantes de los torneos de la página, que con los nombrados primero son los más grandes.
         - La lista elige primero los id de la página y sólo después cuenta los participantes de esos 50 (`searchTournaments`).
         - Antes los contaba de todos los torneos que casaban, porque al ordenar SQLite calcula las columnas de cada fila antes del `LIMIT`. Así llegaba a leer 72.310 filas («madrid»).
     - **Los datos** están en `data/lugares/` (INE e IGN, CC BY 4.0). Los citan `/acerca` y `/aviso-legal`, con `INE_MUNICIPIOS` e `IGN_NUCLEOS` de `licenses.ts`.
