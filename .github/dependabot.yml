@@ -22,6 +22,10 @@ updates:
       # tiene. Se quita al cambiar de versión de Node.
       - dependency-name: '@types/node'
         update-types: ['version-update:semver-major']
+      # playwright-core va con el Chromium que ya está descargado (chromium-1223),
+      # en la carpeta de navegadores que comparten otros proyectos. Otra versión
+      # pide otro Chromium: se sube a mano (ver scripts/medir.mjs).
+      - dependency-name: playwright-core
 
   - package-ecosystem: github-actions
     directory: /
