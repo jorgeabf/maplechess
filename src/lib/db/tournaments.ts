@@ -56,10 +56,11 @@ const PLAYERS = '(SELECT count(*) FROM participations WHERE tournament_id = t.id
  * los NULL al final, y así recorre el índice tournaments_start_date en vez de
  * ordenar la tabla entera.
  */
-export const TOURNAMENT_ORDER = 'ORDER BY t.start_date DESC, t.id DESC'
+const NEWEST_FIRST = 't.start_date DESC, t.id DESC'
+export const TOURNAMENT_ORDER = `ORDER BY ${NEWEST_FIRST}`
 
 /** Próximos: el más cercano primero, recorriendo el mismo índice hacia delante. */
-const UPCOMING_ORDER = 'ORDER BY t.start_date, t.id'
+const SOONEST_FIRST = 't.start_date, t.id'
 
 /**
  * Torneos ya empezados (los que empiezan `today` o antes) o, con `f.upcoming`,
@@ -95,7 +96,14 @@ export async function searchTournaments(
 	const day = p(today)
 	const upcomingSql = `WHERE ${[...where, `t.start_date > ${day}`].join(' AND ')}`
 	const startedSql = `WHERE ${[...where, `t.start_date <= ${day}`, ...(f.withGames ? ['t.games_count > 0'] : [])].join(' AND ')}`
-	const order = f.upcoming ? UPCOMING_ORDER : TOURNAMENT_ORDER
+	// Los recuentos no ordenan: llevan sólo los parámetros hasta aquí.
+	const counted = params.slice()
+	// Con sitios, primero los torneos que los nombran, por cualquiera de sus
+	// nombres o gentilicios (cuantos más de los buscados, antes): «campeonato
+	// andalucia» empieza por los Campeonatos de Andalucía. Sólo ordenan: qué
+	// torneos salen lo ha decidido el WHERE, así que no cuelan los de otro sitio.
+	const named = (terms?.places ?? []).map((place) => `(${fts(place.named)})`).join(' + ')
+	const byDate = f.upcoming ? SOONEST_FIRST : NEWEST_FIRST
 
 	const statements = [
 		// Primero la página (los id) y después sus jugadores. Cuando hay que
@@ -105,13 +113,13 @@ export async function searchTournaments(
 		db
 			.prepare(
 				`SELECT ${COLUMNS}, ${PLAYERS}
-				FROM (SELECT t.id FROM tournaments t ${f.upcoming ? upcomingSql : startedSql}
-					${order} LIMIT ${PAGE_SIZE} OFFSET ${offset(f.page)}) AS page
+				FROM (SELECT t.id${named ? `, ${named} AS named` : ''} FROM tournaments t ${f.upcoming ? upcomingSql : startedSql}
+					ORDER BY ${named ? 'named DESC, ' : ''}${byDate} LIMIT ${PAGE_SIZE} OFFSET ${offset(f.page)}) AS page
 				JOIN tournaments t ON t.id = page.id
-				${order}`
+				ORDER BY ${named ? 'page.named DESC, ' : ''}${byDate}`
 			)
 			.bind(...params),
-		db.prepare(`SELECT count(*) AS n FROM tournaments t ${upcomingSql}`).bind(...params)
+		db.prepare(`SELECT count(*) AS n FROM tournaments t ${upcomingSql}`).bind(...counted)
 	]
 	// Total de los empezados. Sin filtros, todos menos los próximos, con el
 	// total ya calculado: contarlos recorrería la tabla entera. (Si aún no hay
@@ -119,7 +127,7 @@ export async function searchTournaments(
 	if (!f.upcoming) {
 		statements.push(
 			filtered
-				? db.prepare(`SELECT count(*) AS n FROM tournaments t ${startedSql}`).bind(...params)
+				? db.prepare(`SELECT count(*) AS n FROM tournaments t ${startedSql}`).bind(...counted)
 				: db.prepare(
 						'SELECT coalesce((SELECT tournaments FROM site_totals WHERE id = 1), (SELECT count(*) FROM tournaments)) AS n'
 					)
