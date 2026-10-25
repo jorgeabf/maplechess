@@ -7,7 +7,7 @@ import '@lichess-org/chessground/assets/chessground.base.css'
 import '../visor/board.css'
 import { OPENING_MOVES_PLIES } from '../../lib/chess/pgn'
 import type { Color, Exploration, Line } from '../../lib/chess/repertoire'
-import { formatDate, formatMove, formatNumber, formatPercent } from '../../lib/format'
+import { formatDate, formatMove, formatNumber, formatPercent, formatResults } from '../../lib/format'
 import CampoJugada from '../visor/CampoJugada.astro'
 import Coronacion from '../visor/Coronacion.astro'
 import PanelMotor from '../visor/PanelMotor.astro'
@@ -83,9 +83,14 @@ const positionHref = (moves: string[]) => `${lineHref(moves)}#${ANCHOR}`
 			<p class="opening">
 				{line.opening ? <><span class="eco">{line.opening.eco}</span> {line.opening.name}</> : !last && 'Posición inicial'}
 			</p>
-			{last && <a class="button secondary" href={positionHref(moves.slice(0, -1))} rel="nofollow">← Atrás</a>}
+			{
+				last && (
+					<a class="button secondary" href={positionHref(moves.slice(0, -1))} rel="nofollow" data-prev>
+						← Atrás
+					</a>
+				)
+			}
 		</div>
-		{!atLimit && <CampoJugada />}
 
 		<section class="card moves-card" aria-labelledby="turno">
 			<h2 id="turno">
@@ -109,7 +114,11 @@ const positionHref = (moves: string[]) => `${lineHref(moves)}#${ANCHOR}`
 								{exploration.moves.map((m) => (
 									<tr data-uci={m.uci}>
 										<td class="move">
-											<a href={positionHref([...moves, m.uci])} rel="nofollow">{nextLabel(m.san)}</a>
+											{/* El enlace cubre la fila (ver los estilos), también la barra:
+											    el desglose de su title, aquí. */}
+											<a href={positionHref([...moves, m.uci])} rel="nofollow" title={formatResults(m)}>
+												{nextLabel(m.san)}
+											</a>
 										</td>
 										<td class="end num">
 											{formatNumber(m.games)} <span class="muted">({share(m.games)})</span>
@@ -149,6 +158,12 @@ const positionHref = (moves: string[]) => `${lineHref(moves)}#${ANCHOR}`
 				)
 			}
 		</section>
+		{/* El campo para escribir una jugada, detrás de la tabla (decidido con
+		    Jorge el 25-oct-2026, sobre maquetas): delante, en un móvil de 667 px
+		    de alto la tabla empezaba a 635 px y, tras cada jugada, no se veía
+		    ninguna fila entera; detrás se ven dos. En dos columnas, igual: en el
+		    DOM, para que el tabulador siga el orden visual. */}
+		{!atLimit && <CampoJugada />}
 	</div>
 
 	{/* El motor, detrás de las jugadas: en una columna, la tabla, que se consulta
@@ -411,6 +426,110 @@ const positionHref = (moves: string[]) => `${lineHref(moves)}#${ANCHOR}`
 		font-family: var(--font-moves);
 		font-weight: var(--weight-strong);
 		text-decoration: none;
+	}
+
+	/*
+	 * Toda la fila de una jugada lleva a su posición, como la de una partida en
+	 * GamesTable: el enlace de la jugada se estira sobre ella con un ::after.
+	 * Al pasar por la fila el tablero ya dibuja su flecha, y sólo se podía
+	 * pulsar la jugada: el 7 % de la fila a 1280 px y el 10 % a 375. Sigue
+	 * habiendo un solo enlace por fila, así que el tabulador y los lectores de
+	 * pantalla no cambian.
+	 *
+	 * El ::after necesita que la fila sea su bloque contenedor, y una fila de
+	 * tabla no lo es en Safari hasta la 27 (WebKit 240961). Por eso las filas
+	 * son rejillas: por debajo de 19.5rem, con sus áreas (arriba); por encima,
+	 * con subgrid sobre las columnas de la tabla, que pasa a ser la rejilla.
+	 * Las columnas son auto, como las de la tabla: su mínimo es el mismo, así
+	 * que la columna lateral no cambia de ancho, y lo que sobra se reparte. La
+	 * raya y el centrado vertical, que en la tabla eran de las celdas, pasan a
+	 * la fila. Sin subgrid (Safari 15, Chrome 116) la tabla sigue siendo tabla
+	 * y el enlace es sólo la jugada.
+	 */
+	@supports (grid-template-columns: subgrid) {
+		@media (width >= 19.5rem) {
+			.moves-table {
+				display: grid;
+				grid-template-columns: repeat(4, auto);
+			}
+
+			.moves-table :is(thead, tbody, tfoot, tr) {
+				display: grid;
+				grid-column: 1 / -1;
+				grid-template-columns: subgrid;
+			}
+
+			.moves-table tr {
+				align-items: center;
+				border-bottom: 1px solid var(--border);
+			}
+
+			.moves-table thead tr {
+				border-bottom-color: var(--border-strong);
+			}
+
+			.moves-table tbody tr:last-child {
+				border-bottom: 0;
+			}
+
+			.moves-table tfoot tr {
+				border-top: 1px solid var(--border-strong);
+				border-bottom: 0;
+			}
+
+			.moves-table :is(th, td) {
+				border: 0;
+			}
+		}
+
+		/* Sin «Última vez» (ver más arriba), tres: una pista vacía también crecería. */
+		@media (19.5rem <= width < 30rem) {
+			.moves-table {
+				grid-template-columns: repeat(3, auto);
+			}
+		}
+
+		.moves-table tr[data-uci] {
+			position: relative;
+			isolation: isolate;
+		}
+
+		.moves-table td.move a::after {
+			content: '';
+			position: absolute;
+			inset: 0;
+		}
+
+		/*
+		 * El fondo al pasar por encima y el anillo del foco van en un ::before
+		 * que sobresale por los lados: la tabla va a plomo con el título de la
+		 * tarjeta, y en la fila tocaban la jugada y la fecha. Detrás de las
+		 * celdas (isolation) y fuera de la rejilla (absolute); las rayas siguen
+		 * a plomo.
+		 */
+		.moves-table tr[data-uci]::before {
+			content: '';
+			position: absolute;
+			inset: 0 calc(-1 * var(--space-2));
+			z-index: -1;
+			border-radius: var(--radius-s);
+		}
+
+		.moves-table tr[data-uci]:hover::before {
+			background: var(--surface-hover);
+		}
+
+		/* El foco de la jugada marca la fila entera, que es lo que se abre. */
+		@supports selector(:has(a)) {
+			.moves-table tr:has(a:focus-visible)::before {
+				outline: 2px solid var(--focus-ring);
+				outline-offset: -2px;
+			}
+
+			.moves-table td.move a:focus-visible {
+				outline: none;
+			}
+		}
 	}
 
 	.legend {

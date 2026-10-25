@@ -2,7 +2,7 @@
 // Ganadas, tablas y perdidas (desde el punto de vista del jugador) como barra,
 // y su puntuación. Los anchos salen de propiedades CSS: no hace falta JS.
 import { score, type Stats } from '../../lib/chess/repertoire'
-import { formatCount, formatNumber, formatPercent } from '../../lib/format'
+import { formatPercent, formatResults } from '../../lib/format'
 
 interface Props {
 	stats: Stats
@@ -10,8 +10,7 @@ interface Props {
 
 const { stats } = Astro.props
 const points = score(stats)
-// "Tablas" no tiene singular: "1 tablas".
-const label = `${formatCount(stats.wins, 'ganada', 'ganadas')}, ${formatNumber(stats.draws)} tablas, ${formatCount(stats.losses, 'perdida', 'perdidas')}`
+const label = formatResults(stats)
 ---
 
 <span class="score-bar">

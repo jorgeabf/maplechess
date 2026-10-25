@@ -196,20 +196,31 @@ describe('backTarget', () => {
 		expect(from('/partidas?jugador=P%C3%A9rez&p=2')).toEqual({
 			href: '/partidas?jugador=P%C3%A9rez&p=2',
 			kind: 'search',
-			fideId: null
+			id: null
 		})
-		expect(from('/torneos/12')).toEqual({ href: '/torneos/12', kind: 'tournament', fideId: null })
-		expect(from('/jugadores/2200000')).toEqual({ href: '/jugadores/2200000', kind: 'player', fideId: 2200000 })
+		expect(from('/torneos/12')).toEqual({ href: '/torneos/12', kind: 'tournament', id: null })
+		expect(from('/jugadores/2200000')).toEqual({ href: '/jugadores/2200000', kind: 'player', id: 2200000 })
 		expect(from('/jugadores/2200000/preparar?color=black')).toEqual({
 			href: '/jugadores/2200000/preparar?color=black',
 			kind: 'dossier',
-			fideId: 2200000
+			id: 2200000
 		})
-		expect(from('/jugadores/2200000/repertorio')).toMatchObject({ kind: 'repertoire', fideId: 2200000 })
+		expect(from('/jugadores/2200000/repertorio')).toMatchObject({ kind: 'repertoire', id: 2200000 })
 	})
 
-	it('nada desde otra partida, la portada u otras páginas', () => {
-		expect(from('/partidas/874')).toBeNull()
+	it('/partidas sin búsqueda no es «la búsqueda», tampoco con el formulario enviado vacío o sólo con afinar', () => {
+		expect(from('/partidas')).toEqual({ href: '/partidas', kind: 'games', id: null })
+		expect(from('/partidas?jugador=&rival=&eco=')).toMatchObject({ kind: 'games' })
+		expect(from('/partidas?color=white')).toMatchObject({ kind: 'search' })
+		expect(from('/partidas?desde=2026-01-01')).toMatchObject({ kind: 'search' })
+	})
+
+	it('desde otra partida, su id (la página decide si es del mismo torneo)', () => {
+		expect(from('/partidas/874')).toEqual({ href: '/partidas/874', kind: 'game', id: 874 })
+		expect(from('/partidas/874.pgn')).toBeNull()
+	})
+
+	it('nada desde la portada u otras páginas', () => {
 		expect(from('/')).toBeNull()
 		expect(from('/torneos')).toBeNull()
 		expect(from('/jugadores/2200000/otra')).toBeNull()

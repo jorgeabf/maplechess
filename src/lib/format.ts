@@ -112,6 +112,11 @@ export function formatGames(n: number): string {
 	return formatCount(n, 'partida', 'partidas')
 }
 
+/** Ganadas, tablas y perdidas: "5 ganadas, 3 tablas, 1 perdida". "Tablas" no tiene singular: "1 tablas". */
+export function formatResults(stats: { wins: number; draws: number; losses: number }): string {
+	return `${formatCount(stats.wins, 'ganada', 'ganadas')}, ${formatNumber(stats.draws)} tablas, ${formatCount(stats.losses, 'perdida', 'perdidas')}`
+}
+
 /**
  * La lista FIDE distingue a los homónimos con el año de nacimiento, a veces con
  * una letra, detrás del nombre («Supuesto Supuesto, Ruben 1978 I»; unos 1.300

@@ -29,7 +29,9 @@ function arrow(uci: string): { orig: Key; dest: Key } {
 /**
  * Ancla de la página que sigue a una jugada escrita en el campo: ningún
  * elemento la lleva, así que el navegador no se desplaza, y el explorador se
- * pone a la vista y devuelve el foco al campo para escribir la siguiente.
+ * pone a la vista y devuelve el foco al campo para escribir la siguiente. En
+ * el móvil el campo, detrás de la tabla, queda debajo: se ven el tablero
+ * entero y las primeras jugadas, y al teclear el navegador lo trae.
  */
 const MOVE_INPUT_HASH = 'jugada'
 
@@ -74,6 +76,11 @@ class ExploradorRepertorio extends HTMLElement {
 		this.addEventListener('focusin', (event) => this.showArrow(event), { signal })
 		this.addEventListener('pointerleave', () => this.setHover(null), { signal })
 		this.addEventListener('focusout', () => this.setHover(null), { signal })
+		document.addEventListener('keydown', (event) => this.onKey(event), { signal })
+		// El atajo, en «← Atrás» sólo desde aquí: sin JavaScript no lo hay.
+		const prev = this.querySelector('a[data-prev]')
+		prev?.setAttribute('title', 'Jugada anterior (←)')
+		prev?.setAttribute('aria-keyshortcuts', 'ArrowLeft')
 
 		this.panel = new EnginePanel(
 			this.querySelector<HTMLElement>('.engine')!,
@@ -133,6 +140,29 @@ class ExploradorRepertorio extends HTMLElement {
 			lastMove: lastMove ? squares(lastMove) : undefined,
 			movable: { color: this.movable ? pos.turn : undefined, dests: chessgroundDests(pos) }
 		}
+	}
+
+	/**
+	 * ← vuelve a la jugada anterior, como en el visor: sigue «← Atrás». Con
+	 * las mismas excepciones: las teclas con modificador, los campos (en «Tu
+	 * jugada» las flechas mueven el cursor) y el diálogo de coronar. Una tecla
+	 * mantenida no repite: cada jugada es una página nueva, y la pide al
+	 * servidor.
+	 */
+	private onKey(event: KeyboardEvent): void {
+		if (event.key !== 'ArrowLeft' || event.repeat) return
+		if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return
+		const target = event.target
+		if (
+			target instanceof Element &&
+			target.closest("input:not([type='checkbox']), select, textarea, [contenteditable], dialog")
+		) {
+			return
+		}
+		const prev = this.querySelector<HTMLAnchorElement>('a[data-prev]')
+		if (!prev) return
+		event.preventDefault()
+		prev.click()
 	}
 
 	/** Flecha de la jugada de la tabla sobre la que está el puntero o el foco. */

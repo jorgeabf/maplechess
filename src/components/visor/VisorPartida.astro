@@ -24,8 +24,9 @@ interface Side {
 
 /**
  * Lo que va dentro (la barra de acciones de la página) se pinta debajo, a
- * todo el ancho, y dentro del elemento: así sus botones de copiar llegan al
- * mismo manejador que los del tablero y saben la jugada y el lado.
+ * todo el ancho, y dentro del elemento: así sus botones de copiar (el PGN, el
+ * enlace y la posición en FEN) llegan al manejador de los botones del tablero
+ * y saben la jugada y el lado.
  */
 interface Props {
 	tree: GameTree
@@ -72,9 +73,19 @@ const hasVariations = tree.nodes.some((n) => n.children.length > 1)
 			<span class="clock" data-clock="white"></span>
 		</div>
 		{/* group y no toolbar: una barra de herramientas promete moverse entre sus
-		    botones con las flechas, y aquí las flechas cambian de jugada. */}
+		    botones con las flechas, y aquí las flechas cambian de jugada. Los
+		    atajos (onKey en visor-partida.ts) van también en aria-keyshortcuts:
+		    el title no lo leen todos los lectores de pantalla, y con el teclado
+		    no se ve. Mayús+← y Mayús+→ son otra acción: sólo en el title. */}
 		<div class="controls" role="group" aria-label="Navegación por la partida">
-			<button type="button" class="button secondary square" data-action="first" title="Inicio (↑)" aria-label="Ir al inicio">
+			<button
+				type="button"
+				class="button secondary square"
+				data-action="first"
+				title="Inicio (↑)"
+				aria-label="Ir al inicio"
+				aria-keyshortcuts="ArrowUp Home"
+			>
 				<Icon name="first" />
 			</button>
 			<button
@@ -83,6 +94,7 @@ const hasVariations = tree.nodes.some((n) => n.children.length > 1)
 				data-action="prev"
 				title="Anterior (←). Mayús+←: salir de la variante"
 				aria-label="Jugada anterior"
+				aria-keyshortcuts="ArrowLeft"
 			>
 				<Icon name="prev" />
 			</button>
@@ -94,19 +106,30 @@ const hasVariations = tree.nodes.some((n) => n.children.length > 1)
 				data-action="next"
 				title={hasVariations ? 'Siguiente (→). Mayús+→: entrar en la variante' : 'Siguiente (→)'}
 				aria-label="Jugada siguiente"
+				aria-keyshortcuts="ArrowRight"
 			>
 				<Icon name="next" />
 			</button>
-			<button type="button" class="button secondary square" data-action="last" title="Final (↓)" aria-label="Ir al final">
+			<button
+				type="button"
+				class="button secondary square"
+				data-action="last"
+				title="Final (↓)"
+				aria-label="Ir al final"
+				aria-keyshortcuts="ArrowDown End"
+			>
 				<Icon name="last" />
 			</button>
-			<button type="button" class="button secondary square" data-action="flip" title="Girar el tablero (F)" aria-label="Girar el tablero">
+			<button
+				type="button"
+				class="button secondary square"
+				data-action="flip"
+				title="Girar el tablero (F)"
+				aria-label="Girar el tablero"
+				aria-keyshortcuts="F"
+			>
 				<Icon name="flip" />
 			</button>
-			<span class="copy">
-				<button type="button" class="button secondary square" data-action="copy-fen" title="Copiar la posición en FEN">FEN</button>
-				<span class="copied" role="status"></span>
-			</span>
 		</div>
 		{/* El comentario de la jugada actual, que la jugada ya anuncia (showCurrent). */}
 		{hasComments && <p class="move-note" aria-hidden="true" data-note></p>}
@@ -371,7 +394,9 @@ const hasVariations = tree.nodes.some((n) => n.children.length > 1)
 
 	/*
 	 * Botones cuadrados de 40 px (.button.square): con la jugada entre ellos, la
-	 * fila cabe a 375 px. Con el tablero mínimo, girar y FEN bajan a otra línea.
+	 * fila cabe a 375 px. Con el tablero mínimo, girar baja a otra línea.
+	 * manipulation: dos toques seguidos en «siguiente» son dos jugadas, no el
+	 * zoom de iOS (Safari lo hace con touch-action: auto).
 	 */
 	.controls {
 		display: flex;
@@ -379,6 +404,7 @@ const hasVariations = tree.nodes.some((n) => n.children.length > 1)
 		align-items: center;
 		gap: var(--space-1);
 		font-size: var(--text-s);
+		touch-action: manipulation;
 	}
 
 	/*
@@ -398,10 +424,7 @@ const hasVariations = tree.nodes.some((n) => n.children.length > 1)
 		white-space: nowrap;
 	}
 
-	/*
-	 * Girar y FEN, a la derecha de la navegación. El aviso de «FEN copiado»
-	 * (.copied, global) tapa la barra del jugador de abajo, no el tablero.
-	 */
+	/* Girar, a la derecha de la navegación. */
 	[data-action='flip'] {
 		margin-inline-start: auto;
 	}
@@ -560,7 +583,6 @@ const hasVariations = tree.nodes.some((n) => n.children.length > 1)
 		color: var(--text);
 		font-family: var(--font-moves);
 		font-weight: var(--weight-strong);
-		cursor: pointer;
 	}
 
 	/* El símbolo de la jugada ($146, la novedad, es una «N»), en letras. Acotado:
@@ -569,9 +591,17 @@ const hasVariations = tree.nodes.some((n) => n.children.length > 1)
 		font-family: var(--font-sans);
 	}
 
-	.moves :global(.move:hover),
-	.variant-moves :global(.move:hover) {
-		background: var(--surface-hover);
+	/* Sin JavaScript las jugadas no hacen nada: ni mano ni fondo al pasar por encima. */
+	@media (scripting: enabled) {
+		.moves :global(.move),
+		.variant-moves :global(.move) {
+			cursor: pointer;
+		}
+
+		.moves :global(.move:hover),
+		.variant-moves :global(.move:hover) {
+			background: var(--surface-hover);
+		}
 	}
 
 	.moves :global(.move[aria-current='true']),

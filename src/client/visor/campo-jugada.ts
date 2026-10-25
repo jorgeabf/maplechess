@@ -150,8 +150,15 @@ export class MoveInput {
 		if (document.activeElement === this.input) this.suggest()
 	}
 
-	/** Pone el foco en el campo. */
+	/**
+	 * Pone el foco en el campo, con las sugerencias ya puestas: si el datalist
+	 * pasa de vacío a lleno con el foco dentro, Chrome desplaza la página hasta
+	 * el campo aunque se pida preventScroll. En el explorador, tras escribir
+	 * una jugada, el campo va detrás de la tabla, y en el móvil el tablero
+	 * quedaba fuera de la vista.
+	 */
 	focus(options?: FocusOptions): void {
+		this.suggest()
 		this.input.focus(options)
 	}
 

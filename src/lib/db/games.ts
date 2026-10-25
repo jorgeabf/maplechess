@@ -442,3 +442,24 @@ export async function getAdjacentGames(
 	])
 	return { prev: prev.results[0]?.id ?? null, next: next.results[0]?.id ?? null }
 }
+
+/** Partidas de la ronda anteriores a una (torneo, ronda, mesa, id), por el índice único. */
+export const ROUND_POSITION_SQL = `SELECT count(*) AS n FROM games
+	WHERE tournament_id = ?1 AND round = ?2 AND (board, seq) < (?3, (SELECT seq FROM games WHERE id = ?4))`
+
+/**
+ * Página de la lista de partidas del torneo, filtrada por la ronda de la
+ * partida, en la que sale ella: la lista va por mesa y seq (ORDERS.round).
+ * Cuenta las anteriores de la ronda, una fila por cada una (unas 300 en la
+ * última mesa de un open de 600 jugadores).
+ */
+export async function gameRoundPage(
+	db: D1Database,
+	game: Pick<GameDetail, 'id' | 'tournamentId' | 'round' | 'board'>
+): Promise<number> {
+	const before = await db
+		.prepare(ROUND_POSITION_SQL)
+		.bind(game.tournamentId, game.round, game.board, game.id)
+		.first<number>('n')
+	return Math.floor((before ?? 0) / PAGE_SIZE) + 1
+}
