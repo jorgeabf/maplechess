@@ -15,7 +15,9 @@
 // y anonimiza a los retirados (tabla retiradas). Oculta el sexo y el año de
 // quien lo ha pedido (tabla ocultaciones), también el del nombre. Y borra los
 // torneos sensibles (tabla torneos_sensibles) y los de menores (menores.ts),
-// que no se guardan. Y vuelve a decidir dónde se juega cada torneo (lugares.ts).
+// que no se guardan. Vuelve a decidir dónde se juega cada torneo (lugares.ts).
+// Y vacía la columna Fed. de los torneos en que no es la de federaciones
+// (federaciones.ts).
 //
 //   POST /api/admin/sync  {"workflow":"reprocess"}
 //   wrangler workflows trigger games-reprocess '{}'
@@ -24,6 +26,7 @@
 //   wrangler workflows trigger games-reprocess '{"sensibles":true}'    (sólo los torneos sensibles)
 //   wrangler workflows trigger games-reprocess '{"menores":true}'      (sólo los torneos de menores)
 //   wrangler workflows trigger games-reprocess '{"lugares":true}'      (sólo dónde se juegan los torneos)
+//   wrangler workflows trigger games-reprocess '{"federaciones":true}' (sólo la columna Fed.)
 import { WorkflowEntrypoint, type WorkflowEvent, type WorkflowStep } from 'cloudflare:workers'
 import { normalizeName } from '../lib/chess/names'
 import { parseGames } from '../lib/chess/pgn'
@@ -39,6 +42,7 @@ import { isRetired, nameKey, publicName, publicPgnNames, RETIRED_NAME, withoutHi
 import {
 	anonymizeRetiredParticipations,
 	applyHiddenFields,
+	clearNonFederations,
 	deleteExcludedTournaments,
 	deleteRetiredPlayers,
 	deleteTournaments,
@@ -87,6 +91,8 @@ export interface GamesReprocessParams {
 	menores?: boolean
 	/** Sólo dónde se juegan los torneos (applyPlaces), sin recorrer las partidas: tras la migración o si cambian los datos. */
 	lugares?: boolean
+	/** Sólo la columna Fed. de los participantes (clearNonFederations), sin recorrer las partidas: si cambia la regla. */
+	federaciones?: boolean
 }
 
 /** Partidas por paso: unos 2 MB de PGN y unas décimas de segundo de CPU. */
@@ -111,8 +117,8 @@ export interface ReprocessedBatch {
 
 export class GamesReprocessWorkflow extends WorkflowEntrypoint<Env, GamesReprocessParams> {
 	async run(event: WorkflowEvent<GamesReprocessParams>, step: WorkflowStep): Promise<void> {
-		const { retiradas, ocultaciones, sensibles, menores, lugares } = event.payload
-		const all = !retiradas && !ocultaciones && !sensibles && !menores && !lugares
+		const { retiradas, ocultaciones, sensibles, menores, lugares, federaciones } = event.payload
+		const all = !retiradas && !ocultaciones && !sensibles && !menores && !lugares && !federaciones
 		// Lo primero: las partidas de los torneos borrados ya no se recorren.
 		if (all || sensibles) {
 			// Puede preguntar a lichess de qué torneo es una ronda: con sus reintentos.
@@ -126,6 +132,10 @@ export class GamesReprocessWorkflow extends WorkflowEntrypoint<Env, GamesReproce
 		if (all || lugares) {
 			const places = await step.do('lugares de los torneos', () => applyPlaces(this.env.DB))
 			console.log(`[reprocess] lugares de los torneos: ${JSON.stringify(places)}`)
+		}
+		if (all || federaciones) {
+			const cleared = await step.do('columna Fed.', () => clearNonFederations(this.env.DB))
+			console.log(`[reprocess] columna Fed.: ${JSON.stringify({ cleared })}`)
 		}
 		if (all) {
 			let after = event.payload.after ?? 0
@@ -434,8 +444,10 @@ export async function applyPlaces(db: D1Database): Promise<PlacesCleanup> {
  * usa el reprocesado. Repetirlo no cambia nada. Devuelve cuántos ha borrado.
  */
 export async function applyMinorsTournaments(db: D1Database): Promise<{ deleted: number }> {
-	const { results } = await db.prepare('SELECT id, name FROM tournaments').all<{ id: number; name: string }>()
-	const ids = results.filter((t) => isMinorsTournament(t.name)).map((t) => t.id)
+	const { results } = await db
+		.prepare('SELECT id, name, start_date AS startDate FROM tournaments')
+		.all<{ id: number; name: string; startDate: string | null }>()
+	const ids = results.filter((t) => isMinorsTournament(t.name, t.startDate)).map((t) => t.id)
 	await deleteTournaments(db, ids)
 	if (ids.length > 0) await refreshTotals(db)
 	return { deleted: ids.length }

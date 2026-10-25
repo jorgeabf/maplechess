@@ -133,6 +133,79 @@ describe('isMinorsTournament', () => {
 		}
 	})
 
+	it('reconoce los «por edades» con todas las categorías o por letras', () => {
+		for (const name of [
+			'Campeonato de Inventadia por Edades 2026',
+			'Cto Inventadia Rapido Individual por Edades Online',
+			'Por Edades CTL Inventada 2026 Previa A',
+			'Finales Por Edades CTL Inventada 2022',
+			'Por edades Inventada CTL 2026 Final D',
+			'IV Memorial Inventado por Edades'
+		]) {
+			expect(isMinorsTournament(name), name).toBe(true)
+		}
+	})
+
+	it('deja los «por edades» de Sub 16 y Sub 18, cadetes, juveniles y veteranos', () => {
+		for (const name of [
+			'Campeonato de Inventadia por Edades Sub 16 2021',
+			'Campeonato de Inventadia por Edades 2025 sub-18',
+			'Previa Provincial por Edades Inventada 2020 Sub18',
+			'Campeonato de Inventadia Rapido por Edades S16 2024',
+			'Campeonato de Inventadia por Edades Cadete',
+			'Campeonato de Inventadia por Edades Juvenil',
+			'Campeonato de Inventadia por Edades Veteranos +65 2021',
+			'Campeonato de Inventadia Rapido por Edades 2025 +50',
+			'Campeonato de Inventadia por Edades 2026 V50',
+			'Previa Provincial por Edades Inventada 2020 Supra 50',
+			'Por Edades CTL Inventada 2023 Previa Supra65',
+			'Campeonato por Edades Inventado Veteranos',
+			'Campeonato por Edades Inventado S-16',
+			'Campeonato por Edades Inventado U-16',
+			'Campeonato por Edades Inventado V-65',
+			'Campeonato por Edades Inventado S-50',
+			'Campeonato por Edades Inventado +60',
+			'Campeonato por Edades Inventado Senior',
+			'Campeonato por Edades Inventado Mayores de 50'
+		]) {
+			expect(isMinorsTournament(name), name).toBe(false)
+		}
+	})
+
+	it('reconoce las categorías por años de nacimiento, con la fecha del torneo', () => {
+		for (const [name, date] of [
+			['IV Circuito Inventado Categ. A (2019-2018-2017)', '2026-01-25'],
+			['IV Circuito Inventado Categ. B (2016-2015-2014) Inventada', '2026-02-15'],
+			['III Circuito Inventado. Cat. A (2017-18-19)', '2025-02-16'],
+			['IV Circuito Inventado Categ. C (2011-12-13) Y ABS. SIN ELO', '2026-04-19'],
+			['III Circuito Inventado. Cat. B (2015-2016)', '2025-01-26'],
+			['I Circuito Inventado. Grupo B (2011, 2012 y 2013)', '2023-02-19'],
+			['I Circuito Inventado. Grupo C (2008, 2009 y 2010)', '2023-02-19'],
+			['Circuit Inventat. Grup B (2011 i 2012)', '2022-11-27'],
+			['Circuito Inventado. Grupo B (2011 e 2012)', '2022-11-27'],
+			// Sin fecha (el slug de una pasada con keys), sólo con tres años.
+			['iv-circuito-inventado-categ-a-2019-2018-2017', null]
+		] as const) {
+			expect(isMinorsTournament(name, date), name).toBe(true)
+		}
+	})
+
+	it('deja las temporadas, los grupos de mayores y la categoría absoluta', () => {
+		for (const [name, date] of [
+			['Cto Inventado 2014-2015 (Fase Semifinal A) No oficial', '2015-03-09'],
+			['Campeonato de Inventadia de Veteranos 2015-2016', '2016-01-11'],
+			['Liga Inventada 2025-2026', '2025-10-04'],
+			['Liga Inventada 2025-2026', null],
+			// La temporada que añade el archivo de Cantabria, con una fecha de otro año.
+			['Cto. regional inventado 2008/09 (Cantabria)', '2021-03-07'],
+			['Circuito Inventado. Cat. B (2015-2016)', null],
+			['Veteranos Inventados (1950-1951-1952)', '2026-01-10'],
+			['IV Circuito Inventado Categ. D (ABSOLUTA)', '2026-01-25']
+		] as const) {
+			expect(isMinorsTournament(name, date), name).toBe(false)
+		}
+	})
+
 	it('deja los topes de ELO, Sub 16 y Sub 18, cadete y juvenil, las escuelas de ajedrez y los grupos', () => {
 		for (const name of [
 			'Open Internacional Inventado Sub2200',
@@ -167,6 +240,9 @@ describe('isMinorsTournament', () => {
 describe('torneos de menores en la pasada de info64', () => {
 	const MINORS = 'campeonato-inventado-sub-12'
 	const OTHER = 'open-inventado'
+	// El calendario quita el último paréntesis del título (la ciudad): los años
+	// de nacimiento sólo se ven en la página.
+	const BY_YEARS = 'circuito-inventado-cat-b'
 	const tomorrow = addDays(madridDateTime(new Date()).slice(0, 10), 1)
 	let requested: string[] = []
 
@@ -186,8 +262,10 @@ describe('torneos de menores en la pasada de info64', () => {
 		'events.json': JSON.stringify([
 			{ title: 'R.1 - Campeonato Inventado Sub 12', url: `/${MINORS}/`, start: '2026-09-01T17:00:00' },
 			{ title: 'R.2 - Campeonato Inventado Sub 12', url: `/${MINORS}/`, start: `${tomorrow}T17:00:00` },
-			{ title: 'R.1 - Open Inventado', url: `/${OTHER}/`, start: '2026-09-01T17:00:00' }
+			{ title: 'R.1 - Open Inventado', url: `/${OTHER}/`, start: '2026-09-01T17:00:00' },
+			{ title: 'R.1 - Circuito Inventado. Cat. B (2015-2016)', url: `/${BY_YEARS}/`, start: '2026-09-01T10:00:00' }
 		]),
+		[BY_YEARS]: `<h1>Circuito Inventado. Cat. B (2015-2016)</h1><table id="initial-ranking-table"><tbody>${ranking('Niño')}</tbody></table>`,
 		[MINORS]: `<h1>Campeonato Inventado Sub 12</h1><table id="initial-ranking-table"><tbody>${ranking('Menor')}</tbody></table>`,
 		[`${MINORS}/games`]: `<textarea id="pgnText">${pgn('Menor')}</textarea>`,
 		[OTHER]: `<h1>Open Inventado</h1><table id="initial-ranking-table"><tbody>${ranking('Abierto')}</tbody></table>`,
@@ -230,6 +308,14 @@ describe('torneos de menores en la pasada de info64', () => {
 		expect(requested).toContain(OTHER)
 		expect(await count('SELECT count(*) AS n FROM tournaments WHERE source_key = ?1', MINORS)).toBe(0)
 		expect(await count('SELECT count(*) AS n FROM tournaments')).toBe(1)
+	})
+
+	it('no guarda el que sólo por el nombre y la fecha de su página es de menores', async () => {
+		await run(window)
+		expect(requested).toContain(BY_YEARS)
+		expect(requested).not.toContain(`${BY_YEARS}/games`)
+		expect(await count('SELECT count(*) AS n FROM tournaments WHERE source_key = ?1', BY_YEARS)).toBe(0)
+		expect(await count('SELECT count(*) AS n FROM participations')).toBe(2)
 	})
 
 	it('la pasada de emparejamientos no pide su ronda', async () => {
@@ -333,6 +419,23 @@ describe('applyMinorsTournaments', () => {
 
 		// Repetirlo no cambia nada.
 		expect(await applyMinorsTournaments(db)).toEqual({ deleted: 0 })
+	})
+
+	it('mira la fecha de cada torneo para los años de nacimiento', async () => {
+		const at = (key: string, name: string, startDate: string | null) =>
+			store({ ...tournament(key, name), startDate, endDate: startDate }, [])
+		const minors = await at('cat-b', 'Circuito Inventado. Cat. B (2015-2016)', '2025-01-26')
+		const byAge = await at('por-edades', 'Campeonato de Inventadia por Edades 2026', '2026-01-17')
+		await at('liga', 'Liga Inventada 2025-2026', '2025-10-04')
+		// Sin fecha, dos años no bastan.
+		await at('cat-b-sin-fecha', 'Circuito Inventado. Cat. B (2015-2016)', null)
+
+		expect(await applyMinorsTournaments(db)).toEqual({ deleted: 2 })
+		const kept = (await db.prepare('SELECT id, source_key AS key FROM tournaments ORDER BY id').all<{ id: number; key: string }>())
+			.results
+		expect(kept.map((t) => t.key)).toEqual(['liga', 'cat-b-sin-fecha'])
+		expect(kept.map((t) => t.id)).not.toContain(minors)
+		expect(kept.map((t) => t.id)).not.toContain(byAge)
 	})
 
 	it('borra por trozos', async () => {

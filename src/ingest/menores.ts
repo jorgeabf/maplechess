@@ -1,7 +1,8 @@
 // Torneos de menores: no se guardan (ver CLAUDE.md, «Torneos de menores»).
 // Son los de hasta Sub 14 y los escolares, que dicen la edad o el colegio de
 // quien juega aunque su ficha no enseñe el año. Se reconocen sólo por el
-// nombre, al importarlos; los guardados los borra el reprocesado.
+// nombre (y su fecha, para los años de nacimiento), al importarlos; los
+// guardados los borra el reprocesado.
 import { words } from '../lib/chess/names'
 
 /**
@@ -62,7 +63,72 @@ const MINORS = new RegExp(
 	`(?:^| )(?:(?:${AGE})|(?:${CATEGORY})(?![a-z])|(?:${SCHOOL}|${KIDS})(?= |$))`
 )
 
-/** ¿Es, por el nombre (o el slug de info64, que lleva las mismas palabras), un torneo de menores? */
-export function isMinorsTournament(name: string): boolean {
-	return FIDE_AGE.test(name) || MINORS.test(words(name).join(' '))
+/**
+ * Los «por edades» con todas las categorías juntas o por letras («Previa A»,
+ * «Final D»), que son sobre todo de niños: también los grupos de adultos por
+ * letra, porque la letra cambia de un año a otro (decidido el 25-oct-2026,
+ * medido en producción). No los que dicen Sub 16 o Sub 18, cadete, juvenil o
+ * veteranos (+50, +65, V50, S65, Supra 50).
+ */
+const BY_AGE = /(?:^| )por edades(?= |$)/
+const OLDER =
+	/(?:^| )(?:(?:sub|s|u) ?1[68]|cadetes?|juvenil(?:es)?|veteran[oa]s?|senior(?:s|es)?|mayores|supra ?\d*|[sv] ?(?:50|55|60|65|70|75))(?= |$)/
+/** Sobre el nombre tal cual: sin el signo, «2025 +50» serían dos números. */
+const PLUS_AGE = /\+\s?(?:50|55|60|65|70|75)(?!\d)/
+
+/**
+ * Los años de nacimiento seguidos del nombre, enteros o con sus dos últimas
+ * cifras: el Circuito PROMOCHESS de Alicante nombra así sus categorías, sin
+ * «Sub» («Cat. A (2019-2018-2017)», «Grupo B (2011, 2012 y 2013)», «Cat. A
+ * (2017-18-19)», «Cat. B (2015-2016)»). La barra corta la serie: es la de una
+ * temporada («2008/09», como las añade el archivo de Cantabria).
+ */
+function yearRuns(name: string): number[][] {
+	const runs: number[][] = []
+	let run: number[] = []
+	for (const word of words(name.replaceAll('/', ' barra '))) {
+		const last = run.at(-1)
+		// «2011, 2012 y 2013», también en catalán y gallego («i», «e»).
+		if ((word === 'y' || word === 'i' || word === 'e') && last !== undefined) continue
+		const full = /^(?:19|20)\d\d$/.test(word)
+		const year = full ? Number(word) : last !== undefined && /^\d\d$/.test(word) ? last - (last % 100) + Number(word) : null
+		const step = run.length >= 2 ? run[1] - run[0] : null
+		if (year !== null && last !== undefined && Math.abs(year - last) === 1 && (step === null || year - last === step)) {
+			run.push(year)
+			continue
+		}
+		if (run.length >= 2) runs.push(run)
+		run = full ? [Number(word)] : []
+	}
+	if (run.length >= 2) runs.push(run)
+	return runs
+}
+
+/**
+ * ¿Es una categoría por años de nacimiento? Con el año del torneo, dos o más
+ * años seguidos en los que el más joven tiene de 4 a 13 años: así una
+ * temporada («Cto. de Madrid 2014-2015») no entra. Sin él (el slug de una
+ * pasada con keys), sólo tres, porque una temporada son dos, y el más joven
+ * nacido en 2000 o después. Entraría de más una temporada aplazada cuatro años
+ * o más («Liga 2019-20» jugada en 2024): no hay ninguna en producción.
+ */
+function isBirthYearGroup(run: number[], year: number | null): boolean {
+	const youngest = Math.max(...run)
+	return year === null ? run.length >= 3 && youngest >= 2000 : youngest >= year - 13 && youngest <= year - 4
+}
+
+/**
+ * ¿Es, por el nombre (o el slug de info64, que lleva las mismas palabras), un
+ * torneo de menores? La fecha del torneo ('YYYY-MM-DD…'), si se sabe, sirve
+ * para reconocer los años de nacimiento.
+ */
+export function isMinorsTournament(name: string, date?: string | null): boolean {
+	const text = words(name).join(' ')
+	const year = date && /^\d{4}/.test(date) ? Number(date.slice(0, 4)) : null
+	return (
+		FIDE_AGE.test(name) ||
+		MINORS.test(text) ||
+		(BY_AGE.test(text) && !OLDER.test(text) && !PLUS_AGE.test(name)) ||
+		yearRuns(name).some((run) => isBirthYearGroup(run, year))
+	)
 }

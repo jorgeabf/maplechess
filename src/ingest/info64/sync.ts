@@ -222,7 +222,7 @@ export class Info64SyncWorkflow extends WorkflowEntrypoint<Env, Info64SyncParams
 			// Los sensibles (torneos_sensibles) y los de menores no se leen ni a
 			// mano. Con keys, el nombre es el slug, que lleva las mismas palabras.
 			const excluded = await loadExcluded(this.env.DB, SOURCE)
-			const allowed = candidates.filter((c) => !excluded.has(c.key) && !isMinorsTournament(c.name))
+			const allowed = candidates.filter((c) => !excluded.has(c.key) && !isMinorsTournament(c.name, c.firstRound))
 			const checked = await loadCheckedTournaments(
 				this.env.DB,
 				SOURCE,
@@ -239,11 +239,13 @@ export class Info64SyncWorkflow extends WorkflowEntrypoint<Env, Info64SyncParams
 			// emparejamientos y los totales de después. Sin games_checked_at, se
 			// vuelve a intentar al día siguiente.
 			try {
-				let tournament = await step.do(`torneo ${candidate.key}`, FETCH_STEP, () =>
+				const synced = await step.do(`torneo ${candidate.key}`, FETCH_STEP, () =>
 					failFast(() => syncTournament(this.env.DB, candidate))
 				)
-				health.avisos += tournament.avisos ?? 0
 				await step.sleep(`pausa torneo ${candidate.key}`, PAUSE)
+				if (!synced) continue
+				let tournament = synced
+				health.avisos += tournament.avisos ?? 0
 				// Antes de las partidas: sus nombres se cruzan con la plantilla.
 				if (candidate.type === 'team') {
 					const roster = await step.do(`plantilla ${candidate.key}`, FETCH_STEP, () =>
@@ -289,7 +291,7 @@ export class Info64SyncWorkflow extends WorkflowEntrypoint<Env, Info64SyncParams
 		const keys = params.keys?.map((k) => keyToCandidate(k).key)
 		const excluded = await step.do('torneos sensibles', async () => [...(await loadExcluded(this.env.DB, SOURCE))])
 		const upcoming = rounds.filter(
-			(r) => (!keys || keys.includes(r.key)) && !excluded.includes(r.key) && !isMinorsTournament(r.name)
+			(r) => (!keys || keys.includes(r.key)) && !excluded.includes(r.key) && !isMinorsTournament(r.name, r.startsAt)
 		)
 		const ids = await step.do('torneos con ronda próxima', () =>
 			loadTournamentIds(
@@ -313,10 +315,11 @@ export class Info64SyncWorkflow extends WorkflowEntrypoint<Env, Info64SyncParams
 					const tournament = await step.do(`torneo próximo ${round.key}`, FETCH_STEP, () =>
 						failFast(() => syncTournament(this.env.DB, candidate))
 					)
+					await step.sleep(`pausa torneo próximo ${round.key}`, PAUSE)
+					if (!tournament) continue
 					id = tournament.id
 					added++
 					health.avisos += tournament.avisos ?? 0
-					await step.sleep(`pausa torneo próximo ${round.key}`, PAUSE)
 				}
 				const tournamentId = id
 				const saved = await step.do(`emparejamientos ${round.key}`, FETCH_STEP, () =>
@@ -342,12 +345,14 @@ export class Info64SyncWorkflow extends WorkflowEntrypoint<Env, Info64SyncParams
 	private async syncStoredStandings(params: Info64SyncParams, step: WorkflowStep): Promise<void> {
 		const tournaments = await step.do('torneos guardados', async () => {
 			// Uno sensible o de menores aún guardado (sin reprocesar) no se lee. El
-			// de menores, por el slug.
+			// de menores, por su nombre y su fecha o, con keys, por el slug.
 			const excluded = await loadExcluded(this.env.DB, SOURCE)
 			const skipped = (key: string) => excluded.has(key) || isMinorsTournament(key)
 			if (!params.keys) {
 				const stored = await loadTournamentsStarting(this.env.DB, SOURCE, params.from, params.to, isoDate(new Date()))
-				return stored.filter((t) => !skipped(t.key))
+				return stored
+					.filter((t) => !excluded.has(t.key) && !isMinorsTournament(t.name, t.startDate))
+					.map(({ key, id, type }) => ({ key, id, type }))
 			}
 			const candidates = params.keys.map(keyToCandidate).filter((c) => !skipped(c.key))
 			const ids = await loadTournamentIds(
@@ -495,10 +500,20 @@ export function selectPending(
 	})
 }
 
-async function syncTournament(db: D1Database, candidate: EventTournament): Promise<SyncedTournament> {
+/**
+ * Lee la página del torneo y guarda el torneo y sus participantes. Null si,
+ * por el nombre y la fecha de la página, es de menores: con keys sólo se sabía
+ * el slug, sin fecha, y el calendario quita el último paréntesis del título,
+ * que puede ser el de los años de nacimiento («Cat. A (2019-2018-2017)»).
+ */
+async function syncTournament(db: D1Database, candidate: EventTournament): Promise<SyncedTournament | null> {
 	const url = `${INFO64_URL}/${candidate.key}`
 	const page = await parseTournamentPage(await fetchText(url))
 	const startDate = page.startDate ?? validDate(candidate.firstRound)
+	if (isMinorsTournament(page.name, startDate)) {
+		console.log(`[info64] ${candidate.key}: de menores por su página; no se guarda`)
+		return null
+	}
 	const id = await upsertTournament(db, {
 		source: SOURCE,
 		key: candidate.key,
