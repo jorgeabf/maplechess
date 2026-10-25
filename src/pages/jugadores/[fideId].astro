@@ -51,6 +51,15 @@ const [games, stats, tournaments, upcoming] = await Promise.all([
 	player.minor && !own ? [] : getUpcomingGames(env.DB, fideId)
 ])
 
+// El torneo del filtro tiene que ser uno de los suyos, de la tabla de torneos:
+// si no (borrado, uno en el que no jugó, «1e3», que se lee como 1), vuelve a
+// la ficha sin él, o con su id bien escrito. Sólo con una URL a mano: la
+// ficha no enlaza otros.
+const filterTournament = tournamentId === null ? null : (tournaments.find((t) => t.tournamentId === tournamentId) ?? null)
+if (params.has('torneo') && (filterTournament === null || params.get('torneo') !== String(tournamentId))) {
+	return Astro.redirect(withParams(Astro.url, { torneo: filterTournament && filterTournament.tournamentId }))
+}
+
 const pgnQuery = new URLSearchParams()
 if (color !== 'any') pgnQuery.set('color', color)
 if (ownResult) pgnQuery.set('resultado', ownResult)
@@ -59,14 +68,6 @@ if (timeClass) pgnQuery.set('ritmo', timeClass)
 if (tournamentId) pgnQuery.set('torneo', String(tournamentId))
 const pgnHref = `/jugadores/${fideId}.pgn${pgnQuery.size ? `?${pgnQuery}` : ''}`
 const filtered = color !== 'any' || ownResult !== '' || eco !== '' || timeClass !== null || tournamentId !== null
-// El torneo del filtro no tiene campo en el formulario: se dice encima, con
-// el nombre de su fila en la tabla de torneos o, si no está, de sus partidas.
-const filterTournament =
-	tournamentId === null
-		? null
-		: (tournaments.find((t) => t.tournamentId === tournamentId)?.tournamentName ??
-			games.rows[0]?.tournamentName ??
-			`n.º ${tournamentId}`)
 
 const totalGames = stats.colors.reduce((n, c) => n + c.games, 0)
 // Sin torneos ni partidas sólo quedan los datos de la lista FIDE, y la de un
@@ -112,13 +113,13 @@ const shownTournaments = tournaments.length > RECENT_TOURNAMENTS + 5 ? RECENT_TO
 const recent = tournaments.slice(0, shownTournaments)
 const older = tournaments.slice(shownTournaments)
 // Índice «En esta página», con las secciones que hay: en el móvil, los
-// torneos empezaban a 8.646 px (25-oct-2026). Las partidas, todas las suyas,
-// sin los filtros.
+// torneos empezaban a 8.646 px (25-oct-2026). Las partidas, las de la lista:
+// con filtros, sólo las que cumplen.
 const pageIndex = [
 	...(totalGames > 0
 		? [
 				{ href: '#resultados', label: 'Resultados' },
-				{ href: '#partidas', label: 'Partidas', count: totalGames }
+				{ href: '#partidas', label: 'Partidas', count: filtered ? games.total : totalGames }
 			]
 		: []),
 	...(tournaments.length > 0 ? [{ href: '#torneos', label: 'Torneos', count: tournaments.length }] : [])
@@ -259,23 +260,17 @@ const pageIndex = [
 							</thead>
 							{/*
 								Un grupo por color; cada apertura enlaza a sus partidas con ese
-								color y ese ECO, y el grupo, a su repertorio con ese color: aquí el
-								color es el suyo, como en el repertorio. En la fila de preparar es
-								el tuyo, y «con blancas» llevaba a sitios opuestos.
+								color y ese ECO, y el grupo acaba en su repertorio con ese color:
+								aquí el color es el suyo, como en el repertorio. En la fila de
+								preparar es el tuyo, y «con blancas» llevaba a sitios opuestos. En
+								su propia fila y no en la del color, que es la cabecera del grupo:
+								el lector la repetiría en cada celda.
 							*/}
 							{openingGroups.map((group) => (
 								<tbody>
 									<tr class="group-row">
 										<th scope="rowgroup" colspan="3">
-											<span class="group-head">
-												<span>Con {colorName[group.color].toLowerCase()}</span>
-												{hasDossier && (
-													<a href={`/jugadores/${fideId}/repertorio${group.color === 'black' ? '?color=black' : ''}`} rel="nofollow">
-														Explorar {own ? 'mi' : 'su'} repertorio
-														<span class="visually-hidden"> con {colorName[group.color].toLowerCase()}</span>
-													</a>
-												)}
-											</span>
+											Con {colorName[group.color].toLowerCase()}
 										</th>
 									</tr>
 									{group.openings.map((o) => (
@@ -289,6 +284,15 @@ const pageIndex = [
 											<td class="end num">{o.score === null ? null : formatPercent(o.score)}</td>
 										</tr>
 									))}
+									{hasDossier && (
+										<tr class="explore">
+											<td colspan="3">
+												<a href={`/jugadores/${fideId}/repertorio${group.color === 'black' ? '?color=black' : ''}`} rel="nofollow">
+													Explorar {own ? 'mi' : 'su'} repertorio con {colorName[group.color].toLowerCase()}
+												</a>
+											</td>
+										</tr>
+									)}
 								</tbody>
 							))}
 						</table>
@@ -312,10 +316,11 @@ const pageIndex = [
 				)
 			}
 		</div>
+		{/* El torneo del filtro no tiene campo en el formulario: se dice encima. */}
 		{
 			filterTournament && (
 				<p class="note">
-					Torneo: <a href={`/torneos/${tournamentId}`}>{filterTournament}</a>
+					Torneo: <a href={`/torneos/${filterTournament.tournamentId}`}>{filterTournament.tournamentName}</a>
 				</p>
 			)
 		}
@@ -547,8 +552,8 @@ const pageIndex = [
 			grid-column: 1 / -1;
 		}
 
-		/* La fila de grupo (el color) es una sola celda y conserva su relleno. */
-		.openings tr:not(.group-row) > :first-child {
+		/* La fila de grupo (el color) y la del repertorio son una sola celda y conservan su relleno. */
+		.openings tr:not(.group-row, .explore) > :first-child {
 			padding-bottom: 0;
 		}
 
@@ -566,18 +571,11 @@ const pageIndex = [
 		white-space: normal;
 	}
 
-	/* El color a la izquierda y su repertorio a la derecha; si no caben, el enlace baja. */
-	.group-head {
-		display: flex;
-		flex-wrap: wrap;
-		justify-content: space-between;
-		align-items: baseline;
-		gap: var(--space-1) var(--space-3);
-	}
-
-	.group-head a {
+	/* Su repertorio con ese color, al final del grupo y a la derecha, como las cifras. */
+	.explore td {
+		text-align: end;
 		font-size: var(--text-s);
-		font-weight: normal;
+		white-space: normal;
 	}
 
 	.filters {

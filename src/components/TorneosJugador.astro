@@ -55,7 +55,7 @@ const { tournaments, scores, fideId } = Astro.props
 							{/* Sus partidas del torneo, en la lista de la ficha (filtro torneo). */}
 							<td class="end num stat">
 								{score ? (
-									<a href={`/jugadores/${fideId}?torneo=${t.tournamentId}#partidas`}>
+									<a href={`/jugadores/${fideId}?torneo=${t.tournamentId}#partidas`} rel="nofollow">
 										<span class="cell-label" aria-hidden="true">Partidas con PGN </span>
 										{formatNumber(score.games)}
 										<span class="visually-hidden"> partidas</span>
