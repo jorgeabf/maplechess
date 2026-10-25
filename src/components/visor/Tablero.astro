@@ -1,0 +1,36 @@
+---
+// El tablero de una posición pintado en el servidor, con el marcado de
+// chessground (src/lib/chess/tablero.ts): se ve en el primer pintado y sin
+// JavaScript. Es el .board en el que se monta chessground, que lo vacía y pone
+// el suyo, igual salvo el redondeo de su tamaño (board.css). Sin estilos
+// propios: las reglas son las de board.css y las de chessground.
+import { placement, staticBoard, type Orientation } from '../../lib/chess/tablero'
+
+interface Props {
+	fen: string
+	/** Lado que queda abajo. */
+	orientation: Orientation
+	/** La última jugada, en UCI estándar («e1g1»). */
+	lastMove?: string
+}
+
+const { fen, orientation, lastMove } = Astro.props
+const board = staticBoard(fen, orientation, lastMove)
+// Las coordenadas van siempre en el mismo orden; chessground les da la vuelta
+// con la clase black.
+const flipped = { black: orientation === 'black' }
+const RANKS = ['1', '2', '3', '4', '5', '6', '7', '8']
+const FILES = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h']
+---
+
+<div class={`board cg-wrap orientation-${orientation}`}>
+	<cg-container>
+		<cg-board>
+			{board.lastMove.map((square) => <square class="last-move" style={placement(square)} />)}
+			{board.check && <square class="check" style={placement(board.check)} />}
+			{board.pieces.map((piece) => <piece class={piece.className} style={placement(piece)} />)}
+		</cg-board>
+		<coords class:list={['ranks', flipped]}>{RANKS.map((rank) => <coord>{rank}</coord>)}</coords>
+		<coords class:list={['files', flipped]}>{FILES.map((file) => <coord>{file}</coord>)}</coords>
+	</cg-container>
+</div>
