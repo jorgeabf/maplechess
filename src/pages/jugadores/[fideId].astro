@@ -3,6 +3,7 @@ import { env } from 'cloudflare:workers'
 import GamesTable from '../../components/GamesTable.astro'
 import GraficoElo from '../../components/GraficoElo.astro'
 import Icon from '../../components/Icon.astro'
+import IndicePagina from '../../components/IndicePagina.astro'
 import RitmoSelect from '../../components/RitmoSelect.astro'
 import Pagination from '../../components/Pagination.astro'
 import ProximasPartidas from '../../components/ProximasPartidas.astro'
@@ -10,6 +11,7 @@ import TorneosJugador from '../../components/TorneosJugador.astro'
 import Base from '../../layouts/Base.astro'
 import { score } from '../../lib/chess/repertoire'
 import { searchGames } from '../../lib/db/games'
+import { PLAYER_PAGE_SIZE } from '../../lib/db/pagination'
 import { getUpcomingGames } from '../../lib/db/pairings'
 import { getPlayer, getPlayerSummary, getPlayerTournaments } from '../../lib/db/players'
 import { displayName, formatNumber, formatPercent } from '../../lib/format'
@@ -33,15 +35,16 @@ if (field !== null) {
 }
 // En tu ficha (cookie yo), los textos te hablan a ti.
 const own = isOwn(me, fideId)
-const { color, result, eco, timeClass, page } = gameFilters(params)
+const { color, result, eco, timeClass, tournamentId, page } = gameFilters(params)
 // En la ficha, "resultado" es desde el punto de vista del jugador.
 const ownResult = result === 'win' || result === 'draw' || result === 'loss' ? result : ''
-const filters = { fideId, color, result: ownResult, eco, timeClass } as const
+// El torneo llega de «Partidas con PGN» de la tabla de torneos (TorneosJugador).
+const filters = { fideId, color, result: ownResult, eco, timeClass, tournamentId } as const
 
 // La próxima partida de un posible menor (mayBeMinor) sólo sale en su ficha;
 // en las de los demás, en la página del torneo.
 const [games, stats, tournaments, upcoming] = await Promise.all([
-	searchGames(env.DB, filters, page),
+	searchGames(env.DB, filters, page, PLAYER_PAGE_SIZE),
 	getPlayerSummary(env.DB, fideId),
 	getPlayerTournaments(env.DB, fideId),
 	player.minor && !own ? [] : getUpcomingGames(env.DB, fideId)
@@ -52,8 +55,17 @@ if (color !== 'any') pgnQuery.set('color', color)
 if (ownResult) pgnQuery.set('resultado', ownResult)
 if (eco) pgnQuery.set('eco', eco)
 if (timeClass) pgnQuery.set('ritmo', timeClass)
+if (tournamentId) pgnQuery.set('torneo', String(tournamentId))
 const pgnHref = `/jugadores/${fideId}.pgn${pgnQuery.size ? `?${pgnQuery}` : ''}`
-const filtered = color !== 'any' || ownResult !== '' || eco !== '' || timeClass !== null
+const filtered = color !== 'any' || ownResult !== '' || eco !== '' || timeClass !== null || tournamentId !== null
+// El torneo del filtro no tiene campo en el formulario: se dice encima, con
+// el nombre de su fila en la tabla de torneos o, si no está, de sus partidas.
+const filterTournament =
+	tournamentId === null
+		? null
+		: (tournaments.find((t) => t.tournamentId === tournamentId)?.tournamentName ??
+			games.rows[0]?.tournamentName ??
+			`n.º ${tournamentId}`)
 
 const totalGames = stats.colors.reduce((n, c) => n + c.games, 0)
 // Sin torneos ni partidas sólo quedan los datos de la lista FIDE, y la de un
@@ -98,6 +110,18 @@ const RECENT_TOURNAMENTS = 20
 const shownTournaments = tournaments.length > RECENT_TOURNAMENTS + 5 ? RECENT_TOURNAMENTS : tournaments.length
 const recent = tournaments.slice(0, shownTournaments)
 const older = tournaments.slice(shownTournaments)
+// Índice «En esta página», con las secciones que hay: en el móvil, los
+// torneos empezaban a 8.646 px (25-oct-2026). Las partidas, todas las suyas,
+// sin los filtros.
+const pageIndex = [
+	...(totalGames > 0
+		? [
+				{ href: '#resultados', label: 'Resultados' },
+				{ href: '#partidas', label: 'Partidas', count: totalGames }
+			]
+		: []),
+	...(tournaments.length > 0 ? [{ href: '#torneos', label: 'Torneos', count: tournaments.length }] : [])
+]
 ---
 
 <Base
@@ -155,6 +179,8 @@ const older = tournaments.slice(shownTournaments)
 		</dl>
 	</header>
 
+	<IndicePagina items={pageIndex} />
+
 	<ProximasPartidas class="upcoming" games={upcoming} you={own} owner={{ fideId, name, hasDossier }} />
 
 	{
@@ -177,7 +203,7 @@ const older = tournaments.slice(shownTournaments)
 
 	{
 		totalGames > 0 && (
-			<section class="stats">
+			<section class="stats" id="resultados">
 				<div class="card">
 					<h2>Resultados</h2>
 					<table class="data-table by-color">
@@ -275,10 +301,18 @@ const older = tournaments.slice(shownTournaments)
 				)
 			}
 		</div>
+		{
+			filterTournament && (
+				<p class="note">
+					Torneo: <a href={`/torneos/${tournamentId}`}>{filterTournament}</a>
+				</p>
+			)
+		}
 		{/* Sin ninguna partida no hay nada que filtrar; con filtros, se quedan para poder quitarlos. */}
 		{
 			(filtered || games.total > 0) && (
 				<form method="get" class="filters form-row" action="#partidas">
+					{tournamentId && <input type="hidden" name="torneo" value={tournamentId} />}
 					<label>
 						Color
 						<select name="color">
@@ -299,7 +333,15 @@ const older = tournaments.slice(shownTournaments)
 					<RitmoSelect value={timeClass} />
 					<label>
 						ECO
-						<input name="eco" value={eco} placeholder="B90, C…" size="6" maxlength="3" pattern="[A-Ea-e][0-9]{0,2}" />
+						<input
+							name="eco"
+							value={eco}
+							placeholder="B90, B9…"
+							size="6"
+							maxlength="3"
+							pattern="[A-Ea-e][0-9]{0,2}"
+							title="Una letra de la A a la E y hasta dos cifras, como B90"
+						/>
 					</label>
 					<button class="button secondary" type="submit">Filtrar</button>
 					{filtered && <a href={`/jugadores/${fideId}#partidas`}>Quitar filtros</a>}
@@ -309,7 +351,7 @@ const older = tournaments.slice(shownTournaments)
 		{
 			games.total > 0 ? (
 				<>
-					<GamesTable games={games.rows} fideId={fideId} />
+					<GamesTable games={games.rows} fideId={fideId} hideTournament={tournamentId !== null} />
 					<Pagination page={games.page} pages={games.pages} total={games.total} capped={games.capped} noun={['partida', 'partidas']} anchor="partidas" />
 				</>
 			) : (
@@ -328,11 +370,11 @@ const older = tournaments.slice(shownTournaments)
 		{
 			tournaments.length > 0 ? (
 				<>
-					<TorneosJugador tournaments={recent} scores={stats.byTournament} />
+					<TorneosJugador tournaments={recent} scores={stats.byTournament} fideId={fideId} />
 					{older.length > 0 && (
 						<details class="older">
 							<summary>Ver los {formatNumber(older.length)} anteriores</summary>
-							<TorneosJugador tournaments={older} scores={stats.byTournament} />
+							<TorneosJugador tournaments={older} scores={stats.byTournament} fideId={fideId} />
 						</details>
 					)}
 				</>
@@ -534,10 +576,5 @@ const older = tournaments.slice(shownTournaments)
 	/* Que la zona que se pulsa llegue a los 24 px. */
 	.older > summary {
 		padding-block: var(--space-1);
-	}
-
-	.filters > a {
-		align-self: center;
-		font-size: var(--text-s);
 	}
 </style>

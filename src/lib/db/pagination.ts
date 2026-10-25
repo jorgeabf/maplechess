@@ -1,6 +1,14 @@
 export const PAGE_SIZE = 50
 
 /**
+ * Partidas por página en la ficha y en el repertorio. Con 50, la lista era el
+ * 58 % de la ficha a 375 px de ancho (6.793 de 11.656 px, con los torneos
+ * debajo) y el 79 % del repertorio, que la vuelve a pintar con cada jugada
+ * (25-oct-2026).
+ */
+export const PLAYER_PAGE_SIZE = 20
+
+/**
  * Páginas de una búsqueda de partidas o de jugadores: con una mayor, la
  * última. Más allá se afina la búsqueda. La ficha y las demás listas propias
  * (un jugador, un torneo) no tienen tope: su recuento va por su índice y es
@@ -20,8 +28,8 @@ export interface Page<T> {
 	capped?: boolean
 }
 
-export function toPage<T>(rows: T[], total: number, page: number): Page<T> {
-	return { rows, total, page, pages: Math.max(1, Math.ceil(total / PAGE_SIZE)) }
+export function toPage<T>(rows: T[], total: number, page: number, size = PAGE_SIZE): Page<T> {
+	return { rows, total, page, pages: Math.max(1, Math.ceil(total / size)) }
 }
 
 /** Página de un recuento con tope (countSql): por encima de COUNT_LIMIT, `capped`. */
@@ -34,8 +42,8 @@ export function searchPage(page: number): number {
 	return Math.min(page, SEARCH_PAGES)
 }
 
-export function offset(page: number): number {
-	return (page - 1) * PAGE_SIZE
+export function offset(page: number, size = PAGE_SIZE): number {
+	return (page - 1) * size
 }
 
 /**

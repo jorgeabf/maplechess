@@ -62,6 +62,48 @@ describe('getGame', () => {
 		const stored = await db.prepare('SELECT id, ply_count AS plies FROM games WHERE ply_count > 0 LIMIT 1').first<{ id: number; plies: number }>()
 		expect((await getGame(db, stored!.id))?.plyCount).toBe(stored!.plies)
 	})
+
+	it('da el ritmo, que sale en la línea gris de la partida', async () => {
+		const { id } = (await db.prepare('SELECT id FROM games LIMIT 1').first<{ id: number }>())!
+		expect((await getGame(db, id))?.timeClass).toBe('blitz')
+	})
+})
+
+describe('las partidas de un jugador (la ficha)', () => {
+	const player = async () =>
+		(await db
+			.prepare('SELECT white_fide_id AS fideId, tournament_id AS tournamentId FROM games WHERE white_fide_id IS NOT NULL LIMIT 1')
+			.first<{ fideId: number; tournamentId: number }>())!
+
+	it('de `size` en `size`, en el mismo orden', async () => {
+		const { fideId } = await player()
+		const all = await searchGames(db, { fideId }, 1)
+		expect(all.total).toBeGreaterThan(1)
+		const second = await searchGames(db, { fideId }, 2, 1)
+		expect(second).toMatchObject({ total: all.total, page: 2, pages: all.total })
+		expect(second.rows.map((g) => g.id)).toEqual([all.rows[1].id])
+	})
+
+	it('con un torneo, sólo las suyas de ese torneo', async () => {
+		const { fideId, tournamentId } = await player()
+		const { n } = (await db
+			.prepare('SELECT count(*) AS n FROM games WHERE (white_fide_id = ?1 OR black_fide_id = ?1) AND tournament_id = ?2')
+			.bind(fideId, tournamentId)
+			.first<{ n: number }>())!
+		const found = await searchGames(db, { fideId, tournamentId }, 1)
+		expect(found.total).toBe(n)
+		expect(found.rows.every((g) => g.tournamentId === tournamentId && (g.whiteFideId === fideId || g.blackFideId === fideId))).toBe(true)
+		expect(await searchGames(db, { fideId, tournamentId: tournamentId + 1000 }, 1)).toMatchObject({ total: 0, rows: [] })
+	})
+
+	it('con un torneo y los dos colores, va por el índice del torneo: lee como mucho sus partidas', async () => {
+		const { sql, params } = gamesWhere({ fideId: 1, tournamentId: 1 })
+		const { results } = await db
+			.prepare(`EXPLAIN QUERY PLAN SELECT g.id FROM games g ${sql}`)
+			.bind(...params)
+			.all<{ detail: string }>()
+		expect(results.map((r) => r.detail).join('\n')).toContain('(tournament_id=?)')
+	})
 })
 
 describe('getTournamentGames', () => {

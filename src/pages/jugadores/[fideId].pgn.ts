@@ -11,8 +11,8 @@ export const GET: APIRoute = async ({ params, url }) => {
 	const player = fideId === null ? null : await getPlayer(env.DB, fideId)
 	if (fideId === null || !player) return notFound('Jugador no encontrado')
 
-	const { color, result, eco, timeClass } = gameFilters(url.searchParams)
+	const { color, result, eco, timeClass, tournamentId } = gameFilters(url.searchParams)
 	const ownResult = result === 'win' || result === 'draw' || result === 'loss' ? result : ''
-	const ids = await exportGameIds(env.DB, { fideId, color, result: ownResult, eco, timeClass })
+	const ids = await exportGameIds(env.DB, { fideId, color, result: ownResult, eco, timeClass, tournamentId })
 	return pgnResponse(gamesPgn(env.DB, ids), player.name)
 }

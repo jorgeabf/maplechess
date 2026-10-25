@@ -35,7 +35,7 @@ const searchSummary = [
 <Base title={filters.q ? `Torneos: ${filters.q}` : 'Torneos'} section="torneos">
 	<h1>Torneos</h1>
 	<div class="when">
-		<Segmented label="Torneos" options={tabs} current={filters.upcoming ? 'proximos' : ''} href={tabHref} />
+		<Segmented navigation label="Torneos" options={tabs} current={filters.upcoming ? 'proximos' : ''} href={tabHref} />
 	</div>
 	<FiltrosPlegables label="Búsqueda" summary={searchSummary} fold={searchSummary.length > 0 && result.rows.length > 0}>
 		<form method="get" role="search" class="filters form-row">

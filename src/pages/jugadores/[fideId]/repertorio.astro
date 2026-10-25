@@ -16,10 +16,10 @@ import { explore, parseLine } from '../../../lib/chess/repertoire'
 import { TIME_CLASS_LABEL } from '../../../lib/chess/timecontrol'
 import { addYears, isoDate } from '../../../lib/dates'
 import { getGamesByIds, type GameListRow } from '../../../lib/db/games'
-import { offset, PAGE_SIZE, toPage } from '../../../lib/db/pagination'
+import { offset, PLAYER_PAGE_SIZE, toPage } from '../../../lib/db/pagination'
 import { getPlayer } from '../../../lib/db/players'
 import { getPlayerGames, repertoireGames } from '../../../lib/db/repertoire'
-import { COLOR_NAME, displayName, formatGames } from '../../../lib/format'
+import { COLOR_NAME, displayName, formatGames, formatNumber } from '../../../lib/format'
 import { ME_COOKIE, isOwn, resolveMe } from '../../../lib/me'
 import { PERIOD_OPTIONS, periodSummary, TIME_CLASS_OPTIONS, timeClassSummary } from '../../../lib/options'
 import { positiveInt, repertoireParams, withParams, type RepertoireSearch } from '../../../lib/params'
@@ -38,6 +38,7 @@ const [player, playerGames] = await Promise.all([
 ])
 if (!player) return Astro.rewrite('/404')
 if (player.minor) return Astro.rewrite(`/jugadores/${fideId}/no-disponible`)
+// Sólo las que tienen jugadas: si no son todas, la cabecera dice cuántas.
 const games = repertoireGames(playerGames)
 // Tu propio repertorio (cookie yo): los textos te hablan a ti.
 const own = isOwn(resolveMe(null, Astro.cookies.get(ME_COOKIE)?.value), fideId)
@@ -47,7 +48,13 @@ const exploration = explore(games, line.position, color)
 
 // Partidas de la posición, paginadas; cada una se abre en el visor en la
 // jugada en la que llega a ella.
-const listed = toPage(exploration.games.slice(offset(page), offset(page) + PAGE_SIZE), exploration.games.length, page)
+const start = offset(page, PLAYER_PAGE_SIZE)
+const listed = toPage(
+	exploration.games.slice(start, start + PLAYER_PAGE_SIZE),
+	exploration.games.length,
+	page,
+	PLAYER_PAGE_SIZE
+)
 const plies = new Map(listed.rows.map((g) => [g.id, g.ply]))
 const details = new Map((await getGamesByIds(env.DB, [...plies.keys()])).map((g) => [g.id, g]))
 const rows = listed.rows.map((g) => details.get(g.id)).filter((g): g is GameListRow => g !== undefined)
@@ -62,6 +69,7 @@ const colors: { id: RepertoireSearch['color']; label: string }[] = [
 	{ id: 'black', label: 'Con negras' }
 ]
 const eloFiltered = minElo !== null || maxElo !== null
+const filtered = period !== '' || timeClass !== null || eloFiltered
 const dossierHref = withParams(new URL(`/jugadores/${fideId}/preparar`, Astro.url), {
 	color,
 	periodo: period || null,
@@ -96,8 +104,9 @@ const summary = [
 	noindex
 >
 	<CabeceraJugador fideId={fideId} name={name} title={title} own={own}>
-		{formatGames(games.length)} con {colorText}
-		{filterText}.{' '}
+		{formatGames(playerGames.length)} con {colorText}
+		{filterText}
+		{games.length < playerGames.length && ` (${formatNumber(games.length)} con jugadas)`}.{' '}
 		{
 			own ? (
 				<>
@@ -139,14 +148,37 @@ const summary = [
 			<div class="elo-fields">
 				<label>
 					<span class="visually-hidden">ELO mínimo del rival</span>
-					<input name="elo_min" type="number" min="1000" max="3000" value={minElo ?? ''} placeholder="desde" />
+					<input
+						name="elo_min"
+						type="number"
+						inputmode="numeric"
+						min="1000"
+						max="3000"
+						value={minElo ?? ''}
+						placeholder="desde"
+					/>
 				</label>
 				<label>
 					<span class="visually-hidden">ELO máximo del rival</span>
-					<input name="elo_max" type="number" min="1000" max="3000" value={maxElo ?? ''} placeholder="hasta" />
+					<input
+						name="elo_max"
+						type="number"
+						inputmode="numeric"
+						min="1000"
+						max="3000"
+						value={maxElo ?? ''}
+						placeholder="hasta"
+					/>
 				</label>
-				<button class="button secondary" type="submit">Aplicar</button>
-				{eloFiltered && <a href={link({ elo_min: null, elo_max: null })} rel="nofollow">Quitar</a>}
+				<button class="button secondary" type="submit">Filtrar</button>
+				{/* Los filtros y no el color, con el que va siempre el repertorio. */}
+				{
+					filtered && (
+						<a href={link({ periodo: null, ritmo: null, elo_min: null, elo_max: null })} rel="nofollow">
+							Quitar filtros
+						</a>
+					)
+				}
 			</div>
 		</form>
 	</FiltrosPlegables>

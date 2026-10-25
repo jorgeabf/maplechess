@@ -2,6 +2,11 @@
 // Selector de opciones excluyentes hecho con enlaces (color, periodo, ritmo):
 // cada opción es una URL, así que funciona sin JavaScript y se puede compartir.
 // Las páginas con filtros llevan nofollow: no aportan nada al índice.
+//
+// Un filtro es un grupo (role="group") y no un nav: con un nav por selector,
+// el repertorio tenía siete zonas de navegación y su lista dejaba de servir
+// para saltar al menú. Las pestañas que cambian de lista (/torneos) sí son
+// navegación.
 
 interface Option {
 	id: string
@@ -21,15 +26,18 @@ interface Props {
 	current: string
 	/** URL de la página con esa opción. */
 	href: (id: string) => string
+	/** Pestañas de una página y no un filtro: un nav. */
+	navigation?: boolean
 }
 
-const { label, showLabel = false, options, current, href } = Astro.props
+const { label, showLabel = false, options, current, href, navigation = false } = Astro.props
+const Group = navigation ? 'nav' : 'div'
 ---
 
 <div class="field">
-	{/* El nombre accesible ya lo da el aria-label del nav: el rótulo visible no se lee dos veces. */}
+	{/* El nombre accesible ya lo da el aria-label del grupo: el rótulo visible no se lee dos veces. */}
 	{showLabel && <span class="field-label" aria-hidden="true">{label}</span>}
-	<nav class="segmented" aria-label={label}>
+	<Group class="segmented" role={navigation ? undefined : 'group'} aria-label={label}>
 		{
 			options.map((o) => (
 				<a href={href(o.id)} rel="nofollow" aria-current={o.id === current ? 'true' : undefined}>
@@ -37,7 +45,7 @@ const { label, showLabel = false, options, current, href } = Astro.props
 				</a>
 			))
 		}
-	</nav>
+	</Group>
 </div>
 
 <style>
@@ -59,9 +67,16 @@ const { label, showLabel = false, options, current, href } = Astro.props
 		background: var(--surface);
 	}
 
+	/*
+	 * Ninguna opción baja de 2,5rem de ancho: las rondas de un torneo medían
+	 * 23,6 px en el móvil, con 4 px entre una y otra (25-oct-2026). A 375 px,
+	 * con ocho rondas o más parten línea.
+	 */
 	a {
+		min-inline-size: 2.5rem;
 		padding: var(--space-1) var(--space-3);
 		border-radius: var(--radius-s);
+		text-align: center;
 		color: var(--text);
 		font-size: var(--text-s);
 		text-decoration: none;

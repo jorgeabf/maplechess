@@ -138,6 +138,14 @@ describe('aviso de licencia en las descargas PGN', () => {
 		expect(info64.others).toBeGreaterThan(0)
 	})
 
+	it('/jugadores/{id}.pgn?torneo=, sólo las suyas de ese torneo', async () => {
+		const pgn = await download(playerPgn, `/jugadores/${LICHESS_PLAYER}.pgn?torneo=${ids.lichess}`, {
+			fideId: String(LICHESS_PLAYER)
+		})
+		expect(notices(pgn)).toEqual({ lichess: 1, others: 0 })
+		expect(parsePgn(pgn)[0].headers.get('Event')).toBe(LICHESS.name)
+	})
+
 	it('/partidas.pgn', async () => {
 		const all = notices(await download(searchPgn, '/partidas.pgn?desde=2000-01-01'))
 		expect(all.lichess).toBe(12)

@@ -144,6 +144,11 @@ export function gamesWhere(f: GameFilters): GamesWhere {
 	if (f.from) where.push(`g.date >= ${p(f.from)}`)
 	if (f.to) where.push(`g.date <= ${p(f.to)}`)
 	if (f.timeClass) where.push(`g.time_class = ${p(f.timeClass)}`)
+	// Las de un jugador en un torneo (la ficha): con los dos colores, SQLite va
+	// por el índice del torneo y lee todas sus partidas, como mucho las del más
+	// grande (866 el 25-oct-2026). Por el del jugador, con +g.tournament_id,
+	// leería todas las suyas, que pueden ser miles: en la D1 remota, las 11 de
+	// un GM con 329 en el CE Rápido 2026 eran 189 + 177 filas así y 353 + 331 por él.
 	if (f.tournamentId) where.push(`g.tournament_id = ${p(f.tournamentId)}`)
 	if (f.round != null) where.push(`g.round = ${p(f.round)}`)
 	if (f.ids) where.push(`g.id IN (SELECT value FROM json_each(${p(JSON.stringify(f.ids))}))`)
@@ -161,18 +166,19 @@ function gamesFrom(byDate: boolean): string {
 	return byDate ? 'games g INDEXED BY games_date' : 'games g'
 }
 
-/** Una página de las partidas del WHERE de gamesWhere, sin contarlas. */
+/** Una página de `size` partidas del WHERE de gamesWhere, sin contarlas. */
 function listGames(
 	db: D1Database,
 	{ sql, params }: GamesWhere,
 	page: number,
 	order: GameOrder,
-	byDate = false
+	byDate = false,
+	size = PAGE_SIZE
 ): D1PreparedStatement {
 	return db
 		.prepare(
 			`SELECT ${LIST_COLUMNS} FROM ${gamesFrom(byDate)} JOIN tournaments t ON t.id = g.tournament_id
-			${sql} ${ORDERS[order]} LIMIT ${PAGE_SIZE} OFFSET ${offset(page)}`
+			${sql} ${ORDERS[order]} LIMIT ${size} OFFSET ${offset(page, size)}`
 		)
 		.bind(...params)
 }
@@ -189,18 +195,24 @@ function countFrom({ sql, namesOnly }: GamesWhere): string {
 /**
  * Una página de partidas, de la más reciente a la más antigua, y cuántas son.
  * Las de un jugador (la ficha), un torneo o una lista: el total exacto y todas
- * sus páginas. Las búsquedas, con tope (COUNT_LIMIT y SEARCH_PAGES); si salen
- * del nombre o del ECO, el recuento va primero y dice si recorrer games_date
- * (countAndPlan).
+ * sus páginas, de `size` en `size`. Las búsquedas, con tope (COUNT_LIMIT y
+ * SEARCH_PAGES), van siempre de PAGE_SIZE en PAGE_SIZE: el tope son sus
+ * páginas de ese tamaño. Si salen del nombre o del ECO, el recuento va primero
+ * y dice si recorrer games_date (countAndPlan).
  */
-export async function searchGames(db: D1Database, f: GameFilters, page: number): Promise<Page<GameListRow>> {
+export async function searchGames(
+	db: D1Database,
+	f: GameFilters,
+	page: number,
+	size = PAGE_SIZE
+): Promise<Page<GameListRow>> {
 	const where = gamesWhere(f)
 	if (where.recent === 'own') {
 		const [rows, count] = await db.batch<GameListRow | { n: number }>([
-			listGames(db, where, page, 'recent'),
+			listGames(db, where, page, 'recent', false, size),
 			db.prepare(`SELECT count(*) AS n FROM games g ${where.sql}`).bind(...where.params)
 		])
-		return toPage(rows.results as GameListRow[], (count.results[0] as { n: number }).n, page)
+		return toPage(rows.results as GameListRow[], (count.results[0] as { n: number }).n, page, size)
 	}
 	const at = searchPage(page)
 	if (where.recent === 'date') {
@@ -408,13 +420,15 @@ export interface GameDetail extends GameListRow {
 	gamesSource: string | null
 	/** Medias jugadas; sin ninguna, la página no se indexa ni entra en el sitemap. */
 	plyCount: number
+	/** Ritmo (lib/chess/timecontrol.ts); null si ni el torneo ni el PGN lo dicen. */
+	timeClass: TimeClass | null
 }
 
 export async function getGame(db: D1Database, id: number): Promise<GameDetail | null> {
 	return db
 		.prepare(
-			`SELECT ${LIST_COLUMNS}, g.pgn, g.ply_count AS plyCount, t.url AS tournamentUrl, t.source AS tournamentSource,
-				t.games_source AS gamesSource
+			`SELECT ${LIST_COLUMNS}, g.pgn, g.ply_count AS plyCount, g.time_class AS timeClass, t.url AS tournamentUrl,
+				t.source AS tournamentSource, t.games_source AS gamesSource
 			FROM games g JOIN tournaments t ON t.id = g.tournament_id WHERE g.id = ?1`
 		)
 		.bind(id)

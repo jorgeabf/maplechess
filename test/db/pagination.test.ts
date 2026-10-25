@@ -1,5 +1,25 @@
 import { describe, expect, it } from 'vitest'
-import { COUNT_LIMIT, countSql, SEARCH_PAGES, searchPage, toCappedPage, toPage, walkOrderIndex } from '../../src/lib/db/pagination'
+import {
+	COUNT_LIMIT,
+	countSql,
+	offset,
+	PLAYER_PAGE_SIZE,
+	SEARCH_PAGES,
+	searchPage,
+	toCappedPage,
+	toPage,
+	walkOrderIndex
+} from '../../src/lib/db/pagination'
+
+describe('toPage y offset', () => {
+	it('de 50 en 50 o del tamaño que se pida (la ficha y el repertorio, de 20 en 20)', () => {
+		expect(toPage([], 101, 1)).toMatchObject({ pages: 3 })
+		expect(toPage([], 101, 1, PLAYER_PAGE_SIZE)).toMatchObject({ pages: 6 })
+		expect(toPage([], 0, 1, PLAYER_PAGE_SIZE)).toMatchObject({ pages: 1 })
+		expect(offset(3)).toBe(100)
+		expect(offset(3, PLAYER_PAGE_SIZE)).toBe(40)
+	})
+})
 
 describe('toCappedPage', () => {
 	it('hasta 1.000, el total exacto', () => {
