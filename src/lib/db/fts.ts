@@ -59,11 +59,34 @@ export function tournamentTerms(text: string): { text: string | null; places: Pl
 			})
 			i += found.length
 		} else {
-			terms.push(prefix([query[i]]))
+			terms.push(withEquivalents(query[i]))
 			i++
 		}
 	}
-	return { text: terms.length > 0 ? terms.join(' ') : null, places }
+	// AND explícito: FTS5 no admite el implícito (el espacio) junto a un paréntesis.
+	return { text: terms.length > 0 ? terms.join(' AND ') : null, places }
+}
+
+/**
+ * Palabras de los torneos internacionales en inglés: las retransmisiones de
+ * lichess se llaman así («European Club Cup», «FIDE World Championship»), y
+ * «europeo» sólo encontraba un torneo de Alzira. Como prefijo, «europe»
+ * encuentra también «european». Sin «ce» (campeonato de España): como
+ * prefijo, también encontraría «Cervera».
+ */
+const EQUIVALENTS: Record<string, string> = {
+	europeo: 'europe',
+	europea: 'europe',
+	europa: 'europe',
+	mundial: 'world',
+	olimpiada: 'olympiad',
+	copa: 'cup'
+}
+
+/** La palabra como prefijo y, si tiene equivalente (también en plural: «mundiales»), con él. */
+function withEquivalents(word: string): string {
+	const equivalent = EQUIVALENTS[word] ?? EQUIVALENTS[word.replace(/e?s$/, '')]
+	return equivalent ? `(${prefix([word])} OR ${prefix([equivalent])})` : prefix([word])
 }
 
 /**

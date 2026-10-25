@@ -268,6 +268,37 @@ describe('searchTournaments: primero los que nombran el sitio', () => {
 	})
 })
 
+describe('searchTournaments: equivalencias en inglés', () => {
+	const search = async (q: string) => {
+		const result = await searchTournaments(
+			db,
+			{ q, upcoming: false, withGames: false, from: '', to: '', type: null, page: 1 },
+			'2026-10-20'
+		)
+		return result.rows.map((t) => t.name).sort()
+	}
+
+	beforeEach(async () => {
+		await tournament('41st European Chess Club Cup 2026')
+		await tournament('Campeonato Europeo de Veteranos 2026')
+		await tournament('FIDE World Championship 2026')
+		await tournament('Copa Galicia 2026', '2026-10-17', '2026-10-18', 'individual', 'Lugo')
+		await tournament('Open de Otoño 2026', '2026-10-17', '2026-10-18', 'individual', 'Lugo')
+	})
+
+	it('cada palabra, también por su equivalente en inglés', async () => {
+		expect(await search('europeo')).toEqual(['41st European Chess Club Cup 2026', 'Campeonato Europeo de Veteranos 2026'])
+		expect(await search('mundial')).toEqual(['FIDE World Championship 2026'])
+		expect(await search('copa')).toEqual(['41st European Chess Club Cup 2026', 'Copa Galicia 2026'])
+	})
+
+	it('las demás palabras y los sitios siguen siendo obligatorios', async () => {
+		expect(await search('copa europea')).toEqual(['41st European Chess Club Cup 2026'])
+		expect(await search('campeonato europeo')).toEqual(['Campeonato Europeo de Veteranos 2026'])
+		expect(await search('copa lugo')).toEqual(['Copa Galicia 2026'])
+	})
+})
+
 describe('isIndexableTournament', () => {
 	it('con partidas o al menos dos jugadores, como el sitemap', () => {
 		expect(isIndexableTournament(0, 0)).toBe(false)
