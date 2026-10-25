@@ -14,9 +14,15 @@ interface Props {
 		tournament?: { id: number; name: string; round: number; startsAt: string }
 		pairings: RoundPairing[]
 	}[]
+	/**
+	 * Cada mesa con su ancla (#mesa-12), a la que lleva «mesa 12» de la
+	 * próxima partida. Sólo en la página del torneo: en /partidas van mesas
+	 * de varios torneos en la misma tabla.
+	 */
+	boardIds?: boolean
 }
 
-const { groups } = Astro.props
+const { groups, boardIds = false } = Astro.props
 ---
 
 <div class="table-wrap pairings">
@@ -45,7 +51,7 @@ const { groups } = Astro.props
 						</tr>
 					)}
 					{pairings.map((pairing) => (
-						<tr>
+						<tr id={boardIds ? `mesa-${pairing.board}` : undefined}>
 							<td class="end num">{pairing.board}</td>
 							{(['white', 'black'] as const).map((color) => {
 								const player = pairing[color]
@@ -89,6 +95,25 @@ const { groups } = Astro.props
 
 	.group-row .muted {
 		font-weight: normal;
+	}
+
+	/*
+	 * La mesa a la que lleva el enlace (#mesa-12), con el fondo de lo actual
+	 * y una raya del acento a la izquierda: el fondo solo apenas se distingue
+	 * del de la tabla. Por celdas, que valen en la tabla y en la rejilla del
+	 * móvil. Queda a un cuarto de la pantalla y no pegada arriba, para ver
+	 * también las mesas de antes.
+	 */
+	tr:target {
+		scroll-margin-top: 25svh;
+	}
+
+	tr:target > * {
+		background: var(--accent-soft);
+	}
+
+	tr:target > :first-child {
+		box-shadow: inset 3px 0 var(--accent);
 	}
 
 	/*

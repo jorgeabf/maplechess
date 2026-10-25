@@ -3,17 +3,19 @@ import { env } from 'cloudflare:workers'
 import Emparejamientos from '../../components/Emparejamientos.astro'
 import GamesTable from '../../components/GamesTable.astro'
 import Icon from '../../components/Icon.astro'
+import IndicePagina from '../../components/IndicePagina.astro'
 import Pagination from '../../components/Pagination.astro'
 import PlayerName from '../../components/PlayerName.astro'
 import Segmented from '../../components/Segmented.astro'
 import Base from '../../layouts/Base.astro'
-import { tiebreakLabel } from '../../lib/chess/tiebreaks'
+import { pointsTiebreaks, tiebreakLabel } from '../../lib/chess/tiebreaks'
 import { TIME_CLASS_LABEL, timeClassOf } from '../../lib/chess/timecontrol'
 import { madridDate } from '../../lib/dates'
 import { getTournamentGames } from '../../lib/db/games'
 import { getUpcomingRound } from '../../lib/db/pairings'
 import { getTournamentStandings, standingsHeading } from '../../lib/db/standings'
 import { getTournament, getTournamentParticipants, isIndexableTournament } from '../../lib/db/tournaments'
+import { gameMatches } from '../../lib/encuentros'
 import { formatCount, formatNumber, formatPoints, formatRange, formatRoundTime } from '../../lib/format'
 import { CC_BY, CC_BY_SA } from '../../lib/licenses'
 import { ME_COOKIE, resolveMe } from '../../lib/me'
@@ -31,6 +33,7 @@ const isTeam = tournament.type === 'team'
 const fromLichess = tournament.source === 'lichess'
 // Del archivo de la Federación Cántabra (ingest/fca), con licencia CC BY 4.0.
 const fromFca = tournament.source === 'fca'
+const today = madridDate(new Date())
 // En un torneo individual la clasificación sustituye a los participantes en
 // cuanto la hay; en uno por equipos va encima de las plantillas. Los propios
 // de lichess no tienen.
@@ -58,11 +61,19 @@ const roundOptions = [
 	...(rounds.some((r) => r.round === 0) ? [{ id: '0', label: 'Sin ronda' }] : [])
 ]
 const roundHref = (option: string) => `${withParams(Astro.url, { ronda: option, p: null })}#partidas`
+// Las del torneo, sea cual sea la ronda elegida.
+const gamesTotal = rounds.reduce((sum, r) => sum + r.games, 0)
 const timeClass = timeClassOf(tournament.timeControl)
 // Sin cookie yo, la próxima ronda explica cómo recibir el aviso de las tuyas.
 const me = resolveMe(null, Astro.cookies.get(ME_COOKIE)?.value).fideId
-// Agrupados por equipo; en torneos individuales hay un único grupo sin nombre.
-const teams = [...Map.groupBy(participants, (p) => p.team).entries()]
+// Las plantillas de un torneo por equipos, por equipo. Los jugadores sin
+// equipo (los puede traer una retransmisión de lichess) van al final.
+const teams = [...Map.groupBy(participants, (p) => p.team).entries()].sort(
+	([a], [b]) => Number(a === null) - Number(b === null)
+)
+const teamCount = teams.filter(([team]) => team !== null).length
+// «52 equipos», o los jugadores si ninguno trae equipo.
+const rosterCount = teamCount > 0 ? formatCount(teamCount, 'equipo', 'equipos') : participants.length
 // En uno individual con clasificación no se leen los participantes: cada fila
 // de la clasificación es uno de ellos.
 const players = standings && !isTeam ? standings.rows.length : participants.length
@@ -79,7 +90,13 @@ const lichessShare =
 			? 'Sus partidas son'
 			: `${formatNumber(tournament.lichessGames)} de sus ${formatNumber(tournament.gamesCount)} partidas ${tournament.lichessGames === 1 ? 'es' : 'son'}`
 		: null
-const standingsTitle = standings && standingsHeading(standings, tournament.endDate, madridDate(new Date()))
+const standingsTitle = standings && standingsHeading(standings, tournament.endDate, today)
+// En un torneo por equipos, el desempate que es su propia puntuación (los
+// puntos de encuentro o de tablero) no sale en la tabla: la nota lo sigue
+// nombrando y dice por qué no está. En uno individual coincidía por casualidad.
+const repeated = isTeam && standings ? pointsTiebreaks(standings) : []
+const tiebreakColumns = standings ? standings.tiebreaks.flatMap((code, i) => (repeated.includes(i) ? [] : [{ code, i }])) : []
+const repeatedCodes = repeated.map((i) => standings?.tiebreaks[i])
 // «La publica info64, con los desempates del torneo por orden: BH (Buchholz), WON (partidas ganadas).»
 const standingsNote =
 	standings &&
@@ -88,8 +105,51 @@ const standingsNote =
 		standings.tiebreaks.length > 0
 			? `, con los desempates del torneo por orden: ${standings.tiebreaks.map(tiebreakLabel).join(', ')}`
 			: '',
-		isTeam ? '.' : '. Nº es el número del ranking inicial.'
+		isTeam ? '.' : '. Nº es el número del ranking inicial.',
+		repeatedCodes.length === 1 ? ` ${repeatedCodes[0]} no sale en la tabla: es la misma cifra que Pts.` : '',
+		repeatedCodes.length > 1
+			? ` ${new Intl.ListFormat('es').format(repeatedCodes.map(String))} no salen en la tabla: son la misma cifra que Pts.`
+			: ''
 	].join('')
+// ELO medio de cada equipo, el de la clasificación (el que publica la fuente).
+const teamRating = new Map(isTeam && standings ? standings.rows.map((s) => [s.name, s.rating]) : [])
+// El encuentro de cada partida, de las plantillas, que ya están leídas. Si no
+// casa ninguna de la página (sin plantillas), no hay columna: sería de rayas.
+const matches = isTeam ? gameMatches(games.rows, participants) : null
+
+/*
+ * Orden de las secciones: primero lo que resume el torneo, y las partidas
+ * después. La próxima ronda, si la hay; la clasificación o, sin ella, los
+ * participantes; las partidas, y las plantillas de un torneo por equipos al
+ * final, porque son largas. Sin ninguna partida, «Partidas» va la última:
+ * sólo dice por qué no las hay. El índice sale de esta misma lista.
+ */
+type Section = 'proxima-ronda' | 'clasificacion' | 'participantes' | 'partidas' | 'plantillas'
+const sections = (
+	[
+		upcoming && 'proxima-ronda',
+		standings && 'clasificacion',
+		!isTeam && !standings && 'participantes',
+		gamesTotal > 0 && 'partidas',
+		isTeam && 'plantillas',
+		gamesTotal === 0 && 'partidas'
+	] as const
+).filter((s): s is Section => typeof s === 'string')
+const participantsLabel = fromLichess ? 'Jugadores' : 'Participantes'
+const indexItems = sections.flatMap((s) => {
+	switch (s) {
+		case 'proxima-ronda':
+			return [{ href: '#proxima-ronda', label: 'Emparejamientos' }]
+		case 'clasificacion':
+			return [{ href: '#clasificacion', label: 'Clasificación' }]
+		case 'participantes':
+			return [{ href: '#participantes', label: participantsLabel, count: participants.length }]
+		case 'partidas':
+			return gamesTotal > 0 ? [{ href: '#partidas', label: 'Partidas', count: gamesTotal }] : []
+		case 'plantillas':
+			return [{ href: '#participantes', label: 'Plantillas', count: rosterCount }]
+	}
+})
 ---
 
 <Base
@@ -138,191 +198,113 @@ const standingsNote =
 		</p>
 	</header>
 
-	{
-		upcoming && (
-			<section id="proxima-ronda">
-				<h2>
-					Ronda {upcoming.round} · {formatRoundTime(upcoming.startsAt)}
-				</h2>
-				<p class="muted">
-					Emparejamientos publicados en {tournament.source}. «Preparar» abre el dossier del jugador con el color que lleva.
-					{!me && ' ¿Juegas? Pulsa tu nombre y, en tu ficha, «Soy yo»: la portada te avisará de cada ronda.'}
-				</p>
-				<Emparejamientos groups={[{ pairings: upcoming.pairings }]} />
-			</section>
-		)
-	}
-
-	<section id="partidas">
-		<h2>Partidas</h2>
-		{
-			fromLichess ? (
-				<p class="muted">
-					Este torneo no está en info64. Sus partidas vienen de su{' '}
-					{tournamentUrl ? (
-						<a href={tournamentUrl} rel="noopener">retransmisión oficial en lichess</a>
-					) : (
-						'retransmisión oficial en lichess'
-					)}{' '}
-					y sólo están las que juega algún
-					jugador español. Licencia <a href={CC_BY_SA} rel="license noopener">CC BY-SA 4.0</a>.
-				</p>
-			) : tournament.gamesSource === 'lichess' ? (
-				<p class="muted">
-					{tournament.source} no publica las partidas de este torneo; vienen de su{' '}
-					{broadcastUrl ? (
-						<a href={broadcastUrl} rel="noopener">retransmisión en lichess</a>
-					) : (
-						'retransmisión en lichess'
-					)}
-					, que suele cubrir sólo las mesas con tablero electrónico. Licencia{' '}
-					<a href={CC_BY_SA} rel="license noopener">CC BY-SA 4.0</a>.
-				</p>
-			) : fromFca ? (
-				<p class="muted">
-					Sus partidas son del{' '}
-					{tournamentUrl ? (
-						<a href={tournamentUrl} rel="noopener">archivo de la Federación Cántabra de Ajedrez</a>
-					) : (
-						'archivo de la Federación Cántabra de Ajedrez'
-					)}
-					, con licencia <a href={CC_BY} rel="license noopener">CC BY 4.0</a>. Aquí se han separado por torneo y cada
-					jugador se ha enlazado con su ficha FIDE por el nombre, sólo cuando casa con uno solo.
-				</p>
-			) : (
-				lichessShare && (
-					<p class="muted">
-						{lichessShare} de una retransmisión de lichess publicada en info64 (FEDA), con licencia{' '}
-						<a href={CC_BY_SA} rel="license noopener">CC BY-SA 4.0</a>.
-					</p>
-				)
-			)
-		}
-		{
-			rounds.length > 1 && (
-				<div class="selectors">
-					<Segmented showLabel label="Ronda" options={roundOptions} current={round === null ? '' : String(round)} href={roundHref} />
-				</div>
-			)
-		}
-		{
-			games.total > 0 ? (
-				<>
-					<GamesTable games={games.rows} hideTournament />
-					<Pagination page={games.page} pages={games.pages} total={games.total} noun={['partida', 'partidas']} anchor="partidas" />
-				</>
-			) : (
-				<p class="muted">
-					{round === null ? 'La fuente no ha publicado partidas de este torneo.' : 'No hay partidas de esa ronda.'}
-				</p>
-			)
-		}
-	</section>
+	<IndicePagina items={indexItems} />
 
 	{
-		standings && (
-			<section id="clasificacion">
-				<h2>{standingsTitle}</h2>
-				<p class="muted">{standingsNote}</p>
-				<div class="table-wrap compact standings">
-					<table class="data-table">
-						<thead>
-							<tr>
-								<th scope="col" class="end">Pos.</th>
-								<th scope="col">{isTeam ? 'Equipo' : 'Jugador'}</th>
-								<th scope="col" class="end">Pts.</th>
-								{standings.tiebreaks.map((code) => (
-									<th scope="col" class="end">
-										{code}
-									</th>
-								))}
-								<th scope="col" class="end">{isTeam ? 'ELO medio' : 'ELO'}</th>
-								{!isTeam && (
-									<>
-										<th scope="col">Fed.</th>
-										<th scope="col" class="end">Nº</th>
-									</>
-								)}
-							</tr>
-						</thead>
-						<tbody>
-							{standings.rows.map((s) => (
-								<tr>
-									<td class="end num">{s.pos}</td>
-									<td class="name">
-										{isTeam || !s.name ? (
-											s.name
-										) : (
-											<>
-												<PlayerName name={s.name} title={s.title} fideId={s.fideId} />
-												{s.fideId && s.hasDossier === 1 && (
-													<span class="prepare">
-														{' '}
-														·{' '}
-														<a href={dossierHref(s.fideId)} rel="nofollow">
-															preparar
-														</a>
-													</span>
-												)}
-											</>
-										)}
-									</td>
-									<td class="end num">{formatPoints(s.points)}</td>
-									{s.tiebreaks.map((value) => (
-										<td class="end num">{value === null ? '' : formatNumber(value)}</td>
-									))}
-									<td class="end num">{s.rating}</td>
-									{!isTeam && (
-										<>
-											<td>{s.fed}</td>
-											<td class="end num">{s.startRank}</td>
-										</>
-									)}
-								</tr>
-							))}
-						</tbody>
-					</table>
-				</div>
-			</section>
-		)
-	}
+		sections.map((section) => (
+			<>
+				{section === 'proxima-ronda' && upcoming && (
+					<section id="proxima-ronda">
+						<h2>
+							Emparejamientos de la ronda {upcoming.round} · {formatRoundTime(upcoming.startsAt)}
+						</h2>
+						<p class="muted">
+							Publicados en {tournament.source}. «Preparar» abre el dossier del jugador con el color que lleva.
+							{!me && ' ¿Juegas? Pulsa tu nombre y, en tu ficha, «Soy yo»: la portada te avisará de cada ronda.'}
+						</p>
+						<Emparejamientos groups={[{ pairings: upcoming.pairings }]} boardIds />
+					</section>
+				)}
 
-	{
-		(!standings || isTeam) && (
-			<section id="participantes">
-				<h2>
-					{isTeam ? 'Plantillas' : fromLichess ? 'Jugadores' : 'Participantes'} (
-					{isTeam
-						? `${formatCount(participants.length, 'jugador', 'jugadores')}, ${formatCount(teams.length, 'equipo', 'equipos')}`
-						: formatNumber(participants.length)})
-				</h2>
-				{fromLichess && <p class="muted">Los de las partidas de arriba, numerados por ELO.</p>}
-				{
-					participants.length > 0 ? (
-						<div class="table-wrap compact participants">
+				{section === 'clasificacion' && standings && (
+					<section id="clasificacion">
+						<h2>{standingsTitle}</h2>
+						<p class="muted">{standingsNote}</p>
+						<div class="table-wrap compact standings">
 							<table class="data-table">
 								<thead>
 									<tr>
-										<th scope="col" class="end">{isTeam ? 'Tablero' : 'Nº'}</th>
-										<th scope="col">Jugador</th>
-										<th scope="col">Fed.</th>
-										<th scope="col" class="end">ELO</th>
-										<th scope="col" class="end">FIDE ID</th>
+										<th scope="col" class="end">Pos.</th>
+										<th scope="col">{isTeam ? 'Equipo' : 'Jugador'}</th>
+										<th scope="col" class="end">Pts.</th>
+										{tiebreakColumns.map(({ code }) => (
+											<th scope="col" class="end">
+												{code}
+											</th>
+										))}
+										<th scope="col" class="end">{isTeam ? 'ELO medio' : 'ELO'}</th>
+										{!isTeam && (
+											<>
+												<th scope="col">Fed.</th>
+												<th scope="col" class="end">Nº</th>
+											</>
+										)}
 									</tr>
 								</thead>
-								{teams.map(([team, players]) => (
+								<tbody>
+									{standings.rows.map((s) => (
+										<tr>
+											<td class="end num">{s.pos}</td>
+											<td class="name">
+												{isTeam || !s.name ? (
+													s.name
+												) : (
+													<>
+														<PlayerName name={s.name} title={s.title} fideId={s.fideId} />
+														{s.fideId && s.hasDossier === 1 && (
+															<span class="prepare">
+																{' '}
+																·{' '}
+																<a href={dossierHref(s.fideId)} rel="nofollow">
+																	preparar
+																</a>
+															</span>
+														)}
+													</>
+												)}
+											</td>
+											<td class="end num">{formatPoints(s.points)}</td>
+											{tiebreakColumns.map(({ i }) => (
+												<td class="end num">{s.tiebreaks[i] === null ? '' : formatNumber(s.tiebreaks[i])}</td>
+											))}
+											<td class="end num">{s.rating}</td>
+											{!isTeam && (
+												<>
+													<td>{s.fed}</td>
+													<td class="end num">{s.startRank}</td>
+												</>
+											)}
+										</tr>
+									))}
+								</tbody>
+							</table>
+						</div>
+					</section>
+				)}
+
+				{section === 'participantes' && (
+					<section id="participantes">
+						<h2>
+							{participantsLabel} ({formatNumber(participants.length)})
+						</h2>
+						{fromLichess && <p class="muted">Los de sus partidas, numerados por ELO.</p>}
+						{participants.length > 0 ? (
+							<div class="table-wrap compact participants">
+								<table class="data-table">
+									<thead>
+										<tr>
+											<th scope="col" class="end">Nº</th>
+											<th scope="col">Jugador</th>
+											<th scope="col">Fed.</th>
+											<th scope="col" class="end">ELO</th>
+											<th scope="col" class="end">FIDE ID</th>
+										</tr>
+									</thead>
 									<tbody>
-										{team && (
-											<tr class="group-row">
-												<th scope="colgroup" colspan="5">
-													{team}
-												</th>
-											</tr>
-										)}
-										{players.map((p) => (
+										{participants.map((p) => (
 											<tr>
 												{/* Apilada en una pantalla muy estrecha: cada cifra lleva su rótulo, sólo si la hay. */}
-												<td class="end num"><span class="cell-label" aria-hidden="true">{isTeam ? 'Tablero ' : 'Nº '}</span>{p.startRank}</td>
+												<td class="end num"><span class="cell-label" aria-hidden="true">Nº </span>{p.startRank}</td>
 												<td class="name">
 													<PlayerName name={p.name} title={p.title} fideId={p.fideId} />
 													{p.fideId && p.hasDossier === 1 && (
@@ -341,15 +323,146 @@ const standingsNote =
 											</tr>
 										))}
 									</tbody>
-								))}
-							</table>
-						</div>
-					) : (
-						<p class="muted">La fuente no publica la lista de participantes.</p>
-					)
-				}
-			</section>
-		)
+								</table>
+							</div>
+						) : (
+							<p class="muted">La fuente no publica la lista de participantes.</p>
+						)}
+					</section>
+				)}
+
+				{section === 'partidas' && (
+					<section id="partidas">
+						<h2>Partidas</h2>
+						{fromLichess ? (
+							<p class="muted">
+								Este torneo no está en info64. Sus partidas vienen de su{' '}
+								{tournamentUrl ? (
+									<a href={tournamentUrl} rel="noopener">retransmisión oficial en lichess</a>
+								) : (
+									'retransmisión oficial en lichess'
+								)}{' '}
+								y sólo están las que juega algún
+								jugador español. Licencia <a href={CC_BY_SA} rel="license noopener">CC BY-SA 4.0</a>.
+							</p>
+						) : tournament.gamesSource === 'lichess' ? (
+							<p class="muted">
+								{tournament.source} no publica las partidas de este torneo; vienen de su{' '}
+								{broadcastUrl ? (
+									<a href={broadcastUrl} rel="noopener">retransmisión en lichess</a>
+								) : (
+									'retransmisión en lichess'
+								)}
+								, que suele cubrir sólo las mesas con tablero electrónico. Licencia{' '}
+								<a href={CC_BY_SA} rel="license noopener">CC BY-SA 4.0</a>.
+							</p>
+						) : fromFca ? (
+							<p class="muted">
+								Sus partidas son del{' '}
+								{tournamentUrl ? (
+									<a href={tournamentUrl} rel="noopener">archivo de la Federación Cántabra de Ajedrez</a>
+								) : (
+									'archivo de la Federación Cántabra de Ajedrez'
+								)}
+								, con licencia <a href={CC_BY} rel="license noopener">CC BY 4.0</a>. Aquí se han separado por torneo y cada
+								jugador se ha enlazado con su ficha FIDE por el nombre, sólo cuando casa con uno solo.
+							</p>
+						) : (
+							lichessShare && (
+								<p class="muted">
+									{lichessShare} de una retransmisión de lichess publicada en info64 (FEDA), con licencia{' '}
+									<a href={CC_BY_SA} rel="license noopener">CC BY-SA 4.0</a>.
+								</p>
+							)
+						)}
+						{rounds.length > 1 && (
+							<div class="selectors">
+								<Segmented showLabel label="Ronda" options={roundOptions} current={round === null ? '' : String(round)} href={roundHref} />
+							</div>
+						)}
+						{games.total > 0 ? (
+							<>
+								<GamesTable games={games.rows} hideTournament match={matches?.size ? (g) => matches.get(g.id) : undefined} />
+								<Pagination page={games.page} pages={games.pages} total={games.total} noun={['partida', 'partidas']} anchor="partidas" />
+							</>
+						) : (
+							<p class="muted">
+								{gamesTotal > 0
+									? 'No hay partidas de esa ronda.'
+									: tournament.startDate !== null && tournament.startDate > today
+										? 'Aún no ha empezado.'
+										: 'La fuente no ha publicado partidas de este torneo.'}
+							</p>
+						)}
+					</section>
+				)}
+
+				{section === 'plantillas' && (
+					<section id="participantes">
+						<h2>
+							Plantillas ({formatCount(participants.length, 'jugador', 'jugadores')}
+							{teamCount > 0 && `, ${formatCount(teamCount, 'equipo', 'equipos')}`})
+						</h2>
+						{fromLichess && <p class="muted">Los de sus partidas, numerados por ELO.</p>}
+						{participants.length > 0 ? (
+							<div class="teams">
+								{teams.map(([team, members]) => {
+									const rating = teamRating.get(team)
+									return (
+										<details class="team">
+											<summary>
+												<span class="team-name">{team ?? 'Sin equipo'}</span>
+												<span class="team-meta">
+													{formatCount(members.length, 'jugador', 'jugadores')}
+													{rating && ` · ELO medio ${rating}`}
+												</span>
+											</summary>
+											<div class="table-wrap compact participants">
+												<table class="data-table">
+													<thead>
+														<tr>
+															<th scope="col" class="end">Tablero</th>
+															<th scope="col">Jugador</th>
+															<th scope="col">Fed.</th>
+															<th scope="col" class="end">ELO</th>
+															<th scope="col" class="end">FIDE ID</th>
+														</tr>
+													</thead>
+													<tbody>
+														{members.map((p) => (
+															<tr>
+																<td class="end num"><span class="cell-label" aria-hidden="true">Tablero </span>{p.startRank}</td>
+																<td class="name">
+																	<PlayerName name={p.name} title={p.title} fideId={p.fideId} />
+																	{p.fideId && p.hasDossier === 1 && (
+																		<span class="prepare">
+																			{' '}
+																			·{' '}
+																			<a href={dossierHref(p.fideId)} rel="nofollow">
+																				preparar
+																			</a>
+																		</span>
+																	)}
+																</td>
+																<td>{p.fed}</td>
+																<td class="end num">{p.rating && <><span class="cell-label" aria-hidden="true">ELO </span>{p.rating}</>}</td>
+																<td class="end num">{p.fideId && <><span class="cell-label" aria-hidden="true">FIDE ID </span>{p.fideId}</>}</td>
+															</tr>
+														))}
+													</tbody>
+												</table>
+											</div>
+										</details>
+									)
+								})}
+							</div>
+						) : (
+							<p class="muted">La fuente no publica la lista de participantes.</p>
+						)}
+					</section>
+				)}
+			</>
+		))
 	}
 </Base>
 
@@ -402,9 +515,7 @@ const standingsNote =
 	 * ELO, que piden de 190 a 279 px (30 torneos medidos el 24-oct-2026), y el
 	 * ELO quedaba tras el scroll. Por debajo de 17,5rem cada jugador pasa a un
 	 * bloque, como en los listados apilados (.stack): el nombre a todo el ancho
-	 * y, debajo y en pequeño, las demás celdas, cada cifra con su rótulo. La
-	 * fila de cada equipo también pasa a bloque: como fila de tabla, su colspan
-	 * daría cinco columnas a la tabla y los jugadores irían en la primera.
+	 * y, debajo y en pequeño, las demás celdas, cada cifra con su rótulo.
 	 */
 	@container (width < 17.5rem) {
 		.participants thead {
@@ -416,12 +527,7 @@ const standingsNote =
 			white-space: nowrap;
 		}
 
-		.participants tr,
-		.participants .group-row > th {
-			display: block;
-		}
-
-		.participants tr:not(.group-row) {
+		.participants tr {
 			display: flex;
 			flex-wrap: wrap;
 			align-items: baseline;
@@ -430,7 +536,7 @@ const standingsNote =
 			border-bottom: 1px solid var(--border);
 		}
 
-		.participants tbody:last-child > tr:last-child {
+		.participants tbody > tr:last-child {
 			border-bottom: 0;
 		}
 
@@ -459,6 +565,97 @@ const standingsNote =
 		.participants .cell-label {
 			display: inline;
 			color: var(--text-muted);
+		}
+	}
+
+	/*
+	 * Plantillas de un torneo por equipos: un equipo por fila, plegado, con su
+	 * número de jugadores y su ELO medio. Abiertas medían 20.441 px a 375 en
+	 * un torneo de 52 equipos (el CE de Rápidas por Equipos 2026), y quien
+	 * prepara un encuentro sólo busca la del rival. Cada equipo abre la misma
+	 * tabla que la de los participantes, con sus propios anchos.
+	 *
+	 * El triángulo es del acento, porque se pulsa; el nombre, del color del
+	 * texto: 52 nombres en azul pesaban más que la clasificación. Con flex, el
+	 * summary pierde su marcador, así que va delante del nombre, para que no
+	 * se quede solo en su línea si el nombre baja (a 250 px), y sin texto para
+	 * el lector de pantalla (la barra de content; sin ella, el triángulo se lee).
+	 */
+	.teams {
+		overflow: hidden;
+		border: 1px solid var(--border);
+		border-radius: var(--radius-l);
+		background: var(--surface);
+	}
+
+	.team + .team {
+		border-top: 1px solid var(--border);
+	}
+
+	.team > summary {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: baseline;
+		gap: 0 var(--space-3);
+		padding: var(--space-2) var(--space-3);
+		color: var(--text);
+		list-style: none;
+	}
+
+	.team > summary::-webkit-details-marker {
+		display: none;
+	}
+
+	.team-name::before {
+		content: '▸';
+		content: '▸' / '';
+		margin-inline-end: var(--space-2);
+		color: var(--accent);
+	}
+
+	.team[open] .team-name::before {
+		content: '▾';
+		content: '▾' / '';
+	}
+
+	.team > summary:hover {
+		background: var(--surface-hover);
+	}
+
+	/* Dentro de la caja, que recorta lo que sale de ella. */
+	.team > summary:focus-visible {
+		outline-offset: -2px;
+	}
+
+	.team-name {
+		flex: 1 1 12rem;
+		font-weight: var(--weight-strong);
+	}
+
+	.team-meta {
+		color: var(--text-muted);
+	}
+
+	.team > .table-wrap {
+		margin-top: 0;
+		border: 0;
+		border-top: 1px solid var(--border);
+		border-radius: 0;
+	}
+
+	/*
+	 * En papel, las plantillas salen abiertas, como antes de plegarlas, y sin
+	 * el triángulo. Donde no hay ::details-content, salen plegadas.
+	 */
+	@media print {
+		@supports selector(::details-content) {
+			.team::details-content {
+				content-visibility: visible;
+			}
+
+			.team-name::before {
+				content: none;
+			}
 		}
 	}
 </style>

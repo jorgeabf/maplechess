@@ -1,0 +1,91 @@
+---
+// Índice «En esta página», bajo la cabecera de una página larga (el torneo):
+// enlaces a sus secciones, sin JavaScript ni lecturas de D1. La página le
+// pasa sólo las que tiene y, si el título la lleva, su cifra. Con menos de dos
+// secciones no pinta nada: no hay adónde saltar.
+//
+// Es texto subrayado, sin caja, para que no se confunda con un selector
+// (Segmented) que vaya debajo. Como el índice de /privacidad, pero en una
+// línea.
+import { formatNumber } from '../lib/format'
+
+interface Item {
+	/** Ancla de la sección: «#clasificacion». */
+	href: string
+	label: string
+	/** Entre paréntesis tras el nombre: un número o un texto («52 equipos»). */
+	count?: number | string
+}
+
+interface Props {
+	items: readonly Item[]
+}
+
+const { items } = Astro.props
+const countText = (count: number | string) => (typeof count === 'number' ? formatNumber(count) : count)
+---
+
+{
+	items.length > 1 && (
+		<nav class="page-index" aria-label="En esta página">
+			{/* El nombre del nav ya lo da su aria-label: el rótulo visible no se lee dos veces. */}
+			<p class="field-label" aria-hidden="true">
+				En esta página:
+			</p>
+			<ul>
+				{items.map((item) => (
+					<li>
+						<a href={item.href}>
+							{item.label}
+							{item.count !== undefined && ` (${countText(item.count)})`}
+						</a>
+					</li>
+				))}
+			</ul>
+		</nav>
+	)
+}
+
+<style>
+	/*
+	 * El rótulo y los enlaces en una línea, separados por «·» como la línea
+	 * gris de la cabecera; si no caben (el móvil), los enlaces bajan enteros,
+	 * debajo del rótulo.
+	 */
+	.page-index {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: baseline;
+		gap: var(--space-1) var(--space-2);
+		margin-bottom: var(--space-6);
+		font-size: var(--text-s);
+	}
+
+	p {
+		margin: 0;
+	}
+
+	ul {
+		display: flex;
+		flex-wrap: wrap;
+		gap: var(--space-1) var(--space-2);
+		margin: 0;
+		padding: 0;
+		list-style: none;
+	}
+
+	/* Sin texto para el lector de pantalla, que ya anuncia la lista (la barra de content). */
+	li + li::before {
+		content: '·';
+		content: '·' / '';
+		margin-inline-end: var(--space-2);
+		color: var(--text-muted);
+	}
+
+	/* En papel, los enlaces no llevan a ninguna parte. */
+	@media print {
+		.page-index {
+			display: none;
+		}
+	}
+</style>

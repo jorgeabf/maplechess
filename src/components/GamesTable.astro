@@ -12,9 +12,14 @@ interface Props {
 	hideTournament?: boolean
 	/** Media jugada en la que se abre cada partida; el repertorio, en la que llega a la posición. */
 	ply?: (game: GameListRow) => number | undefined
+	/**
+	 * Los dos equipos del encuentro de cada partida (un torneo por equipos),
+	 * en la columna del torneo: va con hideTournament.
+	 */
+	match?: (game: GameListRow) => readonly [string, string] | undefined
 }
 
-const { games, fideId, hideTournament = false, ply } = Astro.props
+const { games, fideId, hideTournament = false, ply, match } = Astro.props
 
 /** Color del jugador de `fideId` en la partida. */
 function colorOf(game: GameListRow): 'white' | 'black' | undefined {
@@ -35,7 +40,7 @@ function outcomeClass(game: GameListRow): string {
 const linkTo = (id: number | null) => (fideId && id === fideId ? null : id)
 ---
 
-<div class:list={['table-wrap', 'games', { 'no-tournament': hideTournament }]}>
+<div class:list={['table-wrap', 'games', { 'no-tournament': hideTournament && !match, 'with-match': match }]}>
 	<table class="data-table">
 		<thead>
 			<tr>
@@ -45,40 +50,54 @@ const linkTo = (id: number | null) => (fideId && id === fideId ? null : id)
 				<th scope="col" class="black">Negras</th>
 				<th scope="col" class="opening">Apertura</th>
 				{!hideTournament && <th scope="col" class="tournament">Torneo</th>}
+				{match && <th scope="col" class="match">Encuentro</th>}
 				<th scope="col" class="round end">Ronda</th>
 			</tr>
 		</thead>
 		<tbody>
 			{
-				games.map((g) => (
-					<tr>
-						<td class="date num">{formatDate(g.date)}</td>
-						<td class="white">
-							<PlayerName name={g.whiteName} fideId={linkTo(g.whiteFideId)} elo={g.whiteElo} />
-						</td>
-						<td class="outcome center">
-							<a class:list={['result', outcomeClass(g)]} href={gameHref(g.id, colorOf(g), ply?.(g))} title="Ver la partida">
-								{formatResult(g.result)}
-							</a>
-						</td>
-						<td class="black">
-							<PlayerName name={g.blackName} fideId={linkTo(g.blackFideId)} elo={g.blackElo} />
-						</td>
-						<td class="opening wrap">
-							{g.eco && <span class="eco">{g.eco}</span>} {g.opening}
-						</td>
-						{!hideTournament && (
-							<td class="tournament wrap">
-								<a href={`/torneos/${g.tournamentId}`}>{g.tournamentName}</a>
+				games.map((g) => {
+					const teams = match?.(g)
+					return (
+						<tr>
+							<td class="date num">{formatDate(g.date)}</td>
+							<td class="white">
+								<PlayerName name={g.whiteName} fideId={linkTo(g.whiteFideId)} elo={g.whiteElo} />
 							</td>
-						)}
-						{/* Ronda y mesa por separado: «11.407» se leía como un número. */}
-						<td class="round end num">
-							{g.round > 0 ? g.round : '—'}
-							{g.board > 0 && <span class="muted"> · mesa&nbsp;{g.board}</span>}
-						</td>
-					</tr>
-				))
+							<td class="outcome center">
+								<a class:list={['result', outcomeClass(g)]} href={gameHref(g.id, colorOf(g), ply?.(g))}>
+									<span class="visually-hidden">Ver la partida </span>
+									{formatResult(g.result)}
+								</a>
+							</td>
+							<td class="black">
+								<PlayerName name={g.blackName} fideId={linkTo(g.blackFideId)} elo={g.blackElo} />
+							</td>
+							<td class="opening wrap">
+								{g.eco && <span class="eco">{g.eco}</span>} {g.opening}
+							</td>
+							{!hideTournament && (
+								<td class="tournament wrap">
+									<a href={`/torneos/${g.tournamentId}`}>{g.tournamentName}</a>
+								</td>
+							)}
+							{/* Un equipo por línea: los dos nombres juntos se leían como uno. */}
+							{match && <td class="match wrap">{teams && <><span>{teams[0]} –</span> <span>{teams[1]}</span></>}</td>}
+							{/* Ronda y mesa por separado: «11.407» se leía como un número. */}
+							<td class="round end num">
+								{g.round > 0 ? (
+									<>
+										<span class="cell-label" aria-hidden="true">ronda </span>
+										{g.round}
+									</>
+								) : (
+									'—'
+								)}
+								{g.board > 0 && <span class="muted"> · mesa&nbsp;{g.board}</span>}
+							</td>
+						</tr>
+					)
+				})
 			}
 		</tbody>
 	</table>
@@ -108,6 +127,10 @@ const linkTo = (id: number | null) => (fideId && id === fideId ? null : id)
 		background: var(--accent-soft);
 	}
 
+	.match > span {
+		display: block;
+	}
+
 	/*
 	 * Huecos estrechos (el móvil, una tableta en vertical): con las siete
 	 * columnas en paralelo la tabla pide unos 880 px como mínimo, y a 375 px el
@@ -124,6 +147,11 @@ const linkTo = (id: number | null) => (fideId && id === fideId ? null : id)
 	 * hay huecos, así que el relleno, la raya y el fondo de la cabecera van en
 	 * la fila. Con display: grid en tr la tabla conserva su semántica (en Safari
 	 * desde 2023, WebKit 257458).
+	 *
+	 * El encuentro de un torneo por equipos va en su propia línea, bajo los
+	 * jugadores: los dos equipos no cabían en el hueco del torneo, entre la
+	 * fecha y la ronda (cuatro líneas a 375 px). La ronda lleva su rótulo,
+	 * porque la cabecera no se ve: «ronda 5 · mesa 4».
 	 */
 	.games {
 		container-type: inline-size;
@@ -141,6 +169,24 @@ const linkTo = (id: number | null) => (fideId && id === fideId ? null : id)
 			gap: var(--space-1) var(--space-3);
 			padding: var(--space-2) var(--space-3);
 			border-bottom: 1px solid var(--border);
+		}
+
+		.with-match tr {
+			grid-template-areas:
+				'white white outcome'
+				'black black outcome'
+				'match match match'
+				'opening opening opening'
+				'date tournament round';
+		}
+
+		/* Sin equipos (un jugador que no está en las plantillas), sin la raya de una celda vacía. */
+		td.match:empty {
+			display: none;
+		}
+
+		.cell-label {
+			display: inline;
 		}
 
 		/* Como .visually-hidden: fuera de la vista, pero en el árbol de accesibilidad. */
@@ -191,6 +237,10 @@ const linkTo = (id: number | null) => (fideId && id === fideId ? null : id)
 			grid-area: tournament;
 		}
 
+		.match {
+			grid-area: match;
+		}
+
 		.round {
 			grid-area: round;
 		}
@@ -202,6 +252,7 @@ const linkTo = (id: number | null) => (fideId && id === fideId ? null : id)
 
 		td.date,
 		td.tournament,
+		td.match,
 		td.round {
 			font-size: var(--text-xs);
 		}
@@ -236,7 +287,9 @@ const linkTo = (id: number | null) => (fideId && id === fideId ? null : id)
 	 * Toda la fila lleva a la partida, en los dos anchos: el enlace del
 	 * resultado se estira sobre ella con un ::after, y los nombres y el torneo
 	 * quedan encima con su propio enlace. Sigue habiendo un solo enlace a la
-	 * partida, así que el tabulador y los lectores de pantalla no cambian.
+	 * partida, así que el tabulador y los lectores de pantalla no cambian. Su
+	 * nombre lleva delante «Ver la partida», oculto a la vista: en la lista de
+	 * enlaces del lector salían 50 enlaces «1-0» o «½-½».
 	 * isolation deja ese z-index dentro de la fila.
 	 *
 	 * El ::after necesita que la fila sea su bloque contenedor, y una fila de
