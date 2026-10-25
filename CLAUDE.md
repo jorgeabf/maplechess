@@ -396,7 +396,15 @@ pnpm lint
 pnpm db:migrate:local    # aplica migrations/ a la D1 local
 pnpm build               # check + astro build
 pnpm run deploy          # build + wrangler deploy (sin «run», pnpm ejecuta su propio «deploy»)
+node scripts/medir.mjs <carpeta> <ruta…>   # anchos, temas, desbordes y errores, en Chromium sin ventana
+node scripts/worktree.mjs <puerto>         # en una copia de trabajo: instala, D1 local, .dev.vars y migraciones
 ```
+
+- **`medir.mjs`** (25-oct-2026) usa `playwright-core`, fijado en la 1.60.0 porque es la de `chromium-1223`, el que ya está en la carpeta de navegadores de Playwright, que comparten otros proyectos. Dependabot no lo sube. Nunca `playwright install`: puede borrar de esa carpeta versiones que usan otros.
+  - Lanza Chromium con `channel: 'chromium'`: sin él busca `chromium_headless_shell`, que no está descargado.
+  - Sólo abre localhost y maplechess.es, y la carpeta de salida va fuera del repositorio.
+  - En Git Bash, una ruta que empieza por `/` llega como `C:/Program Files/Git/`: hay que lanzarlo con `MSYS_NO_PATHCONV=1` o desde PowerShell.
+- **`worktree.mjs`** sólo prepara una copia de este repositorio que esté fuera de OneDrive y de la carpeta temporal. El puerto tiene que ser el de una configuración de `.claude/launch.json`: `web` (4321), `web-4322` o `web-4323`, una por sesión que pruebe a la vez.
 
 Para lanzar una sincronización en local, con el token de `.dev.vars`:
 
