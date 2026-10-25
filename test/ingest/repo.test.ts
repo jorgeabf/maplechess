@@ -133,6 +133,24 @@ describe('repositorio de ingesta', () => {
 		expect(row?.name).toBe('Otro nombre')
 	})
 
+	it('guarda el grupo del torneo y una lectura sin él no lo borra', async () => {
+		const related = async (id: number) =>
+			(await db.prepare('SELECT related FROM tournaments WHERE id = ?1').bind(id).first<{ related: string | null }>())?.related
+		const group = [
+			{ key: 'odiseo-chess-masters', label: 'Blitz' },
+			{ key: 'odiseo-chess-masters-rapidas', label: 'Rápidas' }
+		]
+		const id = await upsertTournament(db, { ...tournament, related: group })
+		expect(JSON.parse((await related(id))!)).toEqual(group)
+		await upsertTournament(db, { ...tournament, related: null })
+		expect(JSON.parse((await related(id))!)).toEqual(group)
+		// Una lectura con otro grupo sí lo sustituye.
+		await upsertTournament(db, { ...tournament, related: group.slice().reverse() })
+		expect(JSON.parse((await related(id))!)).toEqual(group.slice().reverse())
+		// Las fuentes sin grupos no lo pasan: queda NULL.
+		expect(await related(await upsertTournament(db, { ...tournament, key: 'otro' }))).toBeNull()
+	})
+
 	it('guarda participantes y partidas con jugadores identificados y PGN enriquecido', async () => {
 		const { id, page, rows } = await loadFixture()
 		await saveGames(db, id, rows, '2026-10-17T00:00:00.000Z', INFO64)

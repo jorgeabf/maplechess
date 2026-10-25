@@ -6,6 +6,7 @@
 import { normalizeName } from '../lib/chess/names'
 import { setPgnTags } from '../lib/chess/pgn'
 import { madridYear } from '../lib/dates'
+import type { RelatedTournament } from '../lib/db/tournaments'
 import { withoutHomonymYear } from '../lib/format'
 import { lichessUrl } from '../lib/licenses'
 import { tournamentPlace } from '../lib/lugares'
@@ -131,21 +132,23 @@ export interface TournamentInput {
 	timeControl: string | null
 	url: string
 	syncedAt: string
+	/** Su grupo en la fuente, con él (migración 0018). Sólo lo tiene info64. */
+	related?: RelatedTournament[] | null
 }
 
 /**
  * Guarda el torneo y devuelve su id, con dónde se juega (tournamentPlace). Una
- * lectura que no trae la ciudad, las fechas o el ritmo (la página cambió o vino
- * a medias) no borra los guardados; sin la ciudad, tampoco el sitio que salió
- * de ella.
+ * lectura que no trae la ciudad, las fechas, el ritmo o el grupo (la página
+ * cambió o vino a medias) no borra los guardados; sin la ciudad, tampoco el
+ * sitio que salió de ella.
  */
 export async function upsertTournament(db: D1Database, t: TournamentInput): Promise<number> {
 	const place = tournamentPlace(t.city, t.name)
 	const row = await db
 		.prepare(
 			`INSERT INTO tournaments (source, source_key, type, name, city, start_date, end_date, time_control, url, synced_at,
-				provincia, comunidad)
-			VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)
+				provincia, comunidad, related)
+			VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)
 			ON CONFLICT (source, source_key) DO UPDATE SET
 				type = excluded.type,
 				name = excluded.name,
@@ -158,7 +161,8 @@ export async function upsertTournament(db: D1Database, t: TournamentInput): Prom
 				provincia = CASE WHEN excluded.city IS NULL AND tournaments.city IS NOT NULL
 					THEN tournaments.provincia ELSE excluded.provincia END,
 				comunidad = CASE WHEN excluded.city IS NULL AND tournaments.city IS NOT NULL
-					THEN tournaments.comunidad ELSE excluded.comunidad END
+					THEN tournaments.comunidad ELSE excluded.comunidad END,
+				related = coalesce(excluded.related, tournaments.related)
 			RETURNING id`
 		)
 		.bind(
@@ -173,7 +177,8 @@ export async function upsertTournament(db: D1Database, t: TournamentInput): Prom
 			t.url,
 			t.syncedAt,
 			place.province,
-			place.community
+			place.community,
+			t.related ? JSON.stringify(t.related) : null
 		)
 		.first<{ id: number }>()
 	if (!row) throw new Error(`No se pudo guardar el torneo ${t.source}/${t.key}`)
