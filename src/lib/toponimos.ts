@@ -155,7 +155,7 @@ export function placeAt(query: string[], i: number): { length: number; places: P
  * Si `phrase` está en `text`, con la última palabra como prefijo, como la
  * busca el FTS («araba» está en «Arabako Txapelketa»).
  */
-function contains(text: string[], phrase: string[]): boolean {
+export function contains(text: string[], phrase: string[]): boolean {
 	for (let j = 0; j + phrase.length <= text.length; j++) {
 		if (phrase.every((word, k) => (k === phrase.length - 1 ? text[j + k].startsWith(word) : text[j + k] === word))) {
 			return true

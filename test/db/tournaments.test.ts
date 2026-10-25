@@ -229,6 +229,45 @@ describe('searchTournaments por sitio', () => {
 	})
 })
 
+describe('searchTournaments: primero los que nombran el sitio', () => {
+	const search = async (q: string, upcoming = false) => {
+		const result = await searchTournaments(
+			db,
+			{ q, upcoming, withGames: false, from: '', to: '', type: null, page: 1 },
+			'2026-10-20'
+		)
+		return result.rows.map((t) => t.name)
+	}
+	const at = (name: string, date: string, city: string) => tournament(name, date, date, 'individual', city)
+
+	it('con un sitio, los que lo nombran por cualquiera de sus nombres o gentilicios, aunque sean más viejos', async () => {
+		await at('Torneo de Otoño 2026', '2026-10-01', 'Ferrol')
+		await at('Campeonato Gallego Veterano 2019', '2019-05-01', 'Lugo')
+		await at('Open de Vigo 2025', '2025-06-01', 'Vigo')
+		// El gentilicio sólo ordena: no cuela un torneo de otro sitio.
+		await at('Memorial Gallego 2026', '2026-09-01', 'Gijón')
+		expect(await search('galicia')).toEqual(['Campeonato Gallego Veterano 2019', 'Torneo de Otoño 2026', 'Open de Vigo 2025'])
+	})
+
+	it('también en los próximos, antes que el más cercano', async () => {
+		await at('Torneo de Invierno 2026', '2026-11-01', 'Ferrol')
+		await at('Campionato Galego Rápido 2027', '2027-01-10', 'Vigo')
+		expect(await search('galicia', true)).toEqual(['Campionato Galego Rápido 2027', 'Torneo de Invierno 2026'])
+	})
+
+	it('con dos sitios, antes el que nombra los dos', async () => {
+		await at('Torneo Galicia de Oviedo 2026', '2026-06-01', 'Oviedo')
+		await at('Encuentro Asturias Galicia 2020', '2020-06-01', 'Oviedo')
+		expect(await search('asturias galicia')).toEqual(['Encuentro Asturias Galicia 2020', 'Torneo Galicia de Oviedo 2026'])
+	})
+
+	it('sin sitios, el orden de siempre', async () => {
+		await at('Open Galicia 2019', '2019-03-01', 'Lugo')
+		await at('Open de Primavera 2026', '2026-04-01', 'Madrid')
+		expect(await search('open')).toEqual(['Open de Primavera 2026', 'Open Galicia 2019'])
+	})
+})
+
 describe('isIndexableTournament', () => {
 	it('con partidas o al menos dos jugadores, como el sitemap', () => {
 		expect(isIndexableTournament(0, 0)).toBe(false)

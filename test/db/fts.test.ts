@@ -13,36 +13,48 @@ describe('prefixTerms', () => {
 })
 
 describe('tournamentTerms', () => {
-	const place = (provinces: string[], communities: string[], name: string) => ({
+	const place = (provinces: string[], communities: string[], name: string, named: string) => ({
 		provinces,
 		communities,
-		name: `name : (${name})`
+		name: `name : (${name})`,
+		named: `name : (${named})`
 	})
+	const ALAVA = '"alava"* OR "araba"* OR "alaves"*'
 
 	it('una provincia, por cualquiera de sus nombres o gentilicios, con la palabra escrita para el nombre', () => {
-		expect(tournamentTerms('alava')).toEqual({ text: null, places: [place(['01'], [], '"alava"*')] })
-		expect(tournamentTerms('Alavesa')).toEqual({ text: null, places: [place(['01'], [], '"alavesa"*')] })
-		expect(tournamentTerms('ARABA')).toEqual({ text: null, places: [place(['01'], [], '"araba"*')] })
+		expect(tournamentTerms('alava')).toEqual({ text: null, places: [place(['01'], [], '"alava"*', ALAVA)] })
+		expect(tournamentTerms('Alavesa')).toEqual({ text: null, places: [place(['01'], [], '"alavesa"*', ALAVA)] })
+		expect(tournamentTerms('ARABA')).toEqual({ text: null, places: [place(['01'], [], '"araba"*', ALAVA)] })
 	})
 
 	it('reconoce el plural del gentilicio', () => {
-		expect(tournamentTerms('gallegos')?.places).toEqual([place([], ['12'], '"gallegos"*')])
-		expect(tournamentTerms('andaluces')?.places).toEqual([place([], ['01'], '"andaluces"*')])
+		expect(tournamentTerms('gallegos')?.places).toEqual([
+			place([], ['12'], '"gallegos"*', '"galicia"* OR "gallego"* OR "gallega"* OR "galego"* OR "galega"*')
+		])
+		// Para ordenar, también el plural en -ces, que el prefijo «andaluz» no encuentra.
+		expect(tournamentTerms('andaluces')?.places).toEqual([
+			place([], ['01'], '"andaluces"*', '"andalucia"* OR "andaluz"* OR "andaluces"*')
+		])
 	})
 
 	it('gana el nombre más largo', () => {
-		expect(tournamentTerms('castilla y león')?.places).toEqual([place([], ['07'], '"castilla y leon"*')])
-		expect(tournamentTerms('leon')?.places).toEqual([place(['24'], [], '"leon"*')])
-		expect(tournamentTerms('a coruña')?.places).toEqual([place(['15'], [], '"a coruna"*')])
+		expect(tournamentTerms('castilla y león')?.places).toEqual([
+			place([], ['07'], '"castilla y leon"*', '"castilla y leon"* OR "castilla leon"* OR "castellanoleones"* OR "castellano leones"*')
+		])
+		expect(tournamentTerms('leon')?.places).toEqual([place(['24'], [], '"leon"*', '"leon"*')])
+		expect(tournamentTerms('a coruña')?.places).toEqual([place(['15'], [], '"a coruna"*', '"coruna"* OR "corunes"*')])
 	})
 
 	it('si el nombre es de una provincia y de su comunidad, basta la comunidad', () => {
-		expect(tournamentTerms('valenciana')?.places).toEqual([place([], ['10'], '"valenciana"*')])
-		expect(tournamentTerms('valencia')?.places).toEqual([place(['46'], [], '"valencia"*')])
+		expect(tournamentTerms('valenciana')?.places).toEqual([place([], ['10'], '"valenciana"*', '"valencia"*')])
+		expect(tournamentTerms('valencia')?.places).toEqual([place(['46'], [], '"valencia"*', '"valencia"*')])
 	})
 
 	it('las demás palabras, como en prefixTerms, en el nombre o en la ciudad', () => {
-		expect(tournamentTerms('open lugo 2026')).toEqual({ text: '"open"* "2026"*', places: [place(['27'], [], '"lugo"*')] })
+		expect(tournamentTerms('open lugo 2026')).toEqual({
+			text: '"open"* "2026"*',
+			places: [place(['27'], [], '"lugo"*', '"lugo"* OR "lucense"*')]
+		})
 		expect(tournamentTerms('open gijon')).toEqual({ text: '"open"* "gijon"*', places: [] })
 		expect(tournamentTerms('a')).toBeNull()
 	})
