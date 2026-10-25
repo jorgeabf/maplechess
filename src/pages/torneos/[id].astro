@@ -66,8 +66,14 @@ const gamesTotal = rounds.reduce((sum, r) => sum + r.games, 0)
 const timeClass = timeClassOf(tournament.timeControl)
 // Sin cookie yo, la próxima ronda explica cómo recibir el aviso de las tuyas.
 const me = resolveMe(null, Astro.cookies.get(ME_COOKIE)?.value).fideId
-// Las plantillas de un torneo por equipos, por equipo.
-const teams = [...Map.groupBy(participants, (p) => p.team).entries()]
+// Las plantillas de un torneo por equipos, por equipo. Los jugadores sin
+// equipo (los puede traer una retransmisión de lichess) van al final.
+const teams = [...Map.groupBy(participants, (p) => p.team).entries()].sort(
+	([a], [b]) => Number(a === null) - Number(b === null)
+)
+const teamCount = teams.filter(([team]) => team !== null).length
+// «52 equipos», o los jugadores si ninguno trae equipo.
+const rosterCount = teamCount > 0 ? formatCount(teamCount, 'equipo', 'equipos') : participants.length
 // En uno individual con clasificación no se leen los participantes: cada fila
 // de la clasificación es uno de ellos.
 const players = standings && !isTeam ? standings.rows.length : participants.length
@@ -107,7 +113,8 @@ const standingsNote =
 	].join('')
 // ELO medio de cada equipo, el de la clasificación (el que publica la fuente).
 const teamRating = new Map(isTeam && standings ? standings.rows.map((s) => [s.name, s.rating]) : [])
-// El encuentro de cada partida, de las plantillas, que ya están leídas.
+// El encuentro de cada partida, de las plantillas, que ya están leídas. Si no
+// casa ninguna de la página (sin plantillas), no hay columna: sería de rayas.
 const matches = isTeam ? gameMatches(games.rows, participants) : null
 
 /*
@@ -140,7 +147,7 @@ const indexItems = sections.flatMap((s) => {
 		case 'partidas':
 			return gamesTotal > 0 ? [{ href: '#partidas', label: 'Partidas', count: gamesTotal }] : []
 		case 'plantillas':
-			return [{ href: '#participantes', label: 'Plantillas', count: formatCount(teams.length, 'equipo', 'equipos') }]
+			return [{ href: '#participantes', label: 'Plantillas', count: rosterCount }]
 	}
 })
 ---
@@ -375,7 +382,7 @@ const indexItems = sections.flatMap((s) => {
 						)}
 						{games.total > 0 ? (
 							<>
-								<GamesTable games={games.rows} hideTournament match={matches ? (g) => matches.get(g.id) : undefined} />
+								<GamesTable games={games.rows} hideTournament match={matches?.size ? (g) => matches.get(g.id) : undefined} />
 								<Pagination page={games.page} pages={games.pages} total={games.total} noun={['partida', 'partidas']} anchor="partidas" />
 							</>
 						) : (
@@ -393,9 +400,10 @@ const indexItems = sections.flatMap((s) => {
 				{section === 'plantillas' && (
 					<section id="participantes">
 						<h2>
-							Plantillas ({formatCount(participants.length, 'jugador', 'jugadores')},{' '}
-							{formatCount(teams.length, 'equipo', 'equipos')})
+							Plantillas ({formatCount(participants.length, 'jugador', 'jugadores')}
+							{teamCount > 0 && `, ${formatCount(teamCount, 'equipo', 'equipos')}`})
 						</h2>
+						{fromLichess && <p class="muted">Los de sus partidas, numerados por ELO.</p>}
 						{participants.length > 0 ? (
 							<div class="teams">
 								{teams.map(([team, members]) => {
@@ -403,7 +411,7 @@ const indexItems = sections.flatMap((s) => {
 									return (
 										<details class="team">
 											<summary>
-												<span class="team-name">{team}</span>
+												<span class="team-name">{team ?? 'Sin equipo'}</span>
 												<span class="team-meta">
 													{formatCount(members.length, 'jugador', 'jugadores')}
 													{rating && ` · ELO medio ${rating}`}
@@ -633,5 +641,21 @@ const indexItems = sections.flatMap((s) => {
 		border: 0;
 		border-top: 1px solid var(--border);
 		border-radius: 0;
+	}
+
+	/*
+	 * En papel, las plantillas salen abiertas, como antes de plegarlas, y sin
+	 * el triángulo. Donde no hay ::details-content, salen plegadas.
+	 */
+	@media print {
+		@supports selector(::details-content) {
+			.team::details-content {
+				content-visibility: visible;
+			}
+
+			.team-name::before {
+				content: none;
+			}
+		}
 	}
 </style>
