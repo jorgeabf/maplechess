@@ -29,7 +29,9 @@ function arrow(uci: string): { orig: Key; dest: Key } {
 /**
  * Ancla de la página que sigue a una jugada escrita en el campo: ningún
  * elemento la lleva, así que el navegador no se desplaza, y el explorador se
- * pone a la vista y devuelve el foco al campo para escribir la siguiente.
+ * pone a la vista y devuelve el foco al campo para escribir la siguiente. En
+ * el móvil el campo, detrás de la tabla, queda debajo: se ven el tablero
+ * entero y las primeras jugadas, y al teclear el navegador lo trae.
  */
 const MOVE_INPUT_HASH = 'jugada'
 

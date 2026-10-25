@@ -98,7 +98,6 @@ const positionHref = (moves: string[]) => `${lineHref(moves)}#${ANCHOR}`
 				)
 			}
 		</div>
-		{!atLimit && <CampoJugada />}
 
 		<section class="card moves-card" aria-labelledby="turno">
 			<h2 id="turno">
@@ -162,6 +161,12 @@ const positionHref = (moves: string[]) => `${lineHref(moves)}#${ANCHOR}`
 				)
 			}
 		</section>
+		{/* El campo para escribir una jugada, detrás de la tabla (decidido con
+		    Jorge el 25-oct-2026, sobre maquetas): delante, en un móvil de 667 px
+		    de alto la tabla empezaba a 635 px y, tras cada jugada, no se veía
+		    ninguna fila entera; detrás se ven dos. En dos columnas, igual: en el
+		    DOM, para que el tabulador siga el orden visual. */}
+		{!atLimit && <CampoJugada />}
 	</div>
 
 	{/* El motor, detrás de las jugadas: en una columna, la tabla, que se consulta
