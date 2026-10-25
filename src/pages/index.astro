@@ -42,11 +42,22 @@ const available = [
 		}
 		<form action="/jugadores" method="get" role="search" class="search">
 			<label class="visually-hidden" for="q">Nombre del jugador</label>
-			<input id="q" name="q" type="search" placeholder="Apellidos o nombre" autocomplete="off" required />
+			<input
+				id="q"
+				name="q"
+				type="search"
+				placeholder="Nombre o FIDE ID"
+				autocomplete="off"
+				autocorrect="off"
+				spellcheck="false"
+				minlength="2"
+				required
+			/>
 			<button class="button" type="submit">Buscar</button>
 		</form>
+		{/* Torneos, todos: los que se juegan esta semana casi nunca tienen partidas todavía. */}
 		<p class="links">
-			<a href="/partidas">Buscar partidas</a> · <a href="/torneos?con_partidas=1">Torneos con partidas</a>
+			<a href="/partidas">Buscar partidas</a> · <a href="/torneos">Buscar torneos</a>
 			{me && <> · <a href={`/jugadores/${me}`}>Mi ficha</a></>}
 		</p>
 		{
