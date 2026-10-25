@@ -8,6 +8,7 @@ import { toViewerNodes, type GameTree } from '../../lib/chess/movetree'
 import { formatResult } from '../../lib/format'
 import Icon from '../Icon.astro'
 import PlayerName from '../PlayerName.astro'
+import CampoJugada from './CampoJugada.astro'
 import Coronacion from './Coronacion.astro'
 import EvalChart from './EvalChart.astro'
 import MoveLine from './MoveLine.astro'
@@ -112,9 +113,13 @@ const hasVariations = tree.nodes.some((n) => n.children.length > 1)
 	</div>
 
 	<div class="side">
+		{/* El campo para escribir una jugada, lo primero del lateral: en dos
+		    columnas, arriba junto al tablero; en una, bajo sus botones. Antes que
+		    la variante, para no moverse cuando ésta aparece. */}
+		<CampoJugada />
+
 		{/* La variante propia (visor-partida.ts), oculta hasta que se mueve una
-		    pieza o se pulsa una línea del motor. Va primero: en dos columnas,
-		    arriba junto al tablero; en una, justo debajo de sus botones. */}
+		    pieza, se escribe una jugada o se pulsa una línea del motor. */}
 		<section class="variant panel" aria-labelledby="variante-propia" data-variant hidden>
 			<span class="variant-label" id="variante-propia">Variante propia</span>
 			<button type="button" class="button secondary" data-action="leave-variant">Volver a la partida</button>

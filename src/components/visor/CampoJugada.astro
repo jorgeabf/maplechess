@@ -1,0 +1,56 @@
+---
+// Campo para escribir una jugada, en SAN («Nf3») o en UCI («g1f3»), en el
+// visor y en el explorador del repertorio: con el teclado se puede jugar lo
+// mismo que moviendo una pieza en el tablero, que no tiene teclado
+// (chessground). Lo maneja src/client/visor/campo-jugada.ts. Las jugadas
+// legales de la posición van como sugerencias en el datalist, y lo que no
+// vale (ilegal, ambigua) se dice debajo, en una región viva.
+---
+
+<form class="move-input" data-move-input>
+	<div class="form-row">
+		<label class="grow">
+			Tu jugada
+			<input
+				type="text"
+				name="jugada"
+				list="jugadas-legales"
+				placeholder="Nf3 o g1f3"
+				autocomplete="off"
+				autocapitalize="off"
+				spellcheck="false"
+				enterkeyhint="go"
+				aria-describedby="jugada-aviso"
+			/>
+		</label>
+		<datalist id="jugadas-legales"></datalist>
+		<button type="submit" class="button secondary">Jugar</button>
+	</div>
+	{/* Vacío sigue en el árbol de accesibilidad: se anuncia al llenarse. */}
+	<p class="move-input-note" id="jugada-aviso" role="status"></p>
+</form>
+
+<style>
+	/* Sin JavaScript no hay tablero ni nada que jugar. */
+	@media (scripting: none) {
+		.move-input {
+			display: none;
+		}
+	}
+
+	.move-input-note {
+		margin: 0;
+		color: var(--text);
+		font-size: var(--text-s);
+	}
+
+	.move-input-note:not(:empty) {
+		margin-block-start: var(--space-1);
+	}
+
+	/* Las jugadas del aviso («Puede ser Nbd4 o Nfd4.»), con las figuras, como en la lista. */
+	.move-input-note :global(.move-name) {
+		font-family: var(--font-moves);
+		font-weight: var(--weight-strong);
+	}
+</style>
