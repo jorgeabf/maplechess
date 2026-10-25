@@ -46,9 +46,11 @@ const cards = games.map((game) => ({ game, prepare: prepareLink(game) }))
 			{cards.map(({ game, prepare }) => (
 				<div class="card game">
 					<div>
+						{/* El torneo lleva a su próxima ronda, y la mesa, a la fila de la mesa en ella. */}
 						<p class="muted when">
-							Ronda {game.round} del <a href={`/torneos/${game.tournamentId}`}>{game.tournamentName}</a> ·{' '}
-							{formatRoundTime(game.startsAt)} · mesa {game.board}
+							Ronda {game.round} del <a href={`/torneos/${game.tournamentId}#proxima-ronda`}>{game.tournamentName}</a>{' '}
+							· {formatRoundTime(game.startsAt)} ·{' '}
+							<a href={`/torneos/${game.tournamentId}#mesa-${game.board}`}>mesa {game.board}</a>
 						</p>
 						<p class="match">
 							{you ? 'Juegas' : 'Juega'} con {COLOR_NAME[game.color]} contra{' '}

@@ -1,5 +1,28 @@
 import { describe, expect, it } from 'vitest'
-import { TIEBREAK_NAMES, tiebreakLabel } from '../../src/lib/chess/tiebreaks'
+import { pointsTiebreaks, TIEBREAK_NAMES, tiebreakLabel } from '../../src/lib/chess/tiebreaks'
+
+describe('pointsTiebreaks', () => {
+	const row = (points: number, ...tiebreaks: (number | null)[]) => ({ points, tiebreaks })
+
+	it('da los desempates iguales a los puntos en todas las filas', () => {
+		const standings = { tiebreaks: ['MP', 'GP', 'BH:MP'], rows: [row(15, 15, 24, 81), row(13, 13, 22.5, 88), row(12, 12, 22, 83)] }
+		expect(pointsTiebreaks(standings)).toEqual([0])
+	})
+
+	it('no da uno que sólo coincide en algunas filas', () => {
+		const standings = { tiebreaks: ['WON', 'BH'], rows: [row(6, 6, 40), row(5, 4, 38)] }
+		expect(pointsTiebreaks(standings)).toEqual([])
+	})
+
+	it('no da uno sin valor en alguna fila', () => {
+		const standings = { tiebreaks: ['MP'], rows: [row(3, 3), row(2, null)] }
+		expect(pointsTiebreaks(standings)).toEqual([])
+	})
+
+	it('sin filas no da ninguno', () => {
+		expect(pointsTiebreaks({ tiebreaks: ['MP'], rows: [] })).toEqual([])
+	})
+})
 
 describe('tiebreakLabel', () => {
 	it('explica el código con su nombre', () => {

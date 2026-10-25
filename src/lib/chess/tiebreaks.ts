@@ -95,3 +95,17 @@ export function tiebreakLabel(code: string): string {
 	const name = TIEBREAK_NAMES[code]
 	return name ? `${code} (${name})` : code
 }
+
+/**
+ * Posiciones de los desempates que dan lo mismo que los puntos en todas las
+ * filas: en una tabla serían una columna repetida, como MP (los puntos de
+ * encuentro) en el CE de Rápidas por Equipos 2026, en sus 52 filas. Se mira
+ * en los datos y no en el código, que no dice con qué puntos ordena el torneo.
+ */
+export function pointsTiebreaks(standings: {
+	tiebreaks: readonly string[]
+	rows: readonly { points: number; tiebreaks: readonly (number | null)[] }[]
+}): number[] {
+	if (standings.rows.length === 0) return []
+	return standings.tiebreaks.flatMap((_, i) => (standings.rows.every((r) => r.tiebreaks[i] === r.points) ? [i] : []))
+}
