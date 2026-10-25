@@ -522,6 +522,16 @@ const hasVariations = tree.nodes.some((n) => n.children.length > 1)
 		}
 	}
 
+	/*
+	 * Cada jugada, con su número («20.» y «Qe2»), en un .ply que no parte
+	 * línea: el navegador puede partir antes y después de un botón, y el
+	 * número se quedaba solo al final de la línea.
+	 */
+	.moves :global(.ply),
+	.variant-moves :global(.ply) {
+		white-space: nowrap;
+	}
+
 	.moves :global(.num-label),
 	.variant-moves :global(.num-label) {
 		margin-inline: var(--space-1) 0;
