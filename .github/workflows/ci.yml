@@ -33,8 +33,8 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      # worker-configuration.d.ts no se versiona; wrangler lo genera sin credenciales.
-      - run: pnpm exec wrangler types
       - run: pnpm lint
+      # Genera antes worker-configuration.d.ts, que no se versiona; wrangler
+      # types no necesita credenciales.
       - run: pnpm check
       - run: pnpm test

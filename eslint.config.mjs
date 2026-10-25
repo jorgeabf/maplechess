@@ -15,6 +15,8 @@ export default [
 	},
 	{
 		ignores: [
+			// Las copias de trabajo de las sesiones de Claude Code.
+			'.claude/',
 			'dist/',
 			'.astro/',
 			'.wrangler/',

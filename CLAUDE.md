@@ -391,10 +391,10 @@ MapleChess es un buscador de jugadores españoles (lista FIDE, federación ESP),
 ```bash
 pnpm dev                 # wrangler types + astro dev (workerd, D1 y Workflows locales)
 pnpm test                # vitest dentro de workerd (@cloudflare/vitest-plugin)
-pnpm check               # astro check + tsc -p src/client
+pnpm check               # wrangler types + astro check + tsc -p src/client
 pnpm lint
 pnpm db:migrate:local    # aplica migrations/ a la D1 local
-pnpm build               # wrangler types + check + astro build
+pnpm build               # check + astro build
 pnpm run deploy          # build + wrangler deploy (sin «run», pnpm ejecuta su propio «deploy»)
 ```
 
