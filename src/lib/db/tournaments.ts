@@ -1,5 +1,8 @@
 // Consultas de torneos.
+import { isMinorsTournament } from '../../ingest/menores'
+import { looksSensitive } from '../../ingest/sensibles'
 import { madridYear } from '../dates'
+import { formatNumber } from '../format'
 import { tournamentTerms } from './fts'
 import { COUNT_LIMIT, countSql, offset, PAGE_SIZE, toPage, type Page } from './pagination'
 import { hasDossierSql, minorsBornSince } from './players'
@@ -169,8 +172,132 @@ export async function countTournamentsByName(
 	return n > COUNT_LIMIT ? { total: COUNT_LIMIT, capped: true } : { total: n, capped: false }
 }
 
-export async function getTournament(db: D1Database, id: number): Promise<TournamentRow | null> {
-	return db.prepare(`SELECT ${COLUMNS} FROM tournaments t WHERE t.id = ?1`).bind(id).first<TournamentRow>()
+/** Un torneo del grupo de la fuente (tournaments.related; migración 0018). */
+export interface RelatedTournament {
+	/** Su clave en la fuente (source_key). */
+	key: string
+	/** El rótulo de su pestaña en la fuente, que pone el organizador. */
+	label: string
+}
+
+/** La página del torneo lee además su grupo, que va en la misma fila. */
+export interface TournamentPageRow extends TournamentRow {
+	/** El grupo, con el propio torneo; null si no tiene. */
+	related: RelatedTournament[] | null
+}
+
+export async function getTournament(db: D1Database, id: number): Promise<TournamentPageRow | null> {
+	const row = await db
+		.prepare(`SELECT ${COLUMNS}, t.related FROM tournaments t WHERE t.id = ?1`)
+		.bind(id)
+		.first<TournamentRow & { related: string | null }>()
+	return row && { ...row, related: row.related === null ? null : (JSON.parse(row.related) as RelatedTournament[]) }
+}
+
+// Lo que queda en el borde de un rótulo recortado y también se quita: el guion
+// de «- Fase Final», el «de» de «de Veteranos S50».
+const EDGE_WORD = /^(?:[-–—·:,;|/.]+|de|del|y|e|en)$/i
+
+/**
+ * Una palabra que dice algo: con alguna letra, de dos caracteres o más y no
+ * de borde. «S50» u «O11» sí; «A», «2» o «2000» solas no.
+ */
+const isWord = (word: string) => !EDGE_WORD.test(word) && /\p{L}/u.test(word) && /[\p{L}\p{N}]{2}/u.test(word)
+
+/**
+ * Los rótulos de las pestañas sin las palabras que comparten todos al
+ * principio y al final: «Campeonato Absoluto de Bizkaia 2026» y «Campeonato
+ * Primera de Bizkaia 2026» pasan a «Absoluto» y «Primera». Se recorta menos,
+ * primero por el principio, si a alguno no le queda una palabra que diga algo
+ * («Grupo A» y «Grupo B», «Sub 2000» y «Sub 1600» se quedan como están) o si
+ * dos quedan iguales al quitar el «de» del borde.
+ */
+export function groupLabels(labels: readonly string[]): string[] {
+	if (labels.length < 2) return [...labels]
+	const words = labels.map((label) => label.split(/\s+/).filter(Boolean))
+	const shared = (at: (w: string[]) => string | undefined) =>
+		words.every((w) => at(w)?.localeCompare(at(words[0]) ?? '', 'es', { sensitivity: 'base' }) === 0)
+	const shortest = Math.min(...words.map((w) => w.length))
+	let head = 0
+	while (head < shortest - 1 && shared((w) => w[head])) head++
+	let tail = 0
+	while (head + tail < shortest - 1 && shared((w) => w.at(-1 - tail))) tail++
+	for (;;) {
+		const rest = words.map((w) => {
+			const kept = w.slice(head, w.length - tail)
+			while (head > 0 && kept.length > 1 && EDGE_WORD.test(kept[0])) kept.shift()
+			while (tail > 0 && kept.length > 1 && EDGE_WORD.test(kept.at(-1)!)) kept.pop()
+			return kept.join(' ')
+		})
+		const distinct = new Set(rest).size === new Set(labels).size
+		if (head + tail === 0 || (distinct && rest.every((label) => label.split(' ').some(isWord)))) return rest
+		if (head > 0) head--
+		else tail--
+	}
+}
+
+/** Una pestaña del grupo: un torneo guardado. */
+export interface GroupTab {
+	id: number
+	label: string
+}
+
+/**
+ * Las pestañas del grupo: los torneos guardados, en el orden de la fuente y
+ * con su rótulo recortado (groupLabels). Los demás no salen: aún no han
+ * empezado, han fallado o no se guardan (los de menores y los sensibles).
+ *
+ * El rótulo lo pone el organizador y puede decir lo que el nombre calla
+ * («Sub 12»): pasa por las mismas reglas que el nombre (menores.ts y
+ * sensibles.ts), y si dice que es de menores o lo parece sensible, o si no
+ * hay rótulo, la pestaña lleva el nombre del torneo. La ingesta ya no guarda
+ * los que lo dicen en su propio rótulo; esto cubre los guardados antes.
+ *
+ * Recorre la lista y busca cada torneo por la clave única (source,
+ * source_key): una fila por torneo del grupo y otra por cada uno guardado.
+ * CROSS JOIN fija ese orden: con JOIN, SQLite recorría todos los torneos de
+ * la fuente, y con IN (SELECT …) contaba además la lista.
+ */
+export async function getTournamentGroup(db: D1Database, source: string, related: RelatedTournament[]): Promise<GroupTab[]> {
+	const { results } = await db
+		.prepare(
+			`SELECT t.id, t.source_key AS key, t.name, t.start_date AS startDate FROM json_each(?2) j
+			CROSS JOIN tournaments t ON t.source = ?1 AND t.source_key = j.value`
+		)
+		.bind(source, JSON.stringify(related.map((r) => r.key)))
+		.all<{ id: number; key: string; name: string; startDate: string | null }>()
+	const byKey = new Map(results.map((t) => [t.key, t]))
+	const tabs = related.flatMap((r) => {
+		const t = byKey.get(r.key)
+		if (!t) return []
+		const telling = isMinorsTournament(r.label, t.startDate) || looksSensitive(r.label)
+		return [{ id: t.id, label: r.label && !telling ? r.label : t.name }]
+	})
+	const labels = groupLabels(tabs.map((tab) => tab.label))
+	return tabs.map((tab, i) => ({ ...tab, label: labels[i] }))
+}
+
+// Los títulos que cuenta el resumen: los que dicen cuánto pesa un torneo.
+const SUMMARY_TITLES = ['GM', 'IM']
+
+/**
+ * La línea de resumen del torneo: «100 jugadores · 7 GM · 16 IM · ELO medio
+ * 2211». `size` es el tamaño ya escrito («100 jugadores», «52 equipos»); los
+ * títulos se cuentan en `players` y el ELO medio es el de `ratings`, sin los
+ * que no tienen. Sale de las filas que la página ya lee.
+ */
+export function tournamentSummary(
+	size: string,
+	players: readonly { title: string | null }[],
+	ratings: readonly (number | null)[]
+): string {
+	const titles = SUMMARY_TITLES.flatMap((title) => {
+		const n = players.filter((p) => p.title === title).length
+		return n > 0 ? [`${formatNumber(n)} ${title}`] : []
+	})
+	const rated = ratings.filter((r): r is number => r !== null)
+	const average = rated.length > 0 ? [`ELO medio ${Math.round(rated.reduce((sum, r) => sum + r, 0) / rated.length)}`] : []
+	return [size, ...titles, ...average].join(' · ')
 }
 
 /**
