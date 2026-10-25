@@ -8,10 +8,10 @@
   "scripts": {
     "postinstall": "node scripts/copy-engine.mjs",
     "dev": "wrangler types && astro dev",
-    "build": "wrangler types && pnpm check && astro build",
+    "build": "pnpm check && astro build",
     "preview": "astro preview",
     "deploy": "node scripts/desplegar.mjs",
-    "check": "astro check && tsc -p src/client",
+    "check": "wrangler types && astro check && tsc -p src/client",
     "lint": "eslint .",
     "test": "vitest run",
     "openings": "node scripts/build-openings.mjs",

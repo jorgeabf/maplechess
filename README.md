@@ -248,9 +248,9 @@ curl -X POST localhost:4321/api/admin/sync -H "Authorization: Bearer $TOKEN" \
 | --- | --- |
 | `pnpm dev` | Servidor de desarrollo |
 | `pnpm test` | Tests (vitest dentro de workerd) |
-| `pnpm check` | Comprobación de tipos (`astro check` y el código de navegador) |
+| `pnpm check` | Tipos de Wrangler y comprobación de tipos (`astro check` y el código de navegador) |
 | `pnpm lint` | eslint |
-| `pnpm build` | Tipos, comprobación y build de producción |
+| `pnpm build` | Comprobación y build de producción |
 | `pnpm run deploy` | Despliegue en Cloudflare desde `origin/main`: motor, marcador de D1, build, despliegue y prueba de humo |
 | `pnpm db:migrate:local` / `pnpm db:migrate:remote` | Aplica las migraciones a la D1 local o a la de producción |
 | `pnpm openings` | Regenera la tabla de aperturas a partir de `data/openings/` |

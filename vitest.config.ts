@@ -1,5 +1,5 @@
 import { cloudflareTest, readD1Migrations } from '@cloudflare/vitest-plugin'
-import { defineConfig } from 'vitest/config'
+import { configDefaults, defineConfig } from 'vitest/config'
 
 // Los tests corren dentro de workerd (Miniflare), con HTMLRewriter y un D1
 // propio por fichero de test. No se carga src/worker.ts: arrastra el handler de
@@ -24,6 +24,8 @@ export default defineConfig(async () => {
 		],
 		test: {
 			setupFiles: ['./test/apply-migrations.ts'],
+			// Sin las copias de trabajo de las sesiones de Claude Code.
+			exclude: [...configDefaults.exclude, '.claude/**'],
 			// Vitest vacía el CSS importado, también con ?raw. Los tokens de
 			// global.css sí llegan: test/theme-color.test.ts los compara.
 			css: { include: [/src\/styles\/global\.css/] }
