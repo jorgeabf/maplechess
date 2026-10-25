@@ -96,16 +96,27 @@ export function tiebreakLabel(code: string): string {
 	return name ? `${code} (${name})` : code
 }
 
+/** Equipos que tiene que haber para dar un desempate por la puntuación. */
+const POINTS_MIN_ROWS = 4
+
 /**
- * Posiciones de los desempates que dan lo mismo que los puntos en todas las
- * filas: en una tabla serían una columna repetida, como MP (los puntos de
- * encuentro) en el CE de Rápidas por Equipos 2026, en sus 52 filas. Se mira
- * en los datos y no en el código, que no dice con qué puntos ordena el torneo.
+ * Posiciones de los desempates de un torneo por equipos que son su propia
+ * puntuación: dan lo mismo que los puntos en todas las filas. En una tabla
+ * serían una columna repetida, como MP (los puntos de encuentro) en el CE de
+ * Rápidas por Equipos 2026, en sus 52 filas. Se mira en los datos y no en el
+ * código, que no dice con qué puntos ordena el torneo: en la D1 remota
+ * (25-oct-2026), MP en 64 torneos, MatPnt en 59, y GP o GamPnt (los de
+ * tablero) en 26, de los 584 por equipos con clasificación.
+ *
+ * Sólo para los de equipos, y con al menos POINTS_MIN_ROWS filas: en los
+ * individuales y con dos o tres equipos coinciden por casualidad (las
+ * victorias son los puntos en un torneo sin tablas: Mwns en 47 torneos y WIN
+ * en 41, casi todos de 3 a 6 jugadores), y se escondería un desempate de verdad.
  */
 export function pointsTiebreaks(standings: {
 	tiebreaks: readonly string[]
 	rows: readonly { points: number; tiebreaks: readonly (number | null)[] }[]
 }): number[] {
-	if (standings.rows.length === 0) return []
+	if (standings.rows.length < POINTS_MIN_ROWS) return []
 	return standings.tiebreaks.flatMap((_, i) => (standings.rows.every((r) => r.tiebreaks[i] === r.points) ? [i] : []))
 }

@@ -5,21 +5,25 @@ describe('pointsTiebreaks', () => {
 	const row = (points: number, ...tiebreaks: (number | null)[]) => ({ points, tiebreaks })
 
 	it('da los desempates iguales a los puntos en todas las filas', () => {
-		const standings = { tiebreaks: ['MP', 'GP', 'BH:MP'], rows: [row(15, 15, 24, 81), row(13, 13, 22.5, 88), row(12, 12, 22, 83)] }
+		const standings = {
+			tiebreaks: ['MP', 'GP', 'BH:MP'],
+			rows: [row(15, 15, 24, 81), row(13, 13, 22.5, 88), row(12, 12, 22, 83), row(11, 11, 23, 69)]
+		}
 		expect(pointsTiebreaks(standings)).toEqual([0])
 	})
 
 	it('no da uno que sólo coincide en algunas filas', () => {
-		const standings = { tiebreaks: ['WON', 'BH'], rows: [row(6, 6, 40), row(5, 4, 38)] }
+		const standings = { tiebreaks: ['GP', 'BH:MP'], rows: [row(6, 6, 40), row(5, 4, 38), row(4, 4, 36), row(3, 3, 30)] }
 		expect(pointsTiebreaks(standings)).toEqual([])
 	})
 
 	it('no da uno sin valor en alguna fila', () => {
-		const standings = { tiebreaks: ['MP'], rows: [row(3, 3), row(2, null)] }
+		const standings = { tiebreaks: ['MP'], rows: [row(4, 4), row(3, 3), row(2, 2), row(1, null)] }
 		expect(pointsTiebreaks(standings)).toEqual([])
 	})
 
-	it('sin filas no da ninguno', () => {
+	it('con menos de 4 equipos no da ninguno: pueden coincidir por casualidad', () => {
+		expect(pointsTiebreaks({ tiebreaks: ['Dir_MP'], rows: [row(2, 2), row(1, 1), row(0, 0)] })).toEqual([])
 		expect(pointsTiebreaks({ tiebreaks: ['MP'], rows: [] })).toEqual([])
 	})
 })

@@ -85,10 +85,10 @@ const lichessShare =
 			: `${formatNumber(tournament.lichessGames)} de sus ${formatNumber(tournament.gamesCount)} partidas ${tournament.lichessGames === 1 ? 'es' : 'son'}`
 		: null
 const standingsTitle = standings && standingsHeading(standings, tournament.endDate, today)
-// Los desempates que dan lo mismo que los puntos en todas las filas no salen
-// en la tabla (en los torneos por equipos, los puntos de encuentro): la nota
-// los sigue nombrando y dice por qué no están.
-const repeated = standings ? pointsTiebreaks(standings) : []
+// En un torneo por equipos, el desempate que es su propia puntuación (los
+// puntos de encuentro o de tablero) no sale en la tabla: la nota lo sigue
+// nombrando y dice por qué no está. En uno individual coincidía por casualidad.
+const repeated = isTeam && standings ? pointsTiebreaks(standings) : []
 const tiebreakColumns = standings ? standings.tiebreaks.flatMap((code, i) => (repeated.includes(i) ? [] : [{ code, i }])) : []
 const repeatedCodes = repeated.map((i) => standings?.tiebreaks[i])
 // «La publica info64, con los desempates del torneo por orden: BH (Buchholz), WON (partidas ganadas).»
