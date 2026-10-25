@@ -70,4 +70,10 @@ describe('tournamentTerms', () => {
 		// «ce» no: como prefijo, sería también «Cervera».
 		expect(tournamentTerms('ce')?.text).toBe('"ce"*')
 	})
+
+	it('sólo las palabras de la lista tienen equivalente, no las propiedades de un objeto', () => {
+		// Con un objeto, EQUIVALENTS['constructor'] era la función Object, también en plural.
+		expect(tournamentTerms('constructor')?.text).toBe('"constructor"*')
+		expect(tournamentTerms('constructores')?.text).toBe('"constructores"*')
+	})
 })

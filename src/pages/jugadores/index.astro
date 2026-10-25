@@ -4,7 +4,8 @@ import Pagination from '../../components/Pagination.astro'
 import PlayerName from '../../components/PlayerName.astro'
 import Segmented from '../../components/Segmented.astro'
 import Base from '../../layouts/Base.astro'
-import { madridYear } from '../../lib/dates'
+import { words } from '../../lib/chess/names'
+import { madridDate, madridYear } from '../../lib/dates'
 import { countGamesByName } from '../../lib/db/games'
 import {
 	ageLimit,
@@ -16,6 +17,7 @@ import {
 	TITLES,
 	type RankingCategory
 } from '../../lib/db/players'
+import { countTournamentsByName } from '../../lib/db/tournaments'
 import { formatMonth, formatNumber } from '../../lib/format'
 import { isPlayerSearch, playerFilters, rankingCategory, withParams } from '../../lib/params'
 
@@ -31,12 +33,32 @@ const year = madridYear(new Date())
 const result = searched && !fideId ? await searchPlayers(env.DB, filters, year) : null
 const filtersOpen = Boolean(filters.title || filters.sex || filters.minElo || filters.maxElo)
 const filtered = filtersOpen || filters.withGames || filters.active
-// Un solo jugador con ese nombre: a su ficha, sin pasar por la lista.
-if (result?.total === 1 && filters.page === 1 && !filtered) return Astro.redirect(`/jugadores/${result.rows[0].fideId}`, 303)
+// Un solo jugador con el nombre completo: a su ficha, sin pasar por la lista.
+// Con una palabra no: es un prefijo, y «caruana» da un único jugador de la
+// lista española que no es el que se busca, que es de otra federación y
+// necesita la salida a sus partidas.
+const fullName = words(filters.q).filter((w) => w.length > 1).length >= 2
+if (result?.total === 1 && result.rows.length === 1 && filters.page === 1 && !filtered && fullName) {
+	return Astro.redirect(`/jugadores/${result.rows[0].fideId}`, 303)
+}
 // Nadie con ese nombre en la lista española (es de otra federación, o lleva
-// una errata): sus partidas, si las hay, y sus torneos. Sólo entonces se cuentan.
-const elsewhere = result?.total === 0 ? await countGamesByName(env.DB, filters.q) : null
+// una errata): las partidas con ese nombre y los torneos que lo llevan (un
+// memorial, o un sitio escrito en la lupa), como los cuentan /partidas y
+// /torneos. Sólo entonces se cuentan, y sólo se ofrece lo que tiene alguno.
 const query = (name: string) => new URLSearchParams({ [name]: filters.q })
+const counted = (count: { total: number; capped: boolean } | null) =>
+	count && count.total > 0 ? (count.capped ? `más de ${formatNumber(count.total)}` : formatNumber(count.total)) : null
+const [games, tournaments] =
+	result?.total === 0
+		? await Promise.all([
+				countGamesByName(env.DB, filters.q),
+				countTournamentsByName(env.DB, filters.q, madridDate(new Date()))
+			])
+		: [null, null]
+const elsewhere = [
+	{ label: 'partidas', href: `/partidas?${query('jugador')}`, count: counted(games) },
+	{ label: 'torneos', href: `/torneos?${query('q')}`, count: counted(tournaments) }
+].filter((place) => place.count)
 
 // Sin búsqueda, el ranking de España en la categoría elegida.
 const category = rankingCategory(Astro.url.searchParams)
@@ -255,19 +277,18 @@ const categoryHref = (id: string) => `${withParams(Astro.url, { categoria: id })
 				) : (
 					<p>
 						No hay jugadores con esos datos.
-						{elsewhere && (
+						{elsewhere.length > 0 && (
 							<>
 								{' '}
 								Buscar «{filters.q}»{' '}
-								{elsewhere.total > 0 && (
+								{elsewhere.map((place, i) => (
 									<>
-										<a href={`/partidas?${query('jugador')}`}>
-											en partidas ({elsewhere.capped ? `más de ${formatNumber(elsewhere.total)}` : formatNumber(elsewhere.total)})
+										{i > 0 && ' · '}
+										<a href={place.href}>
+											en {place.label} ({place.count})
 										</a>
-										{' · '}
 									</>
-								)}
-								<a href={`/torneos?${query('q')}`}>en torneos</a>
+								))}
 							</>
 						)}
 					</p>
@@ -325,7 +346,9 @@ const categoryHref = (id: string) => `${withParams(Astro.url, { categoria: id })
 	 * En una tarjeta de menos de 26rem (la pista mínima de la rejilla), como a
 	 * 375 px, la tabla de los primeros pedía 355 px de 294: el nombre ya va a su
 	 * mínimo (la palabra más larga), así que se estrecha el relleno, como en los
-	 * emparejamientos del torneo, y la cabecera del año es «Nac.». Quedan 284.
+	 * emparejamientos del torneo, y las cabeceras son «Pos.» y «Nac.». Medido
+	 * el 25-oct-2026 a 375, con la tabla a min-content: pide de 212 a 263 px de
+	 * 309 con Segoe UI, y de 216 a 270 con Roboto (la más ancha, la femenina).
 	 */
 	@container (width < 26rem) {
 		.ranking .data-table th,

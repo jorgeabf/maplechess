@@ -43,7 +43,9 @@ const filtered = advancedOpen || filters.color !== 'any' || Boolean(filters.oppo
 const unfiltered = filters.player ? `/partidas?${new URLSearchParams({ jugador: filters.player })}` : '/partidas'
 // En la pestaña y en el historial, la búsqueda: «Partidas: anton guijarro contra …».
 const searchedNames = [filters.player, filters.opponent && `contra ${filters.opponent}`].filter(Boolean).join(' ')
-// Con resultados, el formulario se pliega en el móvil y el resumen dice lo buscado.
+// Con resultados en la página, el formulario se pliega en el móvil y el resumen
+// dice lo buscado. Sin nada que decir (sólo ?torneo=) o sin filas (una página
+// de más), no.
 const RESULT_SUMMARY = {
 	'1-0': 'resultado 1-0',
 	'1/2-1/2': 'resultado ½-½',
@@ -66,7 +68,7 @@ const searchSummary = [
 
 <Base title={searchedNames ? `Partidas: ${searchedNames}` : 'Partidas'} section="partidas" noindex={kind !== 'empty'}>
 	<h1>Partidas</h1>
-	<FiltrosPlegables label="Búsqueda" summary={searchSummary} fold={Boolean(result?.total)}>
+	<FiltrosPlegables label="Búsqueda" summary={searchSummary} fold={searchSummary.length > 0 && Boolean(result?.rows.length)}>
 		<form method="get" role="search" class="filters form-row">
 			<label class="grow">
 				Jugador

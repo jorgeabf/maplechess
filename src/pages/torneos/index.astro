@@ -21,7 +21,8 @@ const tabHref = (id: string) => withParams(Astro.url, { cuando: id, p: null, ...
 // «Quitar filtros» deja el nombre o el lugar, y la pestaña.
 const filtered = Boolean(filters.from || filters.to || filters.type || filters.withGames)
 const unfiltered = withParams(Astro.url, { desde: null, hasta: null, modalidad: null, con_partidas: null, p: null })
-// Con resultados, el formulario se pliega en el móvil y el resumen dice lo buscado.
+// Con resultados en la página, el formulario se pliega en el móvil y el resumen
+// dice lo buscado; sin filas (una página de más), no.
 const searchSummary = [
 	filters.q,
 	filters.type && (filters.type === 'team' ? 'por equipos' : 'individual'),
@@ -36,7 +37,7 @@ const searchSummary = [
 	<div class="when">
 		<Segmented label="Torneos" options={tabs} current={filters.upcoming ? 'proximos' : ''} href={tabHref} />
 	</div>
-	<FiltrosPlegables label="Búsqueda" summary={searchSummary} fold={searchSummary.length > 0 && result.total > 0}>
+	<FiltrosPlegables label="Búsqueda" summary={searchSummary} fold={searchSummary.length > 0 && result.rows.length > 0}>
 		<form method="get" role="search" class="filters form-row">
 			{filters.upcoming && <input type="hidden" name="cuando" value="proximos" />}
 			<label class="grow">

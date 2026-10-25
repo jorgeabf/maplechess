@@ -74,18 +74,21 @@ export function tournamentTerms(text: string): { text: string | null; places: Pl
  * encuentra también «european». Sin «ce» (campeonato de España): como
  * prefijo, también encontraría «Cervera».
  */
-const EQUIVALENTS: Record<string, string> = {
-	europeo: 'europe',
-	europea: 'europe',
-	europa: 'europe',
-	mundial: 'world',
-	olimpiada: 'olympiad',
-	copa: 'cup'
-}
+const EQUIVALENTS = new Map([
+	['europeo', 'europe'],
+	['europea', 'europe'],
+	['europa', 'europe'],
+	['mundial', 'world'],
+	['olimpiada', 'olympiad'],
+	['copa', 'cup']
+])
 
-/** La palabra como prefijo y, si tiene equivalente (también en plural: «mundiales»), con él. */
+/**
+ * La palabra como prefijo y, si tiene equivalente (también en plural:
+ * «mundiales»), con él. Un Map y no un objeto: «constructor» no es una clave.
+ */
 function withEquivalents(word: string): string {
-	const equivalent = EQUIVALENTS[word] ?? EQUIVALENTS[word.replace(/e?s$/, '')]
+	const equivalent = EQUIVALENTS.get(word) ?? EQUIVALENTS.get(word.replace(/e?s$/, ''))
 	return equivalent ? `(${prefix([word])} OR ${prefix([equivalent])})` : prefix([word])
 }
 

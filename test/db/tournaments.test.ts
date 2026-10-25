@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import type { TournamentPlayer } from '../../src/ingest/info64/parse'
 import { refreshTotals, replaceParticipations, upsertTournament } from '../../src/ingest/repo'
 import {
+	countTournamentsByName,
 	getTournamentParticipants,
 	isIndexableTournament,
 	searchTournaments,
@@ -296,6 +297,35 @@ describe('searchTournaments: equivalencias en inglés', () => {
 		expect(await search('copa europea')).toEqual(['41st European Chess Club Cup 2026'])
 		expect(await search('campeonato europeo')).toEqual(['Campeonato Europeo de Veteranos 2026'])
 		expect(await search('copa lugo')).toEqual(['Copa Galicia 2026'])
+	})
+})
+
+describe('countTournamentsByName', () => {
+	const today = '2026-10-20'
+	const shown = async (q: string) =>
+		(await searchTournaments(db, { q, upcoming: false, withGames: false, from: '', to: '', type: null, page: 1 }, today)).total
+
+	beforeEach(async () => {
+		await tournament('Memorial Inventado Ficticio 2026', '2026-10-17', '2026-10-18', 'individual', 'Gijón')
+		await tournament('Open de Lugo 2026', '2026-10-17', '2026-10-18', 'individual', 'Lugo')
+		await tournament('Torneo de Navidad 2026', '2026-10-17', '2026-10-18', 'individual', 'Ferrol')
+		await tournament('European Club Cup 2026', '2026-10-01', '2026-10-08')
+		// Aún no ha empezado: /torneos lo enseña en «Próximos», no en su pestaña por defecto.
+		await tournament('Memorial Inventado Ficticio 2027', '2027-03-01', '2027-03-02', 'individual', 'Gijón')
+	})
+
+	it('los empezados que enseña /torneos con ese texto, también por sitio y por equivalencia', async () => {
+		expect(await countTournamentsByName(db, 'inventado', today)).toEqual({ total: 1, capped: false })
+		expect(await countTournamentsByName(db, 'galicia', today)).toEqual({ total: 2, capped: false })
+		expect(await countTournamentsByName(db, 'europeo', today)).toEqual({ total: 1, capped: false })
+		expect(await countTournamentsByName(db, 'inexistente', today)).toEqual({ total: 0, capped: false })
+		for (const q of ['inventado', 'galicia', 'europeo', 'inexistente']) {
+			expect((await countTournamentsByName(db, q, today))?.total, q).toBe(await shown(q))
+		}
+	})
+
+	it('sin palabras que buscar, null', async () => {
+		expect(await countTournamentsByName(db, '-', today)).toBeNull()
 	})
 })
 
