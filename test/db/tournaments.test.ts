@@ -142,6 +142,22 @@ describe('searchTournaments', () => {
 		expect(await search({ withGames: true })).toEqual({ names: ['Open Pasado'], total: 1, upcoming: 2 })
 	})
 
+	it('con una búsqueda, cada torneo de la página con sus jugadores y en orden', async () => {
+		const [pasado] = (await db.prepare("SELECT id FROM tournaments WHERE name = 'Open Pasado'").all<{ id: number }>()).results
+		const otro = await tournament('Open Antiguo', '2026-06-01', '2026-06-02')
+		await replaceParticipations(db, pasado.id, [player(1, 'Uno Inventado, A', null), player(2, 'Dos Inventado, B', null)])
+		await replaceParticipations(db, otro, [player(1, 'Tres Inventado, C', null)])
+		const result = await searchTournaments(
+			db,
+			{ q: 'open', upcoming: false, withGames: false, from: '', to: '', type: null, page: 1 },
+			TODAY
+		)
+		expect(result.rows.map((t) => [t.name, t.players])).toEqual([
+			['Open Pasado', 2],
+			['Open Antiguo', 1]
+		])
+	})
+
 	it('la modalidad filtra las dos pestañas', async () => {
 		expect(await search({ type: 'team' })).toEqual({ names: ['Liga Hoy'], total: 1, upcoming: 0 })
 		expect(await search({ type: 'individual' })).toEqual({ names: ['Open Pasado'], total: 1, upcoming: 2 })

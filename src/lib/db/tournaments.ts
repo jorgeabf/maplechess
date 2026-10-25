@@ -46,7 +46,8 @@ const COLUMNS = `t.id, t.name, t.type, t.city, t.start_date AS startDate, t.end_
 
 /**
  * Jugadores del torneo: lee una fila por participante (D1 las cobra), así que
- * sólo va donde se enseña, en el listado.
+ * sólo va donde se enseña, en el listado, y sólo para los torneos de la página
+ * (searchTournaments).
  */
 const PLAYERS = '(SELECT count(*) FROM participations WHERE tournament_id = t.id) AS players'
 
@@ -94,13 +95,20 @@ export async function searchTournaments(
 	const day = p(today)
 	const upcomingSql = `WHERE ${[...where, `t.start_date > ${day}`].join(' AND ')}`
 	const startedSql = `WHERE ${[...where, `t.start_date <= ${day}`, ...(f.withGames ? ['t.games_count > 0'] : [])].join(' AND ')}`
+	const order = f.upcoming ? UPCOMING_ORDER : TOURNAMENT_ORDER
 
 	const statements = [
+		// Primero la página (los id) y después sus jugadores. Cuando hay que
+		// ordenar (una búsqueda, por el FTS o por un sitio), SQLite calcula las
+		// columnas de cada torneo que casa antes de ordenar y cortar: contaba los
+		// participantes de todos, 59.412 filas en remoto con «asturias».
 		db
 			.prepare(
-				`SELECT ${COLUMNS}, ${PLAYERS} FROM tournaments t ${f.upcoming ? upcomingSql : startedSql}
-				${f.upcoming ? UPCOMING_ORDER : TOURNAMENT_ORDER}
-				LIMIT ${PAGE_SIZE} OFFSET ${offset(f.page)}`
+				`SELECT ${COLUMNS}, ${PLAYERS}
+				FROM (SELECT t.id FROM tournaments t ${f.upcoming ? upcomingSql : startedSql}
+					${order} LIMIT ${PAGE_SIZE} OFFSET ${offset(f.page)}) AS page
+				JOIN tournaments t ON t.id = page.id
+				${order}`
 			)
 			.bind(...params),
 		db.prepare(`SELECT count(*) AS n FROM tournaments t ${upcomingSql}`).bind(...params)
