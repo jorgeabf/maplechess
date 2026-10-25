@@ -42,20 +42,24 @@ const KIDS =
 const CATEGORY = '(?:pre ?)?(?:benjamin(?:es)?|benjami|benxamin)|alevin(?:es)?|alevi|alebin|infantil(?:es|s)?'
 
 /**
- * Los de un colegio o entre colegios (colegio, CEIP, IES, instituto,
- * ikastola…) y los escolares: los juegos escolares y el deporte en edad
- * escolar (JUDEX, Juegos Deportivos, Jocs Esportius, Xogade). También los
- * que no lo dicen con esas palabras: el «Torneig d'Escoles» de Xàtiva, de Sub
- * 8 a Sub 16 (en el slug, «torneig-descoles»); los interescolares en euskera
- * («Eskolarteko Xake Txapelketa», «Eskolartekoa»); y en gallego, el programa
- * «Xadrez nas Escolas» y el «Torneio das Escolas». Las escuelas de ajedrez
- * («Escuela», «Escola», «Escolas», «Eskola») son clubes, y no entran.
+ * Los de un colegio o entre colegios (colegio, CEIP, IES, también con puntos,
+ * instituto, ikastola, los colegios Vedruna…) y los escolares: los juegos escolares y el
+ * deporte en edad escolar (JUDEX, Juegos Deportivos, JDN, JJ.EE., Jocs
+ * Esportius, Xogade, el «Deporte Base» de Castilla-La Mancha). También los que
+ * no lo dicen con esas palabras: el «Torneig d'Escoles» de Xàtiva, de Sub 8 a
+ * Sub 16 (en el slug, «torneig-descoles»); los interescolares en euskera
+ * («Eskolarteko Xake Txapelketa», «Eskolartekoa», y «Eskola Txapelketa», el
+ * campeonato escolar); en gallego, el programa «Xadrez nas Escolas» y el
+ * «Torneio das Escolas»; «Ajedrez en el recreo»; y el interescolar con el
+ * nombre recortado («Circuito … Inter Esc»). Las escuelas de ajedrez
+ * («Escuela», «Escola», «Escolas», «Eskola» sin «txapelketa») son clubes, y no
+ * entran.
  */
 const SCHOOL = [
-	'colegios?|col ?legis?|ceips?|ies|institutos?|instituts?|college|schools?|ikastolak?|ikastetxeak?',
-	'interescolar(?:es|s)?|intercentros|escolar(?:es|s)?|eskolarteko(?:a|ak)?',
-	'torneig d ?escoles|nas escolas|torne(?:o|io) das escolas',
-	'judex|xogade|juegos deportivos|jj ?dd|jocs esportius|xogos deportivos'
+	'colegios?|col ?legis?|ceips?|c e i p|ies|i e s|institutos?|instituts?|college|schools?|ikastolak?|ikastetxeak?|vedruna',
+	'interescolar(?:es|s)?|inter esc(?:olar(?:es|s)?)?|intercentros|escolar(?:es|s)?|eskolarteko(?:a|ak)?|eskola txapelketa',
+	'torneig d ?escoles|nas escolas|torne(?:o|io) das escolas|en el recreo',
+	'judex|jdn|xogade|juegos deportivos|jj ?dd|jj ?ee|jocs esportius|xogos deportivos|deporte base'
 ].join('|')
 
 /** Sobre las palabras del nombre sin tildes, en minúsculas y separadas por un espacio. */

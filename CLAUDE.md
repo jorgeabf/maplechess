@@ -88,6 +88,11 @@ MapleChess es un buscador de jugadores españoles (lista FIDE, federación ESP),
         - los interescolares en euskera («Eskolarteko Xake Txapelketa», «Eskolartekoa»: seis);
         - en gallego, el programa «Xadrez nas Escolas» (dos) y el «Torneio das Escolas» (uno).
       - «Escola», «Escolas» y «Escola d'Escacs» solos siguen sin entrar: son clubes, como «Escolas Xadrez As Burgas».
+      - Añadidos el 25-oct-2026 más escolares que no lo decían con esas palabras: 59 torneos, 1.338 participaciones y ninguna partida (medido en producción, sin ninguno de más):
+        - las siglas y nombres de los juegos escolares: JDN, los Juegos Deportivos de Navarra (33, de Sub 16 y Sub 18); JJ.EE. (uno), y el «Deporte Base» de Ciudad Real (13), su campeonato en edad escolar;
+        - los de un colegio: los torneos FEC Vedruna (tres), «Ajedrez en el recreo» (tres), «I.E.S.» con puntos (dos) y el «Circuito … Inter Esc», con el nombre recortado (uno);
+        - «Eskola Txapelketa», el campeonato escolar en euskera (los tres de Lekunberri). «Eskola» sola sigue siendo un club.
+      - Los grupos «Especial» de los torneos de jóvenes de Navarra (de 12 a 16 años; seis torneos) se quedan, como un Sub 16 (decidido por Jorge el 25-oct-2026). El Cto. de Navarra absoluto por equipos «Especial» es la división.
     - El reprocesado (`{"menores":true}`, `applyMinorsTournaments`) borra los guardados con todo lo suyo en cascada, de 100 en 100 (`deleteTournaments`). Se lanza tras desplegar y si cambia la regla.
     - El mismo hueco que con los sensibles: la retransmisión de lichess de un torneo de info64 de menores se guardaría como torneo propio si su nombre no lo dice.
   - `repo.ts`: escrituras con `json_each`; cada parámetro puede llevar hasta ~1 MB de JSON, porque D1 admite 100 parámetros por sentencia.
