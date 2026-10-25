@@ -1,9 +1,10 @@
 // <explorador-repertorio>: tablero del repertorio. La página funciona sin
-// JavaScript (cada jugada es un enlace); esto añade el tablero con la
-// posición, una flecha al pasar por una jugada de la tabla y la posibilidad
-// de mover piezas para ir a cualquier otra posición, también por transposición,
-// y el análisis de Stockfish de la posición. Pulsar una de sus líneas juega su
-// primera jugada, como moverla en el tablero.
+// JavaScript (cada jugada es un enlace, y el servidor pinta el tablero con la
+// posición); esto monta chessground en ese tablero, con una flecha al pasar
+// por una jugada de la tabla y la posibilidad de mover piezas para ir a
+// cualquier otra posición, también por transposición, y el análisis de
+// Stockfish de la posición. Pulsar una de sus líneas juega su primera jugada,
+// como moverla en el tablero.
 import { Chessground } from '@lichess-org/chessground'
 import type { Api } from '@lichess-org/chessground/api'
 import type { Config } from '@lichess-org/chessground/config'

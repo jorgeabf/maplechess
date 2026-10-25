@@ -1,7 +1,8 @@
 ---
 // Explorador del repertorio: la secuencia de jugadas hasta la posición, el
-// tablero y las jugadas que se han hecho desde ella. Todo son enlaces GET, así
-// que funciona sin JavaScript; <explorador-repertorio> añade el tablero.
+// tablero y las jugadas que se han hecho desde ella. Todo son enlaces GET y el
+// tablero lo pinta el servidor (Tablero.astro), así que funciona sin
+// JavaScript; <explorador-repertorio> monta chessground en el tablero.
 import '@lichess-org/chessground/assets/chessground.base.css'
 import '../visor/board.css'
 import { OPENING_MOVES_PLIES } from '../../lib/chess/pgn'
@@ -11,6 +12,7 @@ import CampoJugada from '../visor/CampoJugada.astro'
 import Coronacion from '../visor/Coronacion.astro'
 import PanelMotor from '../visor/PanelMotor.astro'
 import ScriptTableros from '../visor/ScriptTableros.astro'
+import Tablero from '../visor/Tablero.astro'
 import ScoreBar from './ScoreBar.astro'
 
 interface Props {
@@ -51,10 +53,16 @@ const positionHref = (moves: string[]) => `${lineHref(moves)}#${ANCHOR}`
 	data-movable={atLimit ? 'false' : 'true'}
 >
 	<div class="board-col">
-		{/* Oculto a los lectores de pantalla: chessground pinta las coordenadas
-		    como texto («8 7 6 … a b c») y no hay nada enfocable dentro. La tabla
-		    ofrece las mismas jugadas como enlaces. */}
-		<div class="board-box" aria-hidden="true"><div class="board"></div></div>
+		{/* Oculto a los lectores de pantalla: las coordenadas son texto («8 7 6 …
+		    a b c») y no hay nada enfocable dentro. La tabla ofrece las mismas
+		    jugadas como enlaces. El servidor pinta la posición: está desde el
+		    primer pintado, también sin JavaScript, y chessground se monta en el
+		    mismo .board, así que no empuja la tabla ni descoloca el ancla. En cada
+		    jugada, una página nueva, el tablero tardaba de 0,2 a 0,9 s en un
+		    móvil lento. */}
+		<div class="board-box" aria-hidden="true">
+			<Tablero fen={line.fen} orientation={color} lastMove={last?.uci} />
+		</div>
 	</div>
 
 	<div class="side">
@@ -184,11 +192,10 @@ const positionHref = (moves: string[]) => `${lineHref(moves)}#${ANCHOR}`
 	 * El motor va en el DOM detrás de las jugadas (ver la plantilla) y aquí sube
 	 * a la segunda fila, bajo el tablero, mientras las jugadas ocupan las dos.
 	 * La segunda es 1fr y no auto: así lo que la columna de jugadas tenga de más
-	 * alto va a esa fila y no separa el motor del tablero. Sólo con JavaScript:
-	 * sin él no hay tablero ni motor, y colocar las jugadas en la segunda
-	 * columna crearía una implícita.
+	 * alto va a esa fila y no separa el motor del tablero. Sin JavaScript no hay
+	 * motor, y el tablero y las jugadas quedan en la primera fila.
 	 */
-	@media (width >= 60rem) and (scripting: enabled) {
+	@media (width >= 60rem) {
 		.explorer {
 			grid-template-rows: auto 1fr;
 			row-gap: var(--space-3);
@@ -220,22 +227,6 @@ const positionHref = (moves: string[]) => `${lineHref(moves)}#${ANCHOR}`
 		.board-box {
 			inline-size: clamp(min(var(--board-min), 100%), 100svh - 20rem, 100%);
 			justify-self: center;
-		}
-	}
-
-	/*
-	 * Sin JavaScript no hay tablero: la columna de jugadas ocupa todo el ancho.
-	 * Con JavaScript el hueco del tablero está desde el primer pintado (no
-	 * esperando a que se defina el elemento), para que al montarse chessground
-	 * no empuje la tabla ni descoloque el ancla.
-	 */
-	@media (scripting: none) {
-		.explorer {
-			grid-template-columns: minmax(0, 1fr);
-		}
-
-		.board-col {
-			display: none;
 		}
 	}
 
