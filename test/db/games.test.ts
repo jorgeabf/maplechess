@@ -1,11 +1,12 @@
 import { env } from 'cloudflare:workers'
-import { beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { buildGameRows } from '../../src/ingest/games'
 import { parseGamesPage, parseTournamentPage } from '../../src/ingest/info64/parse'
 import { loadParticipants, replaceParticipations, saveGames, upsertTournament } from '../../src/ingest/repo'
 import { parseGames } from '../../src/lib/chess/pgn'
 import {
 	exportGameIds,
+	gameRoundPage,
 	gamesPgn,
 	gamesWhere,
 	getGame,
@@ -13,6 +14,7 @@ import {
 	getTopRecentGames,
 	getTournamentGames,
 	RECENT_GAMES_SQL,
+	ROUND_POSITION_SQL,
 	searchGames,
 	topPerTournament
 } from '../../src/lib/db/games'
@@ -228,5 +230,74 @@ describe('getTopRecentGames', () => {
 		const plan = results.map((r) => r.detail).join(' | ')
 		expect(plan).toContain('games_date (date>?)')
 		expect(plan).not.toContain('TEMP B-TREE')
+	})
+})
+
+describe('gameRoundPage', () => {
+	// Una ronda de 120 mesas; en la 60, dos partidas (seq 0 y 1). Al final de
+	// todo, y se borra: los demás no la cuentan.
+	let tournamentId: number
+	const idOf = async (board: number, seq = 0) =>
+		(await db
+			.prepare('SELECT id FROM games WHERE tournament_id = ?1 AND round = 3 AND board = ?2 AND seq = ?3')
+			.bind(tournamentId, board, seq)
+			.first<number>('id'))!
+
+	beforeAll(async () => {
+		tournamentId = await upsertTournament(db, {
+			source: 'info64',
+			key: 'open-ronda-larga',
+			type: 'individual',
+			name: 'Open ronda larga',
+			city: null,
+			startDate: null,
+			endDate: null,
+			timeControl: null,
+			url: 'https://info64.org/open-ronda-larga',
+			syncedAt: '2026-10-19T00:00:00.000Z'
+		})
+		await db
+			.prepare(
+				`WITH RECURSIVE b(j) AS (SELECT 1 UNION ALL SELECT j + 1 FROM b WHERE j < 120)
+				INSERT INTO games (tournament_id, round, board, seq, white_name, black_name, result, ply_count, pgn, seen_at)
+				SELECT ?1, 3, j, 0, 'Irreal, Otro', 'Inventado, Nombre', '1-0', 0, '', '' FROM b
+				UNION ALL SELECT ?1, 3, 60, 1, 'Irreal, Otro', 'Inventado, Nombre', '0-1', 0, '', ''`
+			)
+			.bind(tournamentId)
+			.run()
+	})
+
+	afterAll(async () => {
+		await db.batch([
+			db.prepare('DELETE FROM games WHERE tournament_id = ?1').bind(tournamentId),
+			db.prepare('DELETE FROM tournaments WHERE id = ?1').bind(tournamentId)
+		])
+	})
+
+	it('da la página de la lista del torneo, por ronda, en la que sale la partida', async () => {
+		// mesa, seq y página: 50 por página, por mesa y seq.
+		for (const [board, seq, page] of [
+			[1, 0, 1],
+			[50, 0, 1],
+			[51, 0, 2],
+			[60, 1, 2],
+			[99, 0, 2],
+			[100, 0, 3],
+			[120, 0, 3]
+		]) {
+			const id = await idOf(board, seq)
+			expect(await gameRoundPage(db, { id, tournamentId, round: 3, board })).toBe(page)
+			const listed = await getTournamentGames(db, tournamentId, 3, page)
+			expect(listed.games.rows.map((g) => g.id)).toContain(id)
+		}
+	})
+
+	it('cuenta por el índice único, sin recorrer la ronda', async () => {
+		const id = await idOf(10)
+		const { results } = await db
+			.prepare(`EXPLAIN QUERY PLAN ${ROUND_POSITION_SQL}`)
+			.bind(tournamentId, 3, 10, id)
+			.all<{ detail: string }>()
+		expect(results.map((r) => r.detail).join(' | ')).toContain('(tournament_id=? AND round=? AND board<?)')
 	})
 })

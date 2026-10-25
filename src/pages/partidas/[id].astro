@@ -5,7 +5,7 @@ import PlayerName from '../../components/PlayerName.astro'
 import VisorPartida from '../../components/visor/VisorPartida.astro'
 import Base from '../../layouts/Base.astro'
 import { buildTree } from '../../lib/chess/movetree'
-import { getAdjacentGames, getGame } from '../../lib/db/games'
+import { gameRoundPage, getAdjacentGames, getGame } from '../../lib/db/games'
 import { displayName, formatDate, formatResult } from '../../lib/format'
 import { CC_BY, CC_BY_SA, fcaUrl, licensedPgn, lichessUrl } from '../../lib/licenses'
 import { ME_COOKIE, isOwn, resolveMe } from '../../lib/me'
@@ -66,14 +66,17 @@ const OWN_BACK_LABELS: Partial<Record<BackKind, string>> = {
 	repertoire: 'a mi repertorio'
 }
 
-const backLink = (): { href: string; label: string } | null => {
+const backLink = async (): Promise<{ href: string; label: string } | null> => {
 	const from = backTarget(Astro.request.headers.get('referer'), Astro.url)
 	if (!from) return null
 	// Tras «Anterior» o «Siguiente del torneo» se está recorriendo el torneo:
-	// se vuelve a él, en la ronda de esta partida. Desde otra partida, nada.
+	// se vuelve a él, a la página de su lista en la que sale esta partida,
+	// filtrada por su ronda. Desde otra partida, nada.
 	if (from.kind === 'game') {
-		const fromTournament = from.id !== null && (from.id === adjacent.prev || from.id === adjacent.next)
-		return fromTournament ? { href: `/torneos/${game.tournamentId}?ronda=${game.round}#partidas`, label: 'al torneo' } : null
+		if (from.id === null || (from.id !== adjacent.prev && from.id !== adjacent.next)) return null
+		const page = await gameRoundPage(env.DB, game)
+		const href = `/torneos/${game.tournamentId}?ronda=${game.round}${page > 1 ? `&p=${page}` : ''}#partidas`
+		return { href, label: 'al torneo' }
 	}
 	const own = from.id !== null && isOwn(me, from.id) && OWN_BACK_LABELS[from.kind]
 	const player = [white, black].find((p) => p.fideId !== null && p.fideId === from.id)
@@ -81,7 +84,7 @@ const backLink = (): { href: string; label: string } | null => {
 	return { href: from.href, label }
 }
 
-const back = backLink()
+const back = await backLink()
 ---
 
 <Base

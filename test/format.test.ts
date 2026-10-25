@@ -7,6 +7,7 @@ import {
 	formatMonth,
 	formatMove,
 	formatRange,
+	formatResults,
 	homonymYear,
 	withoutHomonymYear
 } from '../src/lib/format'
@@ -70,6 +71,14 @@ describe('formatGames', () => {
 		expect(formatGames(1)).toBe('1 partida')
 		expect(formatGames(0)).toBe('0 partidas')
 		expect(formatGames(12345)).toBe('12.345 partidas')
+	})
+})
+
+describe('formatResults', () => {
+	it('ganadas y perdidas en singular o plural; tablas, siempre en plural', () => {
+		expect(formatResults({ wins: 5, draws: 3, losses: 1 })).toBe('5 ganadas, 3 tablas, 1 perdida')
+		expect(formatResults({ wins: 1, draws: 1, losses: 0 })).toBe('1 ganada, 1 tablas, 0 perdidas')
+		expect(formatResults({ wins: 12345, draws: 0, losses: 2 })).toBe('12.345 ganadas, 0 tablas, 2 perdidas')
 	})
 })
 

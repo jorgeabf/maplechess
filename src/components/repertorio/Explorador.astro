@@ -7,7 +7,7 @@ import '@lichess-org/chessground/assets/chessground.base.css'
 import '../visor/board.css'
 import { OPENING_MOVES_PLIES } from '../../lib/chess/pgn'
 import type { Color, Exploration, Line } from '../../lib/chess/repertoire'
-import { formatDate, formatMove, formatNumber, formatPercent } from '../../lib/format'
+import { formatDate, formatMove, formatNumber, formatPercent, formatResults } from '../../lib/format'
 import CampoJugada from '../visor/CampoJugada.astro'
 import Coronacion from '../visor/Coronacion.astro'
 import PanelMotor from '../visor/PanelMotor.astro'
@@ -85,14 +85,7 @@ const positionHref = (moves: string[]) => `${lineHref(moves)}#${ANCHOR}`
 			</p>
 			{
 				last && (
-					<a
-						class="button secondary"
-						href={positionHref(moves.slice(0, -1))}
-						rel="nofollow"
-						title="Jugada anterior (←)"
-						aria-keyshortcuts="ArrowLeft"
-						data-prev
-					>
+					<a class="button secondary" href={positionHref(moves.slice(0, -1))} rel="nofollow" data-prev>
 						← Atrás
 					</a>
 				)
@@ -121,7 +114,11 @@ const positionHref = (moves: string[]) => `${lineHref(moves)}#${ANCHOR}`
 								{exploration.moves.map((m) => (
 									<tr data-uci={m.uci}>
 										<td class="move">
-											<a href={positionHref([...moves, m.uci])} rel="nofollow">{nextLabel(m.san)}</a>
+											{/* El enlace cubre la fila (ver los estilos), también la barra:
+											    el desglose de su title, aquí. */}
+											<a href={positionHref([...moves, m.uci])} rel="nofollow" title={formatResults(m)}>
+												{nextLabel(m.san)}
+											</a>
 										</td>
 										<td class="end num">
 											{formatNumber(m.games)} <span class="muted">({share(m.games)})</span>

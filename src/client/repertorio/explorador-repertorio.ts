@@ -77,6 +77,10 @@ class ExploradorRepertorio extends HTMLElement {
 		this.addEventListener('pointerleave', () => this.setHover(null), { signal })
 		this.addEventListener('focusout', () => this.setHover(null), { signal })
 		document.addEventListener('keydown', (event) => this.onKey(event), { signal })
+		// El atajo, en «← Atrás» sólo desde aquí: sin JavaScript no lo hay.
+		const prev = this.querySelector('a[data-prev]')
+		prev?.setAttribute('title', 'Jugada anterior (←)')
+		prev?.setAttribute('aria-keyshortcuts', 'ArrowLeft')
 
 		this.panel = new EnginePanel(
 			this.querySelector<HTMLElement>('.engine')!,
