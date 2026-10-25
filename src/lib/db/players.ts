@@ -131,6 +131,28 @@ export async function searchPlayers(
 	return toCappedPage(rows.map((p) => publicBirthYear(p, year)), total, page)
 }
 
+/** El FIDE ID que se busca en /jugadores: sólo cifras, de 4 a 10; null si es un nombre. */
+export function fideIdQuery(q: string): number | null {
+	return /^\d{4,10}$/.test(q) && Number(q) > 0 ? Number(q) : null
+}
+
+/**
+ * ¿Tiene ficha ese FIDE ID? La tiene quien está en la lista española o, como
+ * en getPlayer, quien ha jugado algún torneo (los de otras federaciones). Una
+ * fila de players por la clave y, si no está, una de participations_fide_id:
+ * el OR del WHERE no mira la segunda si la primera ya se cumple.
+ */
+export async function hasProfile(db: D1Database, fideId: number): Promise<boolean> {
+	const found = await db
+		.prepare(
+			`SELECT 1 AS found WHERE EXISTS (SELECT 1 FROM players WHERE fide_id = ?1)
+				OR EXISTS (SELECT 1 FROM participations WHERE fide_id = ?1)`
+		)
+		.bind(fideId)
+		.first()
+	return found !== null
+}
+
 /** Clave de sync_state con el Last-Modified de la última lista FIDE importada. */
 export const FIDE_LIST_KEY = 'fide.lastModified'
 

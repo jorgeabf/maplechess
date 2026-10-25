@@ -5,6 +5,7 @@ import { parseGamesPage, parseTournamentPage } from '../../src/ingest/info64/par
 import { loadParticipants, replaceParticipations, saveGames, upsertTournament } from '../../src/ingest/repo'
 import { parseGames } from '../../src/lib/chess/pgn'
 import {
+	countGamesByName,
 	exportGameIds,
 	gamesPgn,
 	gamesWhere,
@@ -90,6 +91,17 @@ describe('getTournamentGames', () => {
 		expect(games.rows).toEqual([])
 		expect(games.total).toBe(0)
 		expect(rounds).toHaveLength(9)
+	})
+})
+
+describe('countGamesByName', () => {
+	it('cuenta lo mismo que /partidas con ese jugador; null sin palabras que buscar', async () => {
+		const { name } = (await db.prepare('SELECT white_name AS name FROM games LIMIT 1').first<{ name: string }>())!
+		const { total } = await searchGames(db, { player: name }, 1)
+		expect(total).toBeGreaterThan(0)
+		expect(await countGamesByName(db, name)).toEqual({ total, capped: false })
+		expect(await countGamesByName(db, 'Inexistente')).toEqual({ total: 0, capped: false })
+		expect(await countGamesByName(db, '-')).toBeNull()
 	})
 })
 
