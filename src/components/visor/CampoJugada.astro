@@ -4,7 +4,8 @@
 // mismo que moviendo una pieza en el tablero, que no tiene teclado
 // (chessground). Lo maneja src/client/visor/campo-jugada.ts. Las jugadas
 // legales de la posición van como sugerencias en el datalist, y lo que no
-// vale (ilegal, ambigua) se dice debajo, en una región viva.
+// vale (ilegal, ambigua) se dice debajo, en una región viva. Vacío no se
+// envía (required): lo avisa el navegador.
 ---
 
 <form class="move-input" data-move-input>
@@ -20,6 +21,7 @@
 				autocapitalize="off"
 				spellcheck="false"
 				enterkeyhint="go"
+				required
 				aria-describedby="jugada-aviso"
 			/>
 		</label>

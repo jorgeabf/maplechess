@@ -74,6 +74,7 @@ class ExploradorRepertorio extends HTMLElement {
 		this.addEventListener('focusin', (event) => this.showArrow(event), { signal })
 		this.addEventListener('pointerleave', () => this.setHover(null), { signal })
 		this.addEventListener('focusout', () => this.setHover(null), { signal })
+		document.addEventListener('keydown', (event) => this.onKey(event), { signal })
 
 		this.panel = new EnginePanel(
 			this.querySelector<HTMLElement>('.engine')!,
@@ -133,6 +134,29 @@ class ExploradorRepertorio extends HTMLElement {
 			lastMove: lastMove ? squares(lastMove) : undefined,
 			movable: { color: this.movable ? pos.turn : undefined, dests: chessgroundDests(pos) }
 		}
+	}
+
+	/**
+	 * ← vuelve a la jugada anterior, como en el visor: sigue «← Atrás». Con
+	 * las mismas excepciones: las teclas con modificador, los campos (en «Tu
+	 * jugada» las flechas mueven el cursor) y el diálogo de coronar. Una tecla
+	 * mantenida no repite: cada jugada es una página nueva, y la pide al
+	 * servidor.
+	 */
+	private onKey(event: KeyboardEvent): void {
+		if (event.key !== 'ArrowLeft' || event.repeat) return
+		if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return
+		const target = event.target
+		if (
+			target instanceof Element &&
+			target.closest("input:not([type='checkbox']), select, textarea, [contenteditable], dialog")
+		) {
+			return
+		}
+		const prev = this.querySelector<HTMLAnchorElement>('a[data-prev]')
+		if (!prev) return
+		event.preventDefault()
+		prev.click()
 	}
 
 	/** Flecha de la jugada de la tabla sobre la que está el puntero o el foco. */

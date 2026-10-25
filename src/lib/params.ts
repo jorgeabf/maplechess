@@ -145,11 +145,17 @@ export function gameHref(id: number, color?: 'white' | 'black', ply?: number): s
 	return `/partidas/${id}${color === 'black' ? '?color=black' : ''}${ply ? `#j${ply}` : ''}`
 }
 
-/** Listas desde las que se abre una partida. */
-export type BackKind = 'search' | 'tournament' | 'player' | 'dossier' | 'repertoire'
+/**
+ * Páginas desde las que se abre una partida: una búsqueda, /partidas sin
+ * búsqueda («Partidas de la semana», «Se juegan pronto»), un torneo, una
+ * ficha, un dossier, un repertorio u otra partida («Anterior» o «Siguiente
+ * del torneo»).
+ */
+export type BackKind = 'search' | 'games' | 'tournament' | 'player' | 'dossier' | 'repertoire' | 'game'
 
 const BACK_ROUTES: [RegExp, BackKind][] = [
 	[/^\/partidas$/, 'search'],
+	[/^\/partidas\/(\d+)$/, 'game'],
 	[/^\/torneos\/\d+$/, 'tournament'],
 	[/^\/jugadores\/(\d+)$/, 'player'],
 	[/^\/jugadores\/(\d+)\/preparar$/, 'dossier'],
@@ -157,15 +163,16 @@ const BACK_ROUTES: [RegExp, BackKind][] = [
 ]
 
 /**
- * Lista de la que se llega a una partida (cabecera Referer), para volver a
- * ella: la búsqueda, un torneo, una ficha, un dossier o un repertorio, con el
- * FIDE ID del jugador en las tres últimas. Sólo de esta web, y `href` es la
- * ruta sin el origen. Desde otra partida, la portada o fuera, null.
+ * Página de la que se llega a una partida (cabecera Referer), para volver a
+ * ella. `id` es el FIDE ID del jugador en la ficha, el dossier y el
+ * repertorio, y el de la partida si se viene de otra. Sólo de esta web, y
+ * `href` es la ruta sin el origen. Desde la portada, otras páginas o fuera,
+ * null.
  */
 export function backTarget(
 	referer: string | null,
 	here: URL
-): { href: string; kind: BackKind; fideId: number | null } | null {
+): { href: string; kind: BackKind; id: number | null } | null {
 	if (!referer) return null
 	let from: URL
 	try {
@@ -176,9 +183,17 @@ export function backTarget(
 	if (from.origin !== here.origin) return null
 	for (const [pattern, kind] of BACK_ROUTES) {
 		const match = pattern.exec(from.pathname)
-		if (match) return { href: from.pathname + from.search, kind, fideId: match[1] ? Number(match[1]) : null }
+		if (!match) continue
+		const id = match[1] ? Number(match[1]) : null
+		return { href: from.pathname + from.search, kind: kind === 'search' && !searches(from) ? 'games' : kind, id }
 	}
 	return null
+}
+
+/** ¿Es una búsqueda la página /partidas de `url`? Sin filtros (o con el formulario enviado vacío), no. */
+function searches(url: URL): boolean {
+	const { page: _page, ...filters } = gameFilters(url.searchParams)
+	return gameSearchKind(filters) !== 'empty'
 }
 
 /** Ronda de la página del torneo (`ronda`): 0 son las partidas sin ronda; null, todas. */
