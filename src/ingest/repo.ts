@@ -8,6 +8,7 @@ import { setPgnTags } from '../lib/chess/pgn'
 import { madridYear } from '../lib/dates'
 import { withoutHomonymYear } from '../lib/format'
 import { lichessUrl } from '../lib/licenses'
+import { tournamentPlace } from '../lib/lugares'
 import type { FidePlayer } from './fide/parse'
 import type { DerivedColumns, GameRow, Participant, TournamentContext } from './games'
 import type { Pairing, PairedPlayer, StandingsPage, TournamentPlayer, TournamentType } from './info64/parse'
@@ -132,14 +133,18 @@ export interface TournamentInput {
 }
 
 /**
- * Guarda el torneo y devuelve su id. Una lectura que no trae la ciudad, las
- * fechas o el ritmo (la página cambió o vino a medias) no borra los guardados.
+ * Guarda el torneo y devuelve su id, con dónde se juega (tournamentPlace). Una
+ * lectura que no trae la ciudad, las fechas o el ritmo (la página cambió o vino
+ * a medias) no borra los guardados; sin la ciudad, tampoco el sitio que salió
+ * de ella.
  */
 export async function upsertTournament(db: D1Database, t: TournamentInput): Promise<number> {
+	const place = tournamentPlace(t.city, t.name)
 	const row = await db
 		.prepare(
-			`INSERT INTO tournaments (source, source_key, type, name, city, start_date, end_date, time_control, url, synced_at)
-			VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
+			`INSERT INTO tournaments (source, source_key, type, name, city, start_date, end_date, time_control, url, synced_at,
+				provincia, comunidad)
+			VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)
 			ON CONFLICT (source, source_key) DO UPDATE SET
 				type = excluded.type,
 				name = excluded.name,
@@ -148,10 +153,27 @@ export async function upsertTournament(db: D1Database, t: TournamentInput): Prom
 				end_date = coalesce(excluded.end_date, tournaments.end_date),
 				time_control = coalesce(excluded.time_control, tournaments.time_control),
 				url = excluded.url,
-				synced_at = excluded.synced_at
+				synced_at = excluded.synced_at,
+				provincia = CASE WHEN excluded.city IS NULL AND tournaments.city IS NOT NULL
+					THEN tournaments.provincia ELSE excluded.provincia END,
+				comunidad = CASE WHEN excluded.city IS NULL AND tournaments.city IS NOT NULL
+					THEN tournaments.comunidad ELSE excluded.comunidad END
 			RETURNING id`
 		)
-		.bind(t.source, t.key, t.type, t.name, t.city, t.startDate, t.endDate, t.timeControl, t.url, t.syncedAt)
+		.bind(
+			t.source,
+			t.key,
+			t.type,
+			t.name,
+			t.city,
+			t.startDate,
+			t.endDate,
+			t.timeControl,
+			t.url,
+			t.syncedAt,
+			place.province,
+			place.community
+		)
 		.first<{ id: number }>()
 	if (!row) throw new Error(`No se pudo guardar el torneo ${t.source}/${t.key}`)
 	return row.id
@@ -969,6 +991,46 @@ export async function saveLichessGames(db: D1Database, counts: [number, number][
 			)
 			.bind(json)
 	])
+	return results.reduce((n, r) => n + r.meta.changes, 0)
+}
+
+export interface StoredPlace {
+	id: number
+	name: string
+	city: string | null
+	province: string | null
+	community: string | null
+}
+
+/** Dónde se juega cada torneo guardado, con su nombre y su ciudad. Recorre la tabla de torneos. */
+export async function loadTournamentPlaces(db: D1Database): Promise<StoredPlace[]> {
+	const { results } = await db
+		.prepare('SELECT id, name, city, provincia AS province, comunidad AS community FROM tournaments')
+		.all<StoredPlace>()
+	return results
+}
+
+/** Guarda dónde se juegan esos torneos: sólo reescribe los que cambian, y devuelve cuántos. */
+export async function updateTournamentPlaces(
+	db: D1Database,
+	rows: { id: number; province: string | null; community: string | null }[]
+): Promise<number> {
+	if (rows.length === 0) return 0
+	const results = await db.batch(
+		chunkByJsonSize(rows).map((json) =>
+			db
+				.prepare(
+					`UPDATE tournaments SET
+						provincia = json_extract(j.value, '$.province'),
+						comunidad = json_extract(j.value, '$.community')
+					FROM json_each(?1) AS j
+					WHERE tournaments.id = json_extract(j.value, '$.id')
+						AND (tournaments.provincia IS NOT json_extract(j.value, '$.province')
+							OR tournaments.comunidad IS NOT json_extract(j.value, '$.community'))`
+				)
+				.bind(json)
+		)
+	)
 	return results.reduce((n, r) => n + r.meta.changes, 0)
 }
 

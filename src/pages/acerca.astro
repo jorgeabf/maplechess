@@ -1,7 +1,7 @@
 ---
 import Base from '../layouts/Base.astro'
 import { CONTACT } from '../lib/legal'
-import { CC_BY, CC_BY_SA, ENGINE_SOURCE, ENGINE_VERSION, SOURCE_CODE } from '../lib/licenses'
+import { CC_BY, CC_BY_SA, ENGINE_SOURCE, ENGINE_VERSION, IGN_NUCLEOS, INE_MUNICIPIOS, SOURCE_CODE } from '../lib/licenses'
 ---
 
 <Base
@@ -70,6 +70,15 @@ import { CC_BY, CC_BY_SA, ENGINE_SOURCE, ENGINE_VERSION, SOURCE_CODE } from '../
 				<strong>Jugadores y ELO:</strong> la{' '}
 				<a href="https://ratings.fide.com/download_lists.phtml" rel="noopener">lista de jugadores de la FIDE</a>,
 				filtrada a la federación española.
+			</li>
+			<li>
+				<strong>Provincias de los torneos:</strong> se sacan de la ciudad que escribe el organizador o, si no la dice,
+				del nombre del torneo, con la <a href={INE_MUNICIPIOS.url} rel="noopener">relación de municipios del INE</a>{' '}
+				(a {INE_MUNICIPIOS.date}; fuente: sitio web del INE, www.ine.es) y los{' '}
+				<a href={IGN_NUCLEOS} rel="noopener">núcleos de población</a> del Nomenclátor Geográfico de Municipios y
+				Entidades de Población (© Instituto Geográfico Nacional). Los dos se publican con licencia{' '}
+				<a href={CC_BY} rel="license noopener">CC BY 4.0</a>; aquí se han normalizado sus nombres para cruzarlos con
+				la ciudad.
 			</li>
 			<li>
 				<strong>Nombres de aperturas:</strong>{' '}

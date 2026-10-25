@@ -20,28 +20,46 @@ export function prefixTerms(text: string): string | null {
 	return query.map((w) => prefix([w])).join(' ')
 }
 
+/** Un sitio de la búsqueda de torneos: dónde se juegan y la palabra escrita, para el nombre. */
+export interface PlaceTerm {
+	/** Códigos del INE de las provincias y las comunidades (tournaments.provincia y comunidad). */
+	provinces: string[]
+	communities: string[]
+	/** La palabra tal como se ha escrito, en el nombre del torneo (FTS). */
+	name: string
+}
+
 /**
- * Como prefixTerms, pero una provincia o una comunidad se busca por todos sus
- * nombres (`toponimos.ts`): «alava» encuentra también «Alavesa» y «Araba».
- * Para los nombres de los torneos.
+ * La búsqueda de torneos: las palabras, como prefijos en el nombre o en la
+ * ciudad (`text`), y los sitios (`places`). Una provincia o una comunidad
+ * (`toponimos.ts`) se busca por dónde se juega el torneo, que la ingesta saca
+ * de su ciudad o, si no, de su nombre (`lugares.ts`), y por la palabra tal
+ * como se escribe en el nombre: «memorial gallego» encuentra el Memorial
+ * Gallego de Gijón, y «galicia», no. Null si no queda ninguna palabra.
  */
-export function placeTerms(text: string): string | null {
+export function tournamentTerms(text: string): { text: string | null; places: PlaceTerm[] } | null {
 	const query = words(text)
 	if (!query.some((w) => w.length > 1)) return null
 	const terms: string[] = []
+	const places: PlaceTerm[] = []
 	for (let i = 0; i < query.length; ) {
-		const place = placeAt(query, i)
-		if (place) {
-			const names = place.names.map(prefix)
-			terms.push(names.length > 1 ? `(${names.join(' OR ')})` : names[0])
-			i += place.length
+		const found = placeAt(query, i)
+		if (found) {
+			// «valenciana» es de la provincia y de la comunidad: basta la comunidad.
+			const communities = new Set(found.places.filter((p) => p.kind === 'comunidad').map((p) => p.code))
+			const provinces = found.places.filter((p) => p.kind === 'provincia' && !communities.has(p.community))
+			places.push({
+				provinces: provinces.map((p) => p.code),
+				communities: [...communities],
+				name: inColumn('name', prefix(query.slice(i, i + found.length)))
+			})
+			i += found.length
 		} else {
 			terms.push(prefix([query[i]]))
 			i++
 		}
 	}
-	// AND explícito: tras un paréntesis, FTS5 no admite el implícito.
-	return terms.join(' AND ')
+	return { text: terms.length > 0 ? terms.join(' ') : null, places }
 }
 
 /** Restringe los términos a una columna: `col : (t1 t2)`. */
