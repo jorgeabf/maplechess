@@ -9,9 +9,11 @@ export interface Champion extends Championship {
 	tournamentName: string
 	gamesCount: number
 	/**
-	 * Jugador, de sus datos como participante (sin el año de los menores, y
-	 * «Jugador retirado» sin FIDE ID), o equipo, de la clasificación. Null si el
-	 * jugador ya no está entre los participantes o si puede ser menor.
+	 * Jugador, con su nombre de la lista FIDE si está en ella y, si no, con el
+	 * de participante (los extranjeros, y los retirados como «Jugador
+	 * retirado», sin FIDE ID); los dos ya van sin el año de los menores ni el de
+	 * quien lo ha ocultado. O equipo, de la clasificación. Null si el jugador ya
+	 * no está entre los participantes o si puede ser menor.
 	 */
 	name: string | null
 	title: string | null
@@ -25,11 +27,13 @@ export interface Champion extends Championship {
 // fila de la clasificación, recorriendo la clave de standings en orden hasta
 // la primera o hasta la de su número inicial (?3): una fila, o tantas como el
 // puesto de quien ganó si no es el primero. El jugador, por la clave de
-// participations, y su edad, por la de players. Si la categoría dice su sexo
+// participations, y su nombre de la lista FIDE y su edad, por la de players:
+// cada torneo trae el nombre a su manera («Jose Antonio» en uno y «Josep
+// Anton» en otro, con el mismo FIDE ID). Si la categoría dice su sexo
 // (?5), si lo ha ocultado, por el índice único de ocultaciones; si dice su
 // edad, si ha ocultado el año, en la misma fila de players.
 const CHAMPION = `SELECT t.id AS tournamentId, t.name AS tournamentName, t.games_count AS gamesCount, s.points,
-		CASE WHEN t.type = 'team' THEN s.name ELSE p.name END AS name, p.title, p.fide_id AS fideId,
+		CASE WHEN t.type = 'team' THEN s.name ELSE coalesce(m.name, p.name) END AS name, p.title, p.fide_id AS fideId,
 		m.birth_year >= ?4 AS minor,
 		CASE ?5
 			WHEN 'sexo' THEN EXISTS (SELECT 1 FROM ocultaciones o WHERE o.fide_id = p.fide_id AND o.campo = 'sexo')

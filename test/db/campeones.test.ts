@@ -112,6 +112,21 @@ describe('getChampions', () => {
 		expect(champion).toMatchObject({ name: 'Club Inventado', points: 12, fideId: null, title: null })
 	})
 
+	it('con el nombre de la lista FIDE si está en ella, aunque el torneo lo escriba de otra forma', async () => {
+		const id = await tournament('ce-nombre', 'individual')
+		await replaceParticipations(db, id, [player(1, 'Lista Inventado, Jose Antonio', 9500001), player(2, 'Extranjero Inventado, Otro', 9500002)])
+		await db
+			.prepare("INSERT INTO players (fide_id, name, birth_year, seen_at) VALUES (9500001, 'Lista Inventado, Josep Anton', 1970, '')")
+			.run()
+		await standings(id, [
+			[1, 1, 7],
+			[2, 2, 6]
+		])
+
+		const champions = await getChampions(db, [edition('ce-nombre'), edition('ce-nombre', { year: 2025, startRank: 2 })], TODAY)
+		expect(champions.map((c) => c.name)).toEqual(['Lista Inventado, Josep Anton', 'Extranjero Inventado, Otro'])
+	})
+
 	it('el retirado, como «Jugador retirado» y sin FIDE ID', async () => {
 		await db
 			.prepare("INSERT INTO retiradas (fide_id, nombre, creada) VALUES (9500001, 'Retirado Inventado, Uno', '2026-10-22')")
