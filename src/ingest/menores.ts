@@ -24,8 +24,14 @@ const AGE =
  */
 const FIDE_AGE = /(?:\s[-–]|\|)\s*[OG]0?[6-9]\s*$/i
 
-/** Los de niños: «Kids» y «para niños» («Santos Niños», una fiesta, no entra). */
-const KIDS = 'kids|para nin[oa]s'
+/**
+ * Los de niños: «Kids» y «para niños», también en gallego («para nenos», «para
+ * rapaces»), catalán («per a nens», «per a infants») y euskera («Umeentzat»,
+ * «Haurrentzat», «Txikientzat»: el «I Aiarako Txapelketa Umeentzat» se
+ * colaba). «Santos Niños», una fiesta, no entra.
+ */
+const KIDS =
+	'kids|para nin[oa]s|para nen[oa]s|para rapa(?:ces|zas)|per a (?:nen(?:s|es)|infants)|umeentzat|haurrentzat|txikientzat'
 
 /**
  * Las categorías hasta infantil (Sub 14), también en catalán y gallego, y
