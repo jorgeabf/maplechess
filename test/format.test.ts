@@ -6,6 +6,7 @@ import {
 	formatLine,
 	formatMonth,
 	formatMove,
+	formatPlace,
 	formatRange,
 	formatResults,
 	homonymYear,
@@ -120,6 +121,12 @@ describe('formatLine', () => {
 describe('formatMonth', () => {
 	it('mes y año de una fecha ISO', () => {
 		expect(formatMonth('2026-10-17T10:00:00.000Z')).toBe('octubre de 2026')
+	})
+})
+
+describe('formatPlace', () => {
+	it('el puesto con su ordinal', () => {
+		expect([1, 2, 12].map(formatPlace)).toEqual(['1.º', '2.º', '12.º'])
 	})
 })
 

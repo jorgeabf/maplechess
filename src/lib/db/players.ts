@@ -1,4 +1,6 @@
 // Consultas de jugadores.
+import { plausibleRating } from '../chess/rating'
+import { timeClassOf } from '../chess/timecontrol'
 import { madridYear } from '../dates'
 import { outcomeFor } from '../format'
 import { prefixTerms } from './fts'
@@ -526,18 +528,72 @@ export interface ParticipationRow {
 	/** Número inicial; en torneos por equipos, tablero dentro del equipo. */
 	startRank: number
 	team: string | null
+	/** Rondas del torneo según la fuente; null si no las da. */
+	rounds: number | null
+	/** Ronda tras la que va la clasificación guardada; null si la fuente no lo dice. */
+	standingsRound: number | null
+	/** Su puesto en la clasificación o, en un torneo por equipos, el de su equipo; null sin clasificación. */
+	pos: number | null
+	/** Sus puntos en la clasificación; null sin ella y en los torneos por equipos (los del equipo no son suyos). */
+	points: number | null
 }
 
+/**
+ * Sus torneos, del más reciente al más antiguo, con su puesto y sus puntos en
+ * la clasificación. En los individuales, su fila se busca por su número
+ * inicial (índice único standings_start_rank: no repite torneos). En los de
+ * equipos, la de su equipo por el nombre, como las plantillas de la página del
+ * torneo (índice standings_team_name). Va en una subconsulta porque el nombre
+ * se podría repetir; con dos equipos iguales, el mejor puesto. Son una fila
+ * más por torneo individual y dos por torneo por equipos: el ON del cruce
+ * mira el tipo después de buscar por el número.
+ */
 export async function getPlayerTournaments(db: D1Database, fideId: number): Promise<ParticipationRow[]> {
 	const { results } = await db
 		.prepare(
 			`SELECT t.id AS tournamentId, t.name AS tournamentName, t.city, t.start_date AS startDate,
-				t.end_date AS endDate, t.time_control AS timeControl, pa.rating, pa.start_rank AS startRank, nullif(pa.team, '') AS team
+				t.end_date AS endDate, t.time_control AS timeControl, pa.rating, pa.start_rank AS startRank, nullif(pa.team, '') AS team,
+				t.rounds, t.standings_round AS standingsRound, s.points,
+				CASE t.type WHEN 'team'
+					THEN (SELECT min(st.pos) FROM standings st WHERE st.tournament_id = pa.tournament_id AND st.name = pa.team)
+					ELSE s.pos END AS pos
 			FROM participations pa JOIN tournaments t ON t.id = pa.tournament_id
+			LEFT JOIN standings s ON t.type = 'individual' AND s.tournament_id = pa.tournament_id AND s.start_rank = pa.start_rank
 			WHERE pa.fide_id = ?1
 			ORDER BY t.start_date DESC`
 		)
 		.bind(fideId)
 		.all<ParticipationRow>()
 	return results
+}
+
+export interface BestRating {
+	rating: number
+	tournamentId: number
+	tournamentName: string
+	/** Inicio del torneo (o su fin, si no consta), como en el gráfico de ELO. */
+	date: string
+}
+
+/**
+ * Su mejor ELO estándar en sus torneos, de las filas de getPlayerTournaments:
+ * el de su inscripción, sólo en los de ritmo estándar, para no mezclar ritmos,
+ * y la primera vez que lo tuvo. Sin los que aún no han empezado (`today`): los
+ * participantes se guardan antes, con el ELO de la última lista. No es su
+ * máximo en la lista FIDE: sólo cuentan los torneos que tenemos. Null con
+ * menos de dos torneos, porque el mejor de uno es ese mismo.
+ */
+export function bestStandardRating(tournaments: ParticipationRow[], today: string): BestRating | null {
+	let best: BestRating | null = null
+	const rated = new Set<number>()
+	for (const t of tournaments) {
+		const rating = plausibleRating(t.rating)
+		const date = t.startDate ?? t.endDate
+		if (rating === null || !date || date > today || timeClassOf(t.timeControl) !== 'standard') continue
+		rated.add(t.tournamentId)
+		if (!best || rating > best.rating || (rating === best.rating && date < best.date)) {
+			best = { rating, tournamentId: t.tournamentId, tournamentName: t.tournamentName, date }
+		}
+	}
+	return rated.size >= 2 ? best : null
 }

@@ -11,11 +11,12 @@ import ProximasPartidas from '../../components/ProximasPartidas.astro'
 import TorneosJugador from '../../components/TorneosJugador.astro'
 import Base from '../../layouts/Base.astro'
 import { score } from '../../lib/chess/repertoire'
+import { madridDate } from '../../lib/dates'
 import { searchGames } from '../../lib/db/games'
 import { PLAYER_PAGE_SIZE } from '../../lib/db/pagination'
 import { getUpcomingGames } from '../../lib/db/pairings'
-import { getPlayer, getPlayerSummary, getPlayerTournaments } from '../../lib/db/players'
-import { displayName, formatNumber, formatPercent } from '../../lib/format'
+import { bestStandardRating, getPlayer, getPlayerSummary, getPlayerTournaments } from '../../lib/db/players'
+import { displayName, formatMonth, formatNumber, formatPercent } from '../../lib/format'
 import { ME_COOKIE, ME_COOKIE_OPTIONS, ME_FIELD, claimCookieAction, isOwn, readMeField, resolveMe } from '../../lib/me'
 import { dossierHref, gameFilters, positiveInt, withParams } from '../../lib/params'
 
@@ -112,6 +113,8 @@ const RECENT_TOURNAMENTS = 20
 const shownTournaments = tournaments.length > RECENT_TOURNAMENTS + 5 ? RECENT_TOURNAMENTS : tournaments.length
 const recent = tournaments.slice(0, shownTournaments)
 const older = tournaments.slice(shownTournaments)
+// Su mejor ELO estándar, de las filas de sus torneos: sin lecturas de D1.
+const best = bestStandardRating(tournaments, madridDate(new Date()))
 // Índice «En esta página», con las secciones que hay: en el móvil, los
 // torneos empezaban a 8.646 px (25-oct-2026). Las partidas, las de la lista:
 // con filtros, sólo las que cumplen.
@@ -382,6 +385,19 @@ const pageIndex = [
 
 	<section id="torneos">
 		<h2>Torneos ({formatNumber(tournaments.length)})</h2>
+		{/*
+			Sobre el gráfico del que sale. «En sus torneos»: no es su máximo en la
+			lista FIDE. El torneo, entre paréntesis: con «en el» no concordaba con
+			«Liga…» ni «Copa…».
+		*/}
+		{
+			best && (
+				<p class="best-rating">
+					Mejor ELO estándar en {own ? 'tus' : 'sus'} torneos: <strong class="num">{best.rating}</strong> (
+					<a href={`/torneos/${best.tournamentId}`}>{best.tournamentName}</a>, {formatMonth(best.date)})
+				</p>
+			)
+		}
 		<GraficoElo tournaments={tournaments} />
 		{
 			tournaments.length > 0 ? (
@@ -580,6 +596,17 @@ const pageIndex = [
 
 	.filters {
 		margin-bottom: var(--space-4);
+	}
+
+	.best-rating {
+		margin: 0 0 var(--space-4);
+		font-size: var(--text-s);
+		color: var(--text-muted);
+	}
+
+	.best-rating strong {
+		font-weight: var(--weight-strong);
+		color: var(--text);
 	}
 
 	.older {

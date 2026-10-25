@@ -1,11 +1,13 @@
 import { env } from 'cloudflare:workers'
 import { beforeEach, describe, expect, it } from 'vitest'
-import { replaceParticipations, upsertTournament } from '../../src/ingest/repo'
+import { replaceParticipations, replaceStandings, upsertTournament } from '../../src/ingest/repo'
 import {
+	bestStandardRating,
 	FIDE_LIST_KEY,
 	fideIdQuery,
 	findPlayersByName,
 	getPlayer,
+	getPlayerTournaments,
 	hasProfile,
 	getRanking,
 	mayBeMinor,
@@ -382,5 +384,187 @@ describe('getRanking', () => {
 				expect(results.map((r) => r.detail).join(' | '), query).toContain(index)
 			}
 		}
+	})
+})
+
+describe('getPlayerTournaments', () => {
+	const db = env.DB
+	const ME = 9200001
+
+	const tournament = (key: string, type: 'individual' | 'team', startDate: string) =>
+		upsertTournament(db, {
+			source: 'info64',
+			key,
+			type,
+			name: key,
+			city: null,
+			startDate,
+			endDate: startDate,
+			timeControl: '90 minutes + 30 seconds per move',
+			url: `https://info64.org/${key}`,
+			syncedAt: '2026-10-01T00:00:00.000Z'
+		})
+
+	const player = (startRank: number, fideId: number, team: string | null = null) => ({
+		startRank,
+		team,
+		title: null,
+		name: `Inventado ${fideId}, Alguien`,
+		fed: 'ESP',
+		rating: 2000 + startRank,
+		fideId
+	})
+
+	// En los individuales la fuente también da el nombre, pero no se guarda.
+	const standing = (pos: number, startRank: number, points: number, name = `Fuente ${startRank}`) => ({
+		pos,
+		startRank,
+		name,
+		points,
+		tiebreaks: [],
+		rating: null
+	})
+
+	beforeEach(async () => {
+		await db.batch([
+			db.prepare('DELETE FROM standings'),
+			db.prepare('DELETE FROM participations'),
+			db.prepare('DELETE FROM games'),
+			db.prepare('DELETE FROM tournaments')
+		])
+	})
+
+	it('da su puesto y sus puntos de la clasificación, y las rondas', async () => {
+		const open = await tournament('open-de-prueba', 'individual', '2026-09-01')
+		await replaceParticipations(db, open, [player(1, 9200002), player(2, ME), player(3, 9200003)])
+		await replaceStandings(db, open, 'individual', {
+			round: 5,
+			rounds: 9,
+			tiebreaks: [],
+			rows: [standing(1, 1, 4.5), standing(2, 3, 4), standing(3, 2, 3.5)]
+		})
+		const [row] = await getPlayerTournaments(db, ME)
+		expect(row).toMatchObject({ tournamentId: open, pos: 3, points: 3.5, rounds: 9, standingsRound: 5, startRank: 2, team: null })
+	})
+
+	it('en un torneo por equipos, el puesto de su equipo por el nombre y sin sus puntos', async () => {
+		const liga = await tournament('team/liga-de-prueba', 'team', '2026-08-01')
+		// El tablero 2 del Club Inventado B: el equipo número 2 es otro.
+		await replaceParticipations(db, liga, [player(1, 9200004, 'Club Inventado A'), player(2, ME, 'Club Inventado B')])
+		await replaceStandings(db, liga, 'team', {
+			round: null,
+			rounds: 7,
+			tiebreaks: [],
+			rows: [standing(1, 2, 11, 'Club Inventado A'), standing(2, 1, 9, 'Club Inventado B')]
+		})
+		const [row] = await getPlayerTournaments(db, ME)
+		expect(row).toMatchObject({ tournamentId: liga, team: 'Club Inventado B', startRank: 2, pos: 2, points: null })
+	})
+
+	it('sin equipo en un torneo por equipos, ni con su número cruza la fila de un equipo', async () => {
+		// Los de una retransmisión de lichess sin equipo («Sin equipo» en la página del torneo).
+		const liga = await tournament('team/liga-sin-equipo', 'team', '2026-08-01')
+		await replaceParticipations(db, liga, [player(1, ME)])
+		await replaceStandings(db, liga, 'team', { round: null, rounds: 7, tiebreaks: [], rows: [standing(1, 1, 11, 'Club Inventado A')] })
+		expect((await getPlayerTournaments(db, ME))[0]).toMatchObject({ team: null, pos: null, points: null })
+	})
+
+	it('con dos equipos del mismo nombre, el torneo sale una vez, con el mejor puesto', async () => {
+		const liga = await tournament('team/liga-repetida', 'team', '2026-08-01')
+		await replaceParticipations(db, liga, [player(1, ME, 'Club Inventado')])
+		await replaceStandings(db, liga, 'team', {
+			round: null,
+			rounds: 7,
+			tiebreaks: [],
+			rows: [standing(1, 3, 11, 'Otro Club'), standing(2, 1, 9, 'Club Inventado'), standing(3, 2, 7, 'Club Inventado')]
+		})
+		const rows = await getPlayerTournaments(db, ME)
+		expect(rows).toHaveLength(1)
+		expect(rows[0]).toMatchObject({ pos: 2, points: null })
+	})
+
+	it('sin clasificación, sin puesto ni puntos', async () => {
+		const open = await tournament('open-sin-clasificacion', 'individual', '2026-09-01')
+		await replaceParticipations(db, open, [player(1, ME)])
+		expect((await getPlayerTournaments(db, ME))[0]).toMatchObject({ pos: null, points: null, rounds: null, standingsRound: null })
+	})
+
+	it('busca su fila por su número y la de su equipo por el nombre, sin recorrer la clasificación', async () => {
+		// Sin estadísticas, con un índice no único (que no lleva los puntos), el
+		// planificador prefería recorrer la clave (tournament_id, pos, start_rank).
+		const statements: string[] = []
+		const spying = new Proxy(db, {
+			get(target, prop) {
+				const value: unknown = Reflect.get(target, prop)
+				if (prop === 'prepare') return (sql: string) => (statements.push(sql), target.prepare(sql))
+				return typeof value === 'function' ? value.bind(target) : value
+			}
+		})
+		await getPlayerTournaments(spying, ME)
+		const { results } = await db
+			.prepare(`EXPLAIN QUERY PLAN ${statements[0]}`)
+			.bind(ME)
+			.all<{ detail: string }>()
+		const plan = results.map((r) => r.detail).join(' | ')
+		expect(plan).toContain('standings_start_rank (tournament_id=? AND start_rank=?)')
+		expect(plan).toContain('standings_team_name (tournament_id=? AND name=?)')
+		expect(plan).not.toContain('USING PRIMARY KEY (tournament_id=?)')
+	})
+})
+
+describe('bestStandardRating', () => {
+	const row = (tournamentId: number, rating: number | null, startDate: string | null, timeControl: string) => ({
+		tournamentId,
+		tournamentName: `Torneo ${tournamentId}`,
+		city: null,
+		startDate,
+		endDate: startDate,
+		timeControl,
+		rating,
+		startRank: 1,
+		team: null,
+		rounds: null,
+		standingsRound: null,
+		pos: null,
+		points: null
+	})
+	const standard = '90 minutes + 30 seconds per move'
+	const rapid = "10' + 5''"
+	const today = '2026-10-25'
+
+	it('el más alto de los torneos de ritmo estándar, sin mezclar ritmos', () => {
+		expect(
+			bestStandardRating(
+				[row(1, 2150, '2026-05-01', rapid), row(2, 2080, '2026-03-01', standard), row(3, 2100, '2025-03-01', standard)],
+				today
+			)
+		).toEqual({ rating: 2100, tournamentId: 3, tournamentName: 'Torneo 3', date: '2025-03-01' })
+	})
+
+	it('a igualdad, la primera vez que lo tuvo', () => {
+		expect(
+			bestStandardRating(
+				[row(1, 2100, '2026-05-01', standard), row(2, 2100, '2024-01-01', standard), row(3, 2050, '2023-01-01', standard)],
+				today
+			)
+		).toMatchObject({ tournamentId: 2 })
+	})
+
+	it('sin los que aún no han empezado: se inscribió con el ELO de la última lista', () => {
+		expect(
+			bestStandardRating(
+				[row(1, 2150, '2026-12-20', standard), row(2, 2120, today, standard), row(3, 2100, '2025-03-01', standard)],
+				today
+			)
+		).toMatchObject({ tournamentId: 2 })
+	})
+
+	it('sin los ELO inverosímiles ni los torneos sin fecha; con menos de dos torneos, nada', () => {
+		expect(
+			bestStandardRating([row(1, 4296, '2026-05-01', standard), row(2, 2100, null, standard), row(3, 2050, '2023-01-01', standard)], today)
+		).toBeNull()
+		// Dos filas del mismo torneo (en dos equipos) son un torneo.
+		expect(bestStandardRating([row(1, 2100, '2026-05-01', standard), row(1, 2100, '2026-05-01', standard)], today)).toBeNull()
+		expect(bestStandardRating([], today)).toBeNull()
 	})
 })

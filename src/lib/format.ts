@@ -96,6 +96,11 @@ export function formatPoints(points: number): string {
 	return whole > 0 ? `${whole}½` : '½'
 }
 
+/** Puesto en una clasificación: 1 → "1.º". */
+export function formatPlace(pos: number): string {
+	return `${pos}.º`
+}
+
 const numberFormat = new Intl.NumberFormat('es-ES')
 
 export function formatNumber(n: number): string {
