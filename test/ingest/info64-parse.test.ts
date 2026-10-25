@@ -7,7 +7,8 @@ import {
 	parseStandingsPage,
 	parseTeamListing,
 	parseTournamentPage,
-	parseUpcomingRounds
+	parseUpcomingRounds,
+	relatedGroup
 } from '../../src/ingest/info64/parse'
 import { matchName } from '../../src/lib/chess/names'
 import { parseGames } from '../../src/lib/chess/pgn'
@@ -111,8 +112,37 @@ describe('parseTournamentPage', () => {
 			city: 'Linares',
 			startDate: '2022-09-17',
 			endDate: '2022-09-23',
-			players: []
+			players: [],
+			related: []
 		})
+	})
+
+	it('lee las pestañas del grupo: sólo torneos de info64, sin repetir y en su orden', async () => {
+		const page = await parseTournamentPage(tournamentHtml)
+		expect(page.related).toEqual([
+			{ key: 'odiseo-chess-masters-rapidas', label: 'Rápidas' },
+			{ key: 'odiseo-chess-masters', label: 'Blitz' },
+			{ key: 'team/odiseo-chess-masters-equipos', label: 'Por equipos' }
+		])
+		// El título sigue siendo el h1, aunque las pestañas vayan antes.
+		expect(page.name).toBe('I Blitz Odiseo Chess Masters')
+	})
+})
+
+describe('relatedGroup', () => {
+	const related = [
+		{ key: 'open-a', label: 'A' },
+		{ key: 'open-b', label: 'B' }
+	]
+
+	it('guarda el grupo si tiene dos o más torneos y uno es el propio', () => {
+		expect(relatedGroup(related, 'open-b')).toEqual(related)
+	})
+
+	it('no lo guarda si el propio no está o si sólo hay uno', () => {
+		expect(relatedGroup(related, 'open-c')).toBeNull()
+		expect(relatedGroup([related[0]], 'open-a')).toBeNull()
+		expect(relatedGroup([], 'open-a')).toBeNull()
 	})
 })
 

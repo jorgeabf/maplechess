@@ -5,6 +5,7 @@ import GamesTable from '../../components/GamesTable.astro'
 import Icon from '../../components/Icon.astro'
 import IndicePagina from '../../components/IndicePagina.astro'
 import Pagination from '../../components/Pagination.astro'
+import PestanasGrupo from '../../components/PestanasGrupo.astro'
 import PlayerName from '../../components/PlayerName.astro'
 import Segmented from '../../components/Segmented.astro'
 import Base from '../../layouts/Base.astro'
@@ -14,7 +15,13 @@ import { madridDate } from '../../lib/dates'
 import { getTournamentGames } from '../../lib/db/games'
 import { getUpcomingRound } from '../../lib/db/pairings'
 import { getTournamentStandings, standingsHeading } from '../../lib/db/standings'
-import { getTournament, getTournamentParticipants, isIndexableTournament } from '../../lib/db/tournaments'
+import {
+	getTournament,
+	getTournamentGroup,
+	getTournamentParticipants,
+	isIndexableTournament,
+	tournamentSummary
+} from '../../lib/db/tournaments'
 import { gameMatches } from '../../lib/encuentros'
 import { formatCount, formatNumber, formatPoints, formatRange, formatRoundTime } from '../../lib/format'
 import { CC_BY, CC_BY_SA } from '../../lib/licenses'
@@ -49,10 +56,11 @@ const standingsAndParticipants = async () => {
 	const standings = await getTournamentStandings(env.DB, id, 'individual')
 	return { standings, participants: standings ? [] : await getTournamentParticipants(env.DB, id) }
 }
-const [{ standings, participants }, { rounds, games }, upcoming] = await Promise.all([
+const [{ standings, participants }, { rounds, games }, upcoming, groupTabs] = await Promise.all([
 	standingsAndParticipants(),
 	getTournamentGames(env.DB, id, round, page),
-	getUpcomingRound(env.DB, id)
+	getUpcomingRound(env.DB, id),
+	tournament.related ? getTournamentGroup(env.DB, tournament.source, tournament.related) : []
 ])
 // Selector de ronda: todas, las numeradas y, al final, las que no traen ronda (0).
 const roundOptions = [
@@ -76,8 +84,22 @@ const teamCount = teams.filter(([team]) => team !== null).length
 const rosterCount = teamCount > 0 ? formatCount(teamCount, 'equipo', 'equipos') : participants.length
 // En uno individual con clasificación no se leen los participantes: cada fila
 // de la clasificación es uno de ellos.
-const players = standings && !isTeam ? standings.rows.length : participants.length
+const field = standings && !isTeam ? standings.rows : participants
+const players = field.length
 const indexable = isIndexableTournament(tournament.gamesCount, players)
+// La línea de resumen, de las filas ya leídas: «100 jugadores · 7 GM · 16 IM ·
+// ELO medio 2211». En uno por equipos, los equipos, los títulos de las
+// plantillas y la media del ELO medio de cada equipo, el de la clasificación.
+// Los propios de lichess no la llevan: sus jugadores son sólo los de sus
+// partidas, no los del torneo.
+const teamsInField = standings ? standings.rows.length : teamCount
+const summary = fromLichess
+	? null
+	: isTeam
+		? teamsInField > 0 &&
+			tournamentSummary(formatCount(teamsInField, 'equipo', 'equipos'), participants, standings?.rows.map((s) => s.rating) ?? [])
+		: players > 0 &&
+			tournamentSummary(formatCount(players, 'jugador', 'jugadores'), field, field.map((p) => p.rating))
 // Las páginas del torneo y de su retransmisión, sólo si son de una fuente.
 const tournamentUrl = sourceUrl(tournament.url)
 const broadcastUrl = sourceUrl(tournament.gamesSourceUrl)
@@ -136,6 +158,7 @@ const sections = (
 	] as const
 ).filter((s): s is Section => typeof s === 'string')
 const participantsLabel = fromLichess ? 'Jugadores' : 'Participantes'
+// Los jugadores o los equipos ya los cuenta el resumen: el índice no los repite.
 const indexItems = sections.flatMap((s) => {
 	switch (s) {
 		case 'proxima-ronda':
@@ -143,11 +166,11 @@ const indexItems = sections.flatMap((s) => {
 		case 'clasificacion':
 			return [{ href: '#clasificacion', label: 'Clasificación' }]
 		case 'participantes':
-			return [{ href: '#participantes', label: participantsLabel, count: participants.length }]
+			return [{ href: '#participantes', label: participantsLabel, count: summary ? undefined : participants.length }]
 		case 'partidas':
 			return gamesTotal > 0 ? [{ href: '#partidas', label: 'Partidas', count: gamesTotal }] : []
 		case 'plantillas':
-			return [{ href: '#participantes', label: 'Plantillas', count: rosterCount }]
+			return [{ href: '#participantes', label: 'Plantillas', count: summary ? undefined : rosterCount }]
 	}
 })
 ---
@@ -174,6 +197,7 @@ const indexItems = sections.flatMap((s) => {
 			{timeClass && ` · ${TIME_CLASS_LABEL[timeClass]}`}
 			{tournament.timeControl && (timeClass ? ` (${tournament.timeControl})` : ` · ${tournament.timeControl}`)}
 		</p>
+		{summary && <p class="page-meta">{summary}</p>}
 		<p class="page-actions">
 			{
 				tournament.gamesCount > 0 && (
@@ -197,6 +221,8 @@ const indexItems = sections.flatMap((s) => {
 			}
 		</p>
 	</header>
+
+	<PestanasGrupo tabs={groupTabs} current={id} />
 
 	<IndicePagina items={indexItems} />
 

@@ -4,9 +4,13 @@ import type { TournamentPlayer } from '../../src/ingest/info64/parse'
 import { refreshTotals, replaceParticipations, upsertTournament } from '../../src/ingest/repo'
 import {
 	countTournamentsByName,
+	getTournament,
+	getTournamentGroup,
 	getTournamentParticipants,
+	groupLabels,
 	isIndexableTournament,
 	searchTournaments,
+	tournamentSummary,
 	type TournamentFilters
 } from '../../src/lib/db/tournaments'
 
@@ -335,5 +339,85 @@ describe('isIndexableTournament', () => {
 		expect(isIndexableTournament(0, 1)).toBe(false)
 		expect(isIndexableTournament(0, 2)).toBe(true)
 		expect(isIndexableTournament(3, 0)).toBe(true)
+	})
+})
+
+describe('grupo del torneo', () => {
+	const group = [
+		{ key: 'cto-inventado-absoluto-2026', label: 'Campeonato Absoluto de Inventada 2026' },
+		{ key: 'cto-inventado-primera-2026', label: 'Campeonato Primera de Inventada 2026' },
+		{ key: 'cto-inventado-segunda-2026', label: 'Campeonato Segunda de Inventada 2026' },
+		{ key: 'cto-inventado-tercera-2026', label: 'Campeonato Tercera de Inventada 2026' }
+	]
+
+	it('getTournament da el grupo guardado, o null', async () => {
+		const id = await tournament('cto-inventado-absoluto-2026')
+		expect((await getTournament(db, id))?.related).toBeNull()
+		await db.prepare('UPDATE tournaments SET related = ?1 WHERE id = ?2').bind(JSON.stringify(group), id).run()
+		expect((await getTournament(db, id))?.related).toEqual(group)
+	})
+
+	it('las pestañas son los guardados, en el orden de la fuente, con el rótulo recortado o el nombre', async () => {
+		// Guardados en otro orden; la segunda no está (aún no ha empezado, o es de menores).
+		const tercera = await tournament('cto-inventado-tercera-2026')
+		const absoluto = await tournament('cto-inventado-absoluto-2026')
+		const primera = await tournament('cto-inventado-primera-2026')
+		expect(await getTournamentGroup(db, 'info64', group)).toEqual([
+			{ id: absoluto, label: 'Absoluto' },
+			{ id: primera, label: 'Primera' },
+			{ id: tercera, label: 'Tercera' }
+		])
+		// Sin rótulo, el nombre del torneo.
+		const unlabelled = [{ ...group[0], label: '' }, group[1]]
+		expect(await getTournamentGroup(db, 'info64', unlabelled)).toEqual([
+			{ id: absoluto, label: 'cto-inventado-absoluto-2026' },
+			{ id: primera, label: 'Campeonato Primera de Inventada 2026' }
+		])
+		// Sólo los de la misma fuente.
+		expect(await getTournamentGroup(db, 'lichess', group)).toEqual([])
+	})
+})
+
+describe('groupLabels', () => {
+	it('quita las palabras que comparten todos al principio y al final', () => {
+		expect(groupLabels(['Campeonato Absoluto de Bizkaia 2026', 'Campeonato Primera de Bizkaia 2026'])).toEqual([
+			'Absoluto',
+			'Primera'
+		])
+		expect(groupLabels(['Open Sub2400', 'open Sub1800', 'Open Blitz'])).toEqual(['Sub2400', 'Sub1800', 'Blitz'])
+	})
+
+	it('deja los rótulos que no comparten nada, y el de uno solo', () => {
+		expect(groupLabels(['Preferente', 'Segunda', 'Tercera'])).toEqual(['Preferente', 'Segunda', 'Tercera'])
+		expect(groupLabels(['Grupo A', 'Grupo B', 'Final'])).toEqual(['Grupo A', 'Grupo B', 'Final'])
+		expect(groupLabels(['Campeonato de Inventada 2026'])).toEqual(['Campeonato de Inventada 2026'])
+	})
+
+	it('quita el guion o el «de» que queda en el borde', () => {
+		expect(groupLabels(['CE Absoluto', 'CE de Veteranos S50'])).toEqual(['Absoluto', 'Veteranos S50'])
+		expect(groupLabels(['Open Inventado - Fase Final', 'Open Inventado Fase Previa'])).toEqual(['Fase Final', 'Fase Previa'])
+		expect(groupLabels(['Liga Regional - Primera División', 'Liga Regional - Segunda División'])).toEqual([
+			'Primera',
+			'Segunda'
+		])
+	})
+
+	it('recorta menos, primero por el principio, si a alguno no le queda una palabra que diga algo', () => {
+		expect(groupLabels(['Grupo A', 'Grupo B'])).toEqual(['Grupo A', 'Grupo B'])
+		expect(groupLabels(['Open A 2026', 'Open B 2026'])).toEqual(['Open A', 'Open B'])
+	})
+})
+
+describe('tournamentSummary', () => {
+	const p = (title: string | null) => ({ title })
+
+	it('cuenta los GM y los IM y da la media de los que tienen ELO', () => {
+		expect(tournamentSummary('4 jugadores', [p('GM'), p('IM'), p('IM'), p('FM')], [2600, 2401, null, 2200])).toBe(
+			'4 jugadores · 1 GM · 2 IM · ELO medio 2400'
+		)
+	})
+
+	it('sin titulados ni ELO, sólo el tamaño', () => {
+		expect(tournamentSummary('52 equipos', [p(null), p('WGM')], [null])).toBe('52 equipos')
 	})
 })

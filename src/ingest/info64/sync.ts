@@ -42,6 +42,7 @@ import {
 	parseTournamentPage,
 	parseUpcomingRounds,
 	PageFormatError,
+	relatedGroup,
 	type EventTournament,
 	type TournamentPlayer,
 	type TournamentType,
@@ -524,7 +525,8 @@ async function syncTournament(db: D1Database, candidate: EventTournament): Promi
 		endDate: page.endDate ?? validDate(candidate.lastRound),
 		timeControl: page.timeControl,
 		url,
-		syncedAt: new Date().toISOString()
+		syncedAt: new Date().toISOString(),
+		related: relatedGroup(page.related, candidate.key)
 	})
 	// Si lo parece, se apunta para revisarlo; hasta entonces se guarda como los demás.
 	if (looksSensitive(page.name)) await proposeSensitive(db, [{ source: SOURCE, key: candidate.key, name: page.name }])

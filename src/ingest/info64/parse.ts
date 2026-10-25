@@ -5,6 +5,7 @@
 // así que los textos fijos ("from", "There are no games.") son estables.
 import { plausibleRating } from '../../lib/chess/rating'
 import { validDate } from '../../lib/dates'
+import type { RelatedTournament } from '../../lib/db/tournaments'
 
 export type TournamentType = 'individual' | 'team'
 
@@ -42,6 +43,12 @@ export interface TournamentPage {
 	 * las plantillas están en /listing (ver parseTeamListing).
 	 */
 	players: TournamentPlayer[]
+	/**
+	 * Las pestañas del grupo de torneos que crea el organizador, en su orden:
+	 * las que llevan a un torneo de info64, sin repetir. Vacío sin grupo. Si
+	 * se guardan lo decide relatedGroup.
+	 */
+	related: RelatedTournament[]
 }
 
 interface CalendarEvent {
@@ -217,8 +224,19 @@ export async function parseTournamentPage(html: string): Promise<TournamentPage>
 	// Texto y destinos de enlace del bloque de información, donde los
 	// organizadores ponen las retransmisiones (como enlace o como texto suelto).
 	let extraInfo = ''
+	// Pestañas del grupo, encima del título: un enlace por torneo, también al propio.
+	const tabs: { href: string; label: string }[] = []
 
 	const rewriter = new HTMLRewriter()
+		.on('#tournament-selection-nav a[href]', {
+			element(el) {
+				tabs.push({ href: el.getAttribute('href') ?? '', label: '' })
+			},
+			text(chunk) {
+				const tab = tabs.at(-1)
+				if (tab) tab.label += chunk.text
+			}
+		})
 		.on('#extra-information', {
 			text(chunk) {
 				// Un espacio entre nodos de texto: si no, "url<br>Texto" quedaría pegado.
@@ -280,8 +298,33 @@ export async function parseTournamentPage(html: string): Promise<TournamentPage>
 		endDate: validDate(dates.at(-1)),
 		timeControl: clean(timeControl) || null,
 		broadcasts: findLichessBroadcasts(decodeEntities(extraInfo)),
-		players
+		players,
+		related: relatedTournaments(tabs)
 	}
+}
+
+// Una clave de torneo de info64, como la de EventTournament: «slug» o «team/slug».
+const INFO64_KEY = /^(?:team\/)?[a-z0-9_-]+$/
+
+/** Las pestañas que llevan a un torneo de info64, sin repetir, con el rótulo limpio. */
+function relatedTournaments(tabs: { href: string; label: string }[]): RelatedTournament[] {
+	const byKey = new Map<string, RelatedTournament>()
+	for (const tab of tabs) {
+		const key = decodeEntities(tab.href)
+			.replace(/^https?:\/\/(?:www\.)?info64\.org/, '')
+			.replace(/^\/+|\/+$/g, '')
+		if (INFO64_KEY.test(key) && !byKey.has(key)) byKey.set(key, { key, label: clean(tab.label) })
+	}
+	return [...byKey.values()]
+}
+
+/**
+ * El grupo que se guarda del torneo `key`: las pestañas de su página, si son
+ * dos o más y una es la suya. Si no, null, y upsertTournament conserva el
+ * guardado: una página que vino a medias o con otra forma no lo borra.
+ */
+export function relatedGroup(related: RelatedTournament[], key: string): RelatedTournament[] | null {
+	return related.length >= 2 && related.some((r) => r.key === key) ? related : null
 }
 
 const LICHESS_BROADCAST = /https?:\/\/(?:www\.)?lichess\.org\/broadcast\/[^\s"'<>]+/g
