@@ -18,6 +18,7 @@ import Cruce from '../../../components/dossier/Cruce.astro'
 import PrimeraJugada from '../../../components/dossier/PrimeraJugada.astro'
 import FiltrosPlegables from '../../../components/FiltrosPlegables.astro'
 import GamesTable from '../../../components/GamesTable.astro'
+import Icon from '../../../components/Icon.astro'
 import ScoreBar from '../../../components/repertorio/ScoreBar.astro'
 import Segmented from '../../../components/Segmented.astro'
 import Base from '../../../layouts/Base.astro'
@@ -121,7 +122,10 @@ const [all, myGames, headToHead, meChoices] = await Promise.all([
 // cambios recientes comparan siempre el último año con los dos anteriores.
 const from = period ? addYears(today, -Number(period)) : null
 const games = from ? all.filter((g) => g.date !== null && g.date >= from) : all
-const rivalIndex = indexPositions(repertoireGames(games), color)
+// Las líneas y la primera jugada salen de las que tienen jugadas: si no son
+// todas, la cabecera dice cuántas («162 partidas suyas (156 con jugadas)»).
+const withMoves = repertoireGames(games)
+const rivalIndex = indexPositions(withMoves, color)
 // Tu índice: todas tus partidas con el otro color y el mismo ritmo.
 const myIndex = mePlayer ? indexPositions(repertoireGames(myGames), myColor) : null
 const first = firstMoves(rivalIndex, color)
@@ -216,9 +220,10 @@ alternatives.push({
 	description={`Dossier de ${name} (FIDE ${fideId}) con ${colorText}: líneas principales, cambios y resultados.`}
 	noindex
 >
-	<CabeceraJugador fideId={fideId} name={name} title={title} own={own}>
+	<CabeceraJugador fideId={fideId} title={title} view="preparar" filters={{ color, period, timeClass }} own={own}>
 		{own && 'Lo que ven tus rivales al prepararse contra ti: '}
 		{formatCount(games.length, `partida ${own ? 'tuya' : 'suya'}`, `partidas ${yours}`)} con {colorText}{filterText}
+		{withMoves.length < games.length && ` (${formatNumber(withMoves.length)} con jugadas)`}
 		{player.ratingStd && ` · ELO ${player.ratingStd}`} · FIDE {fideId}
 	</CabeceraJugador>
 
@@ -288,7 +293,14 @@ alternatives.push({
 											<a href={repertoireHref(l.moves)} rel="nofollow">
 												Explorar
 											</a>
-											<a href={repertoireHref(l.moves, 'repertorio.pgn')} rel="nofollow" download>
+											<a
+												class="download"
+												href={repertoireHref(l.moves, 'repertorio.pgn')}
+												rel="nofollow"
+												download
+												aria-label="Descargar PGN de esta línea"
+											>
+												<Icon name="download" />
 												PGN
 											</a>
 										</span>
@@ -351,11 +363,11 @@ alternatives.push({
 							<>
 								{me.fideId === fideId && <p class="muted">Ese es su propio ID: indica el tuyo.</p>}
 								{me.fideId !== null && me.fideId !== fideId && (
-									<p class="muted">No encontramos el ID FIDE {me.fideId}.</p>
+									<p class="muted">No encontramos el FIDE ID {me.fideId}.</p>
 								)}
 								<form method="post" class="me-form form-row" action="#tu">
 									<label>
-										Tu nombre o ID FIDE
+										Tu nombre o FIDE ID
 										<input name={ME_FIELD} value={meSearch} required autocomplete="name" />
 									</label>
 									<button class="button secondary" type="submit">
@@ -389,15 +401,15 @@ alternatives.push({
 												</form>
 												{meChoices.more && (
 													<p class="muted small">
-														Hay más con ese nombre: añade otra palabra (el segundo apellido o el nombre) o escribe tu ID
-														FIDE.
+														Hay más con ese nombre: añade otra palabra (el segundo apellido o el nombre) o escribe tu
+														FIDE ID.
 													</p>
 												)}
 											</>
 										) : (
 											<p class="muted">
-												No hay nadie con ese nombre en la lista FIDE española: prueba con menos palabras o escribe tu ID
-												FIDE.
+												No hay nadie con ese nombre en la lista FIDE española: prueba con menos palabras o escribe tu
+												FIDE ID.
 											</p>
 										)}
 									</div>
@@ -620,6 +632,18 @@ alternatives.push({
 	.links {
 		display: inline-flex;
 		gap: var(--space-3);
+	}
+
+	/* «PGN» con el icono de descargar delante, a la altura de su texto. */
+	.download {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--space-1);
+	}
+
+	.download :global(.icon) {
+		inline-size: 1em;
+		block-size: 1em;
 	}
 
 	.small {

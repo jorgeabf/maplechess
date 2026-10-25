@@ -1,0 +1,125 @@
+---
+// Pestañas de las tres páginas de un jugador: su ficha, el dossier para
+// preparar la partida y su repertorio. Son vistas del mismo jugador, y sin
+// ellas sólo las distinguía el h1. Van sin caja, con la raya de las pestañas
+// del menú, para que no se confundan con los selectores de filtros
+// (Segmented) que van debajo. Sin JavaScript ni lecturas de D1.
+//
+// A un posible menor no se le ponen: no tiene dossier ni repertorio
+// (CLAUDE.md, «Menores»). Las decide la página, con hasDossier.
+import type { TimeClass } from '../lib/chess/timecontrol'
+import { withParams } from '../lib/params'
+
+type PlayerView = 'ficha' | 'preparar' | 'repertorio'
+
+interface Props {
+	fideId: number
+	current: PlayerView
+	/** Tus páginas (cookie yo; ver isOwn): «Mi ficha», «Mi dossier», «Mi repertorio». */
+	own?: boolean
+	/**
+	 * Lo elegido en el dossier o en el repertorio, que se conserva al pasar de
+	 * uno a otro: en los dos, `color` es el del jugador. Desde la ficha, nada.
+	 */
+	filters?: { color: 'white' | 'black'; period: string; timeClass: TimeClass | null }
+}
+
+const { fideId, current, own = false, filters } = Astro.props
+const view = (path: string, params: Record<string, string | null>) =>
+	withParams(new URL(`/jugadores/${fideId}/${path}`, Astro.url), params)
+const shared = { periodo: filters?.period || null, ritmo: filters?.timeClass ?? null }
+const tabs: { id: PlayerView; label: string; href: string }[] = [
+	{ id: 'ficha', label: own ? 'Mi ficha' : 'Ficha', href: `/jugadores/${fideId}` },
+	// El color va siempre: sin él, el dossier abre con el de vuestra próxima partida.
+	{ id: 'preparar', label: own ? 'Mi dossier' : 'Preparar', href: view('preparar', { color: filters?.color ?? null, ...shared }) },
+	// En el repertorio, blancas es el color por defecto y no va en la URL.
+	{
+		id: 'repertorio',
+		label: own ? 'Mi repertorio' : 'Repertorio',
+		href: view('repertorio', { color: filters?.color === 'black' ? 'black' : null, ...shared })
+	}
+]
+---
+
+<nav class="player-tabs" aria-label={own ? 'Mis páginas' : 'Páginas del jugador'}>
+	<ul>
+		{
+			tabs.map((tab) => (
+				<li>
+					<a href={tab.href} rel={tab.id === 'ficha' ? undefined : 'nofollow'} aria-current={tab.id === current ? 'page' : undefined}>
+						{tab.label}
+					</a>
+				</li>
+			))
+		}
+	</ul>
+</nav>
+
+<style>
+	/* Justo bajo la cabecera de la página (.page-head), más cerca de ella que del contenido. */
+	.player-tabs {
+		margin: calc(-1 * var(--space-3)) 0 var(--space-5);
+	}
+
+	/*
+	 * La raya de debajo es el borde de la lista, y la de la pestaña actual va
+	 * encima, en su enlace, que baja un píxel sobre ella. Con una sombra por
+	 * dentro, en escritorio asomaba una raya vertical en el extremo derecho.
+	 * Si no caben (tus páginas, con la letra al 150 %), bajan de línea enteras.
+	 */
+	ul {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0 var(--space-5);
+		margin: 0;
+		padding: 0;
+		border-block-end: 1px solid var(--border);
+		list-style: none;
+	}
+
+	li {
+		display: flex;
+	}
+
+	/* De 44 px de alto: se tocan con el dedo. */
+	a {
+		display: flex;
+		align-items: center;
+		min-block-size: 2.75rem;
+		margin-block-end: -1px;
+		border-block-end: 3px solid transparent;
+		color: var(--text-muted);
+		font-size: var(--text-s);
+		font-weight: var(--weight-strong);
+		text-decoration: none;
+		white-space: nowrap;
+	}
+
+	a:hover {
+		border-block-end-color: var(--border-strong);
+		color: var(--text);
+	}
+
+	a[aria-current] {
+		border-block-end-color: var(--accent);
+		color: var(--accent);
+	}
+
+	/* En alto contraste, la actual con el color de selección del sistema, como el menú. */
+	@media (forced-colors: active) {
+		a {
+			border-block-end-color: Canvas;
+		}
+
+		a[aria-current] {
+			border-block-end-color: Highlight;
+		}
+	}
+
+	/* En papel no llevan a ninguna parte. */
+	@media print {
+		.player-tabs {
+			display: none;
+		}
+	}
+</style>

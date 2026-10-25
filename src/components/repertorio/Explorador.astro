@@ -67,12 +67,12 @@ const positionHref = (moves: string[]) => `${lineHref(moves)}#${ANCHOR}`
 
 	<div class="side">
 		<nav class="line" aria-label="Jugadas hasta esta posición">
-			<a href={positionHref([])} rel="nofollow" aria-current={last ? undefined : 'page'}>Inicio</a>
+			<a href={positionHref([])} rel="nofollow" aria-current={last ? undefined : 'step'}>Inicio</a>
 			{
 				line.moves.map((m, i) => (
 					<span class="step">
 						{m.ply % 2 === 1 && <span class="num-label">{moveNumber(m.ply)}.</span>}
-						<a href={positionHref(moves.slice(0, i + 1))} rel="nofollow" aria-current={m === last ? 'page' : undefined}>
+						<a href={positionHref(moves.slice(0, i + 1))} rel="nofollow" aria-current={m === last ? 'step' : undefined}>
 							{m.san}
 						</a>
 					</span>

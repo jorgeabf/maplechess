@@ -1,21 +1,26 @@
 ---
 // Cabecera de las páginas que cuelgan de la ficha de un jugador (repertorio,
-// dossier): enlace de vuelta a la ficha, título y, en el hueco, un resumen.
+// dossier): título y, en el hueco, un resumen; debajo, las pestañas de sus
+// tres páginas, que llevan de vuelta a la ficha.
+import type { TimeClass } from '../lib/chess/timecontrol'
+import PestanasJugador from './PestanasJugador.astro'
 
 interface Props {
 	fideId: number
-	/** Nombre del jugador para el enlace de vuelta. */
-	name: string
 	title: string
-	/** Tu propia página (cookie yo; ver isOwn): vuelve a «Mi ficha». */
+	/** La página: la pestaña que va marcada. */
+	view: 'preparar' | 'repertorio'
+	/** Color, periodo y ritmo elegidos, que las pestañas conservan. */
+	filters: { color: 'white' | 'black'; period: string; timeClass: TimeClass | null }
+	/** Tu propia página (cookie yo; ver isOwn): «Mi ficha», «Mi dossier», «Mi repertorio». */
 	own?: boolean
 }
 
-const { fideId, name, title, own = false } = Astro.props
+const { fideId, title, view, filters, own = false } = Astro.props
 ---
 
 <header class="page-head">
-	<p class="back"><a href={`/jugadores/${fideId}`}>{own ? '← Mi ficha' : `← Ficha de ${name}`}</a></p>
 	<h1>{title}</h1>
 	<p class="page-meta"><slot /></p>
 </header>
+<PestanasJugador fideId={fideId} current={view} own={own} filters={filters} />

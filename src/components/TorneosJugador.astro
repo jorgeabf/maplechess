@@ -8,9 +8,11 @@ interface Props {
 	tournaments: ParticipationRow[]
 	/** Partidas con PGN y puntos en cada torneo (getPlayerSummary). */
 	scores: Map<number, TournamentScore>
+	/** El jugador de la ficha: el número de partidas lleva a las suyas de ese torneo. */
+	fideId: number
 }
 
-const { tournaments, scores } = Astro.props
+const { tournaments, scores, fideId } = Astro.props
 ---
 
 <div class="table-wrap stack tournaments">
@@ -50,7 +52,16 @@ const { tournaments, scores } = Astro.props
 							{/* Apilada en el móvil (.stack): cada cifra lleva su rótulo, sólo si la hay. */}
 							<td class="end num stat">{t.rating && <><span class="cell-label" aria-hidden="true">ELO </span>{t.rating}</>}</td>
 							<td class="end num stat">{!t.team && t.startRank ? <><span class="cell-label" aria-hidden="true">Nº inicial </span>{t.startRank}</> : null}</td>
-							<td class="end num stat">{score ? <><span class="cell-label" aria-hidden="true">Partidas con PGN </span>{formatNumber(score.games)}</> : null}</td>
+							{/* Sus partidas del torneo, en la lista de la ficha (filtro torneo). */}
+							<td class="end num stat">
+								{score ? (
+									<a href={`/jugadores/${fideId}?torneo=${t.tournamentId}#partidas`} rel="nofollow">
+										<span class="cell-label" aria-hidden="true">Partidas con PGN </span>
+										{formatNumber(score.games)}
+										<span class="visually-hidden"> partidas</span>
+									</a>
+								) : null}
+							</td>
 							<td class="end num stat">{score?.decided ? <><span class="cell-label" aria-hidden="true">Puntos </span>{`${formatPoints(score.points)} / ${score.decided}`}</> : null}</td>
 						</tr>
 					)

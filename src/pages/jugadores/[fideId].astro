@@ -3,13 +3,16 @@ import { env } from 'cloudflare:workers'
 import GamesTable from '../../components/GamesTable.astro'
 import GraficoElo from '../../components/GraficoElo.astro'
 import Icon from '../../components/Icon.astro'
+import IndicePagina from '../../components/IndicePagina.astro'
 import RitmoSelect from '../../components/RitmoSelect.astro'
 import Pagination from '../../components/Pagination.astro'
+import PestanasJugador from '../../components/PestanasJugador.astro'
 import ProximasPartidas from '../../components/ProximasPartidas.astro'
 import TorneosJugador from '../../components/TorneosJugador.astro'
 import Base from '../../layouts/Base.astro'
 import { score } from '../../lib/chess/repertoire'
 import { searchGames } from '../../lib/db/games'
+import { PLAYER_PAGE_SIZE } from '../../lib/db/pagination'
 import { getUpcomingGames } from '../../lib/db/pairings'
 import { getPlayer, getPlayerSummary, getPlayerTournaments } from '../../lib/db/players'
 import { displayName, formatNumber, formatPercent } from '../../lib/format'
@@ -33,27 +36,38 @@ if (field !== null) {
 }
 // En tu ficha (cookie yo), los textos te hablan a ti.
 const own = isOwn(me, fideId)
-const { color, result, eco, timeClass, page } = gameFilters(params)
+const { color, result, eco, timeClass, tournamentId, page } = gameFilters(params)
 // En la ficha, "resultado" es desde el punto de vista del jugador.
 const ownResult = result === 'win' || result === 'draw' || result === 'loss' ? result : ''
-const filters = { fideId, color, result: ownResult, eco, timeClass } as const
+// El torneo llega de «Partidas con PGN» de la tabla de torneos (TorneosJugador).
+const filters = { fideId, color, result: ownResult, eco, timeClass, tournamentId } as const
 
 // La próxima partida de un posible menor (mayBeMinor) sólo sale en su ficha;
 // en las de los demás, en la página del torneo.
 const [games, stats, tournaments, upcoming] = await Promise.all([
-	searchGames(env.DB, filters, page),
+	searchGames(env.DB, filters, page, PLAYER_PAGE_SIZE),
 	getPlayerSummary(env.DB, fideId),
 	getPlayerTournaments(env.DB, fideId),
 	player.minor && !own ? [] : getUpcomingGames(env.DB, fideId)
 ])
+
+// El torneo del filtro tiene que ser uno de los suyos, de la tabla de torneos:
+// si no (borrado, uno en el que no jugó, «1e3», que se lee como 1), vuelve a
+// la ficha sin él, o con su id bien escrito. Sólo con una URL a mano: la
+// ficha no enlaza otros.
+const filterTournament = tournamentId === null ? null : (tournaments.find((t) => t.tournamentId === tournamentId) ?? null)
+if (params.has('torneo') && (filterTournament === null || params.get('torneo') !== String(tournamentId))) {
+	return Astro.redirect(withParams(Astro.url, { torneo: filterTournament && filterTournament.tournamentId }))
+}
 
 const pgnQuery = new URLSearchParams()
 if (color !== 'any') pgnQuery.set('color', color)
 if (ownResult) pgnQuery.set('resultado', ownResult)
 if (eco) pgnQuery.set('eco', eco)
 if (timeClass) pgnQuery.set('ritmo', timeClass)
+if (tournamentId) pgnQuery.set('torneo', String(tournamentId))
 const pgnHref = `/jugadores/${fideId}.pgn${pgnQuery.size ? `?${pgnQuery}` : ''}`
-const filtered = color !== 'any' || ownResult !== '' || eco !== '' || timeClass !== null
+const filtered = color !== 'any' || ownResult !== '' || eco !== '' || timeClass !== null || tournamentId !== null
 
 const totalGames = stats.colors.reduce((n, c) => n + c.games, 0)
 // Sin torneos ni partidas sólo quedan los datos de la lista FIDE, y la de un
@@ -98,6 +112,18 @@ const RECENT_TOURNAMENTS = 20
 const shownTournaments = tournaments.length > RECENT_TOURNAMENTS + 5 ? RECENT_TOURNAMENTS : tournaments.length
 const recent = tournaments.slice(0, shownTournaments)
 const older = tournaments.slice(shownTournaments)
+// Índice «En esta página», con las secciones que hay: en el móvil, los
+// torneos empezaban a 8.646 px (25-oct-2026). Las partidas, las de la lista:
+// con filtros, sólo las que cumplen.
+const pageIndex = [
+	...(totalGames > 0
+		? [
+				{ href: '#resultados', label: 'Resultados' },
+				{ href: '#partidas', label: 'Partidas', count: filtered ? games.total : totalGames }
+			]
+		: []),
+	...(tournaments.length > 0 ? [{ href: '#torneos', label: 'Torneos', count: tournaments.length }] : [])
+]
 ---
 
 <Base
@@ -155,29 +181,28 @@ const older = tournaments.slice(shownTournaments)
 		</dl>
 	</header>
 
+	{hasDossier && <PestanasJugador fideId={fideId} current="ficha" own={own} />}
+
+	<IndicePagina items={pageIndex} />
+
 	<ProximasPartidas class="upcoming" games={upcoming} you={own} owner={{ fideId, name, hasDossier }} />
 
 	{
 		hasDossier && (
-			<nav class="prepare" aria-label={own ? 'Mi dossier y mi repertorio' : 'Preparar una partida'}>
+			<nav class="prepare" aria-label={own ? 'Mi dossier' : 'Preparar una partida'}>
 				<span class="muted">{own ? 'Mi dossier:' : 'Preparar una partida:'}</span>
 				{dossierLinks.map((l) => (
 					<a class:list={['button', { secondary: upcomingPrepares }]} href={dossierHref(fideId, l.color)} rel="nofollow">
 						{l.label}
 					</a>
 				))}
-				<span class="repertoire">
-					<span class="muted">{own ? 'Mi repertorio:' : 'Su repertorio:'}</span>
-					<a href={`/jugadores/${fideId}/repertorio`} rel="nofollow">con blancas</a>
-					<a href={`/jugadores/${fideId}/repertorio?color=black`} rel="nofollow">con negras</a>
-				</span>
 			</nav>
 		)
 	}
 
 	{
 		totalGames > 0 && (
-			<section class="stats">
+			<section class="stats" id="resultados">
 				<div class="card">
 					<h2>Resultados</h2>
 					<table class="data-table by-color">
@@ -233,7 +258,14 @@ const older = tournaments.slice(shownTournaments)
 									<th scope="col" class="end">Puntuación</th>
 								</tr>
 							</thead>
-							{/* Un grupo por color; cada apertura enlaza a sus partidas con ese color y ese ECO. */}
+							{/*
+								Un grupo por color; cada apertura enlaza a sus partidas con ese
+								color y ese ECO, y el grupo acaba en su repertorio con ese color:
+								aquí el color es el suyo, como en el repertorio. En la fila de
+								preparar es el tuyo, y «con blancas» llevaba a sitios opuestos. En
+								su propia fila y no en la del color, que es la cabecera del grupo:
+								el lector la repetiría en cada celda.
+							*/}
 							{openingGroups.map((group) => (
 								<tbody>
 									<tr class="group-row">
@@ -252,6 +284,15 @@ const older = tournaments.slice(shownTournaments)
 											<td class="end num">{o.score === null ? null : formatPercent(o.score)}</td>
 										</tr>
 									))}
+									{hasDossier && (
+										<tr class="explore">
+											<td colspan="3">
+												<a href={`/jugadores/${fideId}/repertorio${group.color === 'black' ? '?color=black' : ''}`} rel="nofollow">
+													Explorar {own ? 'mi' : 'su'} repertorio con {colorName[group.color].toLowerCase()}
+												</a>
+											</td>
+										</tr>
+									)}
 								</tbody>
 							))}
 						</table>
@@ -275,10 +316,19 @@ const older = tournaments.slice(shownTournaments)
 				)
 			}
 		</div>
+		{/* El torneo del filtro no tiene campo en el formulario: se dice encima. */}
+		{
+			filterTournament && (
+				<p class="note">
+					Torneo: <a href={`/torneos/${filterTournament.tournamentId}`}>{filterTournament.tournamentName}</a>
+				</p>
+			)
+		}
 		{/* Sin ninguna partida no hay nada que filtrar; con filtros, se quedan para poder quitarlos. */}
 		{
 			(filtered || games.total > 0) && (
 				<form method="get" class="filters form-row" action="#partidas">
+					{tournamentId && <input type="hidden" name="torneo" value={tournamentId} />}
 					<label>
 						Color
 						<select name="color">
@@ -299,7 +349,15 @@ const older = tournaments.slice(shownTournaments)
 					<RitmoSelect value={timeClass} />
 					<label>
 						ECO
-						<input name="eco" value={eco} placeholder="B90, C…" size="6" maxlength="3" pattern="[A-Ea-e][0-9]{0,2}" />
+						<input
+							name="eco"
+							value={eco}
+							placeholder="B90, B9…"
+							size="6"
+							maxlength="3"
+							pattern="[A-Ea-e][0-9]{0,2}"
+							title="Una letra de la A a la E y hasta dos cifras, como B90"
+						/>
 					</label>
 					<button class="button secondary" type="submit">Filtrar</button>
 					{filtered && <a href={`/jugadores/${fideId}#partidas`}>Quitar filtros</a>}
@@ -309,7 +367,7 @@ const older = tournaments.slice(shownTournaments)
 		{
 			games.total > 0 ? (
 				<>
-					<GamesTable games={games.rows} fideId={fideId} />
+					<GamesTable games={games.rows} fideId={fideId} hideTournament={tournamentId !== null} />
 					<Pagination page={games.page} pages={games.pages} total={games.total} capped={games.capped} noun={['partida', 'partidas']} anchor="partidas" />
 				</>
 			) : (
@@ -328,11 +386,11 @@ const older = tournaments.slice(shownTournaments)
 		{
 			tournaments.length > 0 ? (
 				<>
-					<TorneosJugador tournaments={recent} scores={stats.byTournament} />
+					<TorneosJugador tournaments={recent} scores={stats.byTournament} fideId={fideId} />
 					{older.length > 0 && (
 						<details class="older">
 							<summary>Ver los {formatNumber(older.length)} anteriores</summary>
-							<TorneosJugador tournaments={older} scores={stats.byTournament} />
+							<TorneosJugador tournaments={older} scores={stats.byTournament} fideId={fideId} />
 						</details>
 					)}
 				</>
@@ -426,18 +484,9 @@ const older = tournaments.slice(shownTournaments)
 		font-size: var(--text-s);
 	}
 
-	/* Va junta: si no cabe en la línea, baja entera; si ni sola cabe (con la
-	   letra muy grande), parte entre sus enlaces, nunca dentro de uno. */
-	.repertoire {
-		display: inline-flex;
-		flex-wrap: wrap;
-		gap: var(--space-2);
-		white-space: nowrap;
-	}
-
 	/*
-	 * En el móvil, el rótulo, los dos botones en dos columnas iguales y el
-	 * repertorio debajo: en una fila que se partía quedaba un botón solo.
+	 * En el móvil, el rótulo y debajo los dos botones, en dos columnas
+	 * iguales: en una fila que se partía quedaba un botón solo.
 	 */
 	@media (width < 40rem) {
 		.prepare {
@@ -445,8 +494,7 @@ const older = tournaments.slice(shownTournaments)
 			grid-template-columns: repeat(2, minmax(0, 1fr));
 		}
 
-		.prepare > .muted,
-		.repertoire {
+		.prepare > .muted {
 			grid-column: 1 / -1;
 		}
 	}
@@ -504,8 +552,8 @@ const older = tournaments.slice(shownTournaments)
 			grid-column: 1 / -1;
 		}
 
-		/* La fila de grupo (el color) es una sola celda y conserva su relleno. */
-		.openings tr:not(.group-row) > :first-child {
+		/* La fila de grupo (el color) y la del repertorio son una sola celda y conservan su relleno. */
+		.openings tr:not(.group-row, .explore) > :first-child {
 			padding-bottom: 0;
 		}
 
@@ -523,6 +571,13 @@ const older = tournaments.slice(shownTournaments)
 		white-space: normal;
 	}
 
+	/* Su repertorio con ese color, al final del grupo y a la derecha, como las cifras. */
+	.explore td {
+		text-align: end;
+		font-size: var(--text-s);
+		white-space: normal;
+	}
+
 	.filters {
 		margin-bottom: var(--space-4);
 	}
@@ -534,10 +589,5 @@ const older = tournaments.slice(shownTournaments)
 	/* Que la zona que se pulsa llegue a los 24 px. */
 	.older > summary {
 		padding-block: var(--space-1);
-	}
-
-	.filters > a {
-		align-self: center;
-		font-size: var(--text-s);
 	}
 </style>

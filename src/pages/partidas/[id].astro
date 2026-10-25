@@ -5,6 +5,7 @@ import PlayerName from '../../components/PlayerName.astro'
 import VisorPartida from '../../components/visor/VisorPartida.astro'
 import Base from '../../layouts/Base.astro'
 import { buildTree } from '../../lib/chess/movetree'
+import { TIME_CLASS_LABEL } from '../../lib/chess/timecontrol'
 import { gameRoundPage, getAdjacentGames, getGame } from '../../lib/db/games'
 import { displayName, formatDate, formatResult } from '../../lib/format'
 import { CC_BY, CC_BY_SA, fcaUrl, licensedPgn, lichessUrl } from '../../lib/licenses'
@@ -112,6 +113,7 @@ const back = await backLink()
 		<p class="page-meta">
 			<a href={`/torneos/${game.tournamentId}`}>{game.tournamentName}</a> · ronda {game.round}, mesa {game.board}
 			{` · ${formatDate(game.date)}`}
+			{game.timeClass && ` · ${TIME_CLASS_LABEL[game.timeClass]}`}
 			{(game.eco || game.opening) && ' · '}
 			{game.eco && <span class="eco">{game.eco}</span>}
 			{game.eco && game.opening && ' '}
