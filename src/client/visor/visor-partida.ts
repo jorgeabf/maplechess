@@ -18,7 +18,7 @@ import { formatMove } from '../../lib/format'
 import { MoveInput } from './campo-jugada'
 import { choosePromotion, promotes } from './coronacion'
 import { EnginePanel, type EngineView } from './panel-motor'
-import { boardMove, extendVariant, playLine, type LineMove } from './variante'
+import { boardMove, extendVariant, followLink, makeLink, parseLink, playLine, type LineMove } from './variante'
 
 /** "1:23:05" o "4:07" a partir de segundos. */
 function formatClock(seconds: number): string {
@@ -27,12 +27,6 @@ function formatClock(seconds: number): string {
 	const m = Math.floor((s % 3600) / 60)
 	const ss = String(s % 60).padStart(2, '0')
 	return h > 0 ? `${h}:${String(m).padStart(2, '0')}:${ss}` : `${m}:${ss}`
-}
-
-/** Posición pedida en el enlace (#j12): id de nodo. */
-function hashNode(): number | null {
-	const match = /^#j(\d+)$/.exec(location.hash)
-	return match ? Number(match[1]) : null
 }
 
 /**
@@ -87,6 +81,14 @@ class VisorPartida extends HTMLElement {
 		return this.step ? this.variant[this.step - 1] : this.nodes[this.current]
 	}
 
+	/**
+	 * El hash de lo que se ve: el nodo de la partida y la variante propia hasta
+	 * la jugada que se ve (#j12, #j12+g1f3+b8c6). En la posición inicial, nada.
+	 */
+	private get link(): string {
+		return makeLink(this.current, this.variant.slice(0, this.step ?? 0))
+	}
+
 	connectedCallback(): void {
 		const data = JSON.parse(this.querySelector('script[data-game]')?.textContent ?? '{"nodes":[],"pgn":""}') as {
 			nodes: ViewerNode[]
@@ -123,15 +125,14 @@ class VisorPartida extends HTMLElement {
 		document.addEventListener('click', (event) => this.onBack(event), { signal })
 		document.addEventListener('keydown', (event) => this.onKey(event), { signal })
 		this.listenSwipe(this.querySelector<HTMLElement>('.board-box')!, signal)
-		// Un enlace a otra jugada de la misma partida (o el historial) cambia el
-		// #j. La jugada pendiente de escribir ya no vale: pisaría la entrada a la
-		// que se acaba de llegar.
+		// Un enlace a otra jugada de la misma partida (o el historial, o el #
+		// cambiado a mano) cambia el #j. La jugada pendiente de escribir ya no
+		// vale: pisaría la entrada a la que se acaba de llegar.
 		window.addEventListener(
 			'hashchange',
 			() => {
 				this.cancelUrl()
-				const id = hashNode()
-				if (id !== null && this.nodes[id] && id !== this.current) this.goTo(id, false)
+				if (location.hash !== this.link) this.goToLink()
 			},
 			{ signal }
 		)
@@ -167,9 +168,8 @@ class VisorPartida extends HTMLElement {
 		this.movesResize = new ResizeObserver(() => this.revealCurrent())
 		this.movesResize.observe(this.movesBox)
 
-		// Posición del enlace (#j12) o, si no, el final de la partida.
-		const fromHash = hashNode()
-		this.goTo(fromHash !== null && this.nodes[fromHash] ? fromHash : this.lastOf(0), false)
+		// Lo que pide el enlace (#j12, #j12+g1f3) o, si no, el final de la partida.
+		if (!this.goToLink()) this.goTo(this.lastOf(0), false)
 		this.panel.restore()
 	}
 
@@ -333,7 +333,8 @@ class VisorPartida extends HTMLElement {
 			case 'flip':
 				return this.flip()
 			// La posición del tablero, también la de la variante propia. El PGN es
-			// el de la partida, sin ella, y el enlace, el de la jugada de la que sale.
+			// el de la partida, sin ella, y el enlace lleva la variante hasta la que
+			// se ve (currentLink).
 			case 'copy-fen':
 				return void this.copy(action, this.shown.fen, 'FEN copiado')
 			case 'copy-pgn':
@@ -375,38 +376,54 @@ class VisorPartida extends HTMLElement {
 	}
 
 	/**
-	 * Muestra un nodo de la partida (y sale de la variante propia, si se estaba
-	 * en ella): lista, gráfico, relojes y la posición (showPosition). La URL va
+	 * Va a lo que pide el enlace (followLink): el nodo y, si trae variante, su
+	 * última jugada. Lo que no es legal se descarta sin aviso, y la URL no se
+	 * toca hasta la siguiente jugada. false si no pide una jugada de la partida.
+	 */
+	private goToLink(): boolean {
+		const link = parseLink(location.hash)
+		const target = link && followLink(this.nodes, link)
+		if (!target) return false
+		this.goTo(target.node, false, target.variant)
+		return true
+	}
+
+	/**
+	 * Muestra un nodo de la partida: lista, gráfico, relojes y la posición
+	 * (showPosition). Sin `variant`, sale de la variante propia, si se estaba en
+	 * ella; con ella (la de un enlace), entra por su última jugada. La URL va
 	 * después y con retardo (URL_DELAY_MS): si fallara antes, el motor seguiría
 	 * con la posición anterior y pintaría su flecha en esta.
 	 */
-	private goTo(id: number, updateHash = true): void {
+	private goTo(id: number, updateHash = true, variant: LineMove[] = []): void {
 		const node = this.nodes[id]
 		if (!node || !this.cg) return
 		this.cancelUrl()
 		// La franja de la variante se oculta: si el foco estaba en ella, a la lista.
 		const inVariant = this.variantBox.contains(document.activeElement)
 		this.current = id
-		this.variant = []
-		this.step = null
+		this.variant = variant
+		this.step = variant.length > 0 ? variant.length : null
 		this.renderVariant()
+		if (this.step !== null) this.markStep()
 		this.markCurrent(id)
 		if (inVariant) this.focusCurrent()
 		this.markChart(node)
 		this.showClocks(node)
 		this.showPosition()
-		if (updateHash) this.urlTimer = setTimeout(() => this.writeUrl(), URL_DELAY_MS)
+		if (updateHash) this.scheduleUrl()
 	}
 
 	/**
 	 * Va a la jugada `step` de la variante propia (0, la posición de la partida
-	 * de la que sale). La lista, el gráfico, los relojes y la URL se quedan en
-	 * esa posición de la partida.
+	 * de la que sale). La lista, el gráfico y los relojes se quedan en esa
+	 * posición de la partida; la URL lleva la variante hasta aquí.
 	 */
 	private stepTo(step: number): void {
 		this.step = step
 		this.markStep()
 		this.showPosition()
+		this.scheduleUrl()
 	}
 
 	/**
@@ -489,15 +506,21 @@ class VisorPartida extends HTMLElement {
 		this.panel?.show(this.shown.fen)
 	}
 
+	/** Escribe lo que se ve en la URL pasados URL_DELAY_MS, si no se sigue navegando. */
+	private scheduleUrl(): void {
+		this.cancelUrl()
+		this.urlTimer = setTimeout(() => this.writeUrl(), URL_DELAY_MS)
+	}
+
 	/**
-	 * La jugada actual en la URL (#j12; la inicial, sin nada), para recargar o
-	 * volver a ella. Si el navegador limita la llamada, sólo se queda atrás la
-	 * URL: «Copiar enlace» no la lee (currentLink).
+	 * Lo que se ve en la URL (link: #j12, #j12+g1f3; la inicial, sin nada), para
+	 * recargar o volver a ello. Si el navegador limita la llamada, sólo se queda
+	 * atrás la URL: «Copiar enlace» no la lee (currentLink).
 	 */
 	private writeUrl(): void {
 		this.cancelUrl()
 		try {
-			history.replaceState(null, '', this.current === 0 ? location.pathname + location.search : `#j${this.current}`)
+			history.replaceState(null, '', this.link || location.pathname + location.search)
 		} catch {
 			// SecurityError por exceso de llamadas: la siguiente jugada lo vuelve a intentar.
 		}
@@ -706,13 +729,13 @@ class VisorPartida extends HTMLElement {
 	}
 
 	/**
-	 * Enlace a lo que se ve: esta jugada y, con el tablero girado, desde
-	 * negras. Girar no toca la URL, así que no basta con location.href.
+	 * Enlace a lo que se ve: esta jugada, con la variante propia hasta la que se
+	 * ve (link), y, con el tablero girado, desde negras. Girar no toca la URL,
+	 * así que no basta con location.href.
 	 */
 	private currentLink(): string {
 		const color = this.dataset.orientation === 'black' ? '?color=black' : ''
-		const hash = this.current === 0 ? '' : `#j${this.current}`
-		return `${location.origin}${location.pathname}${color}${hash}`
+		return `${location.origin}${location.pathname}${color}${this.link}`
 	}
 
 	/** Copia `text` y lo avisa encima del botón de `action` durante 2 s. */

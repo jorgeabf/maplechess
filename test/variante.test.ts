@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest'
-import { boardMove, extendVariant, playLine, type LineMove } from '../src/client/visor/variante'
+import { buildTree, toViewerNodes } from '../src/lib/chess/movetree'
+import {
+	boardMove,
+	extendVariant,
+	followLink,
+	makeLink,
+	parseLink,
+	playLine,
+	type LineMove
+} from '../src/client/visor/variante'
 
 const START = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'
 // Juegan negras en la jugada 34.
@@ -76,5 +85,50 @@ describe('extendVariant', () => {
 
 	it('una línea del motor sustituye a lo que seguía aunque empiece igual', () => {
 		expect(extendVariant(line, 0, [e4, c5])).toEqual([e4, c5])
+	})
+})
+
+describe('enlace con la variante', () => {
+	// Línea principal 1.e4 e5 2.Nf3 Nc6 (nodos 1 a 4) y, en vez de 2.Nf3, la variante del PGN 2.Bc4 (nodo 5).
+	const nodes = toViewerNodes(buildTree('1. e4 e5 2. Nf3 (2. Bc4) 2... Nc6 *'))
+
+	it('lee el nodo y las jugadas', () => {
+		expect(parseLink('#j12')).toEqual({ node: 12, moves: [] })
+		expect(parseLink('#j12+g1f3+b8c6')).toEqual({ node: 12, moves: ['g1f3', 'b8c6'] })
+		expect(parseLink('#j0+e2e4')).toEqual({ node: 0, moves: ['e2e4'] })
+		expect(parseLink('#comentarios')).toBeNull()
+		expect(parseLink('')).toBeNull()
+	})
+
+	it('escribe la variante hasta la jugada que se ve; la posición inicial, sin hash', () => {
+		expect(makeLink(0, [])).toBe('')
+		expect(makeLink(12, [])).toBe('#j12')
+		expect(makeLink(12, [{ uci: 'g1f3' }, { uci: 'b8c6' }])).toBe('#j12+g1f3+b8c6')
+		expect(makeLink(0, [{ uci: 'e2e4' }])).toBe('#j0+e2e4')
+	})
+
+	it('lo que coincide con la partida o con una variante del PGN, se sigue por ella', () => {
+		expect(followLink(nodes, { node: 2, moves: ['g1f3', 'b8c6'] })).toEqual({ node: 4, variant: [] })
+		expect(followLink(nodes, { node: 2, moves: ['f1c4'] })).toEqual({ node: 5, variant: [] })
+	})
+
+	it('desde la primera que no coincide, es variante propia', () => {
+		const target = followLink(nodes, { node: 2, moves: ['g1f3', 'g8f6', 'b1c3'] })
+		expect(target?.node).toBe(3)
+		expect(target?.variant.map((m) => [m.ply, m.san])).toEqual([
+			[4, 'Nf6'],
+			[5, 'Nc3']
+		])
+	})
+
+	it('para en la primera jugada que no es legal y descarta el resto', () => {
+		const target = followLink(nodes, { node: 2, moves: ['b1c3', 'zz99', 'b8c6'] })
+		expect(target?.node).toBe(2)
+		expect(target?.variant.map((m) => m.san)).toEqual(['Nc3'])
+		expect(followLink(nodes, { node: 2, moves: ['e1e8'] })).toEqual({ node: 2, variant: [] })
+	})
+
+	it('null si el nodo no existe', () => {
+		expect(followLink(nodes, { node: 99, moves: [] })).toBeNull()
 	})
 })
