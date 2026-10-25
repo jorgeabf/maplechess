@@ -89,6 +89,8 @@ describe('isMinorsTournament', () => {
 			'Campeonato de España de Colegios',
 			'X Torneo CEIP Inventado',
 			'VIII Torneo IES Inventado',
+			'I Torneo de Ajedrez I.E.S. Sierra Inventada.',
+			'Torneo C.E.I.P. Inventado',
 			'Campeonato Regional Institutos 2030',
 			'Torneo de ajedrez - Inventado College - Categoria A',
 			'FIDE ISCF World Schools Team Championship 2030',
@@ -108,7 +110,19 @@ describe('isMinorsTournament', () => {
 			'Taldekako eskolarteko txapelketa',
 			'II Torneo Xadrez nas Escolas',
 			"Torneo de Xadrez 'Xadrez nas Escolas'",
-			'I Torneio das Escolas'
+			'I Torneio das Escolas',
+			'JDN Sub-16 Individual Masculino (Fase Final) 2030',
+			'JDN EQUIPOS S18 2030',
+			'Torneo Promocion JDN',
+			'Final Provincial Sub 16 Inventada XXXIX JJEE C. VAL',
+			'Final Provincial Sub 16 Inventada JJ.EE.',
+			'PROVINCIAL CADETE DEPORTE BASE 2030',
+			'Campeonato Provincial del Deporte en Edad Escolar',
+			'II Torneo de Ajedrez FEC Vedruna. Especial Open',
+			'I Inventatuko Eskola - Txapelketa. Especial',
+			'Ajedrez en el recreo 3er Ciclo',
+			'SEXTA JORNADA CIRCUITO DE AJEDREZ INTER ESC',
+			'Circuito de Ajedrez Inter Escolar Inventado'
 		]) {
 			expect(isMinorsTournament(name), name).toBe(true)
 		}
@@ -219,6 +233,10 @@ describe('isMinorsTournament', () => {
 			'Campeonato Juvenil Inventado',
 			'Open Escuela de Ajedrez Inventada',
 			'Xake Eskola Inventada Open',
+			'Inventatuko Xake Eskola - Udako Irekia',
+			'Copa Campeones 2030 Cat Especial',
+			'Cto. de Inventadia Absoluto por equipos Especial Grupo A',
+			'Sociedad El Recreo Inventada',
 			"I IRT Sub1800 Escola d'Escacs Inventada",
 			'Torneo Escolas Xadrez Inventadas Nadal 2030',
 			'Escolas Inventadas Entroido 2030',
