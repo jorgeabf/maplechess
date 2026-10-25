@@ -63,6 +63,7 @@ describe('looksSensitive', () => {
 			'XL Open FEDC',
 			'Torneo para ciegos y deficientes visuales',
 			'III Campeonato de España Individual de Ajedrez Inclusivo',
+			'II Juegos Parainclusivos de Ninguna Parte',
 			'Jornadas por la Inclusión de Ninguna Parte',
 			'25th ICCD World Individual Blitz Chess Championship - Women',
 			'1st World Deaf Team Rapid Chess Championship',
