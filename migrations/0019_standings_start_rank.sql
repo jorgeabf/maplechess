@@ -9,10 +9,10 @@
 -- único, que no lleva los puntos, el planificador prefería recorrer la clave
 -- (sin estadísticas, en una siembra de 3.000 torneos: 18.497 filas en vez de
 -- 1.357). Como la tabla es WITHOUT ROWID, cada entrada lleva también el
--- puesto. replaceStandings
--- inserta con ON CONFLICT DO NOTHING, que también vale para este índice: si
--- por un error la fuente repitiera un número, se quedaría la primera fila y
--- la otra no se guardaría, sin aviso. El 25-oct-2026 no había ninguno.
+-- puesto. replaceStandings inserta con ON CONFLICT DO NOTHING, que también
+-- vale para este índice: si por un error la fuente repitiera un número, se
+-- quedaría la primera fila y la otra no se guardaría, sin aviso. El
+-- 25-oct-2026 no había ninguno.
 CREATE UNIQUE INDEX standings_start_rank ON standings (tournament_id, start_rank);
 
 -- En los de equipos, participations no guarda el número del equipo: la fila
