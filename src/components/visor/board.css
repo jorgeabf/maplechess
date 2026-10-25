@@ -7,9 +7,10 @@
 /*
  * En el tablero el color es el contenido: en alto contraste el sistema
  * quitaría las casillas (el degradado), la última jugada y el color de las
- * coordenadas.
+ * coordenadas. También antes de montarse chessground, cuando .board sólo
+ * lleva las casillas (abajo).
  */
-.cg-wrap {
+.board {
 	forced-color-adjust: none;
 }
 
@@ -24,7 +25,14 @@
 	block-size: 100%;
 }
 
-/* Casillas: un conic-gradient de 2×2 repetido 4×4 veces (a8 clara). */
+/*
+ * Casillas: un conic-gradient de 2×2 repetido 4×4 veces (arriba a la
+ * izquierda, clara: a8 con las blancas abajo y h1 con las negras). También en
+ * .board hasta que chessground se monta en ella y le pone .cg-wrap: así el
+ * primer pintado ya tiene el tablero, sin piezas, y no un hueco del color de
+ * la página. En un móvil lento el script tarda de 0,3 a 0,5 s más.
+ */
+.board:not(.cg-wrap),
 cg-board {
 	background-color: var(--board-dark);
 	background-image: conic-gradient(
