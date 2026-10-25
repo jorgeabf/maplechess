@@ -180,17 +180,19 @@ export interface RelatedTournament {
 	label: string
 }
 
-/** La página del torneo lee además su grupo, que va en la misma fila. */
+/** La página del torneo lee además su clave y su grupo, que van en la misma fila. */
 export interface TournamentPageRow extends TournamentRow {
+	/** Su clave en la fuente (source_key): dice si es un campeonato de España (championshipsOf). */
+	sourceKey: string
 	/** El grupo, con el propio torneo; null si no tiene. */
 	related: RelatedTournament[] | null
 }
 
 export async function getTournament(db: D1Database, id: number): Promise<TournamentPageRow | null> {
 	const row = await db
-		.prepare(`SELECT ${COLUMNS}, t.related FROM tournaments t WHERE t.id = ?1`)
+		.prepare(`SELECT ${COLUMNS}, t.source_key AS sourceKey, t.related FROM tournaments t WHERE t.id = ?1`)
 		.bind(id)
-		.first<TournamentRow & { related: string | null }>()
+		.first<TournamentRow & { sourceKey: string; related: string | null }>()
 	return row && { ...row, related: row.related === null ? null : (JSON.parse(row.related) as RelatedTournament[]) }
 }
 

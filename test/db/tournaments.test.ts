@@ -350,9 +350,9 @@ describe('grupo del torneo', () => {
 		{ key: 'cto-inventado-tercera-2026', label: 'Campeonato Tercera de Inventada 2026' }
 	]
 
-	it('getTournament da el grupo guardado, o null', async () => {
+	it('getTournament da su clave y el grupo guardado, o null', async () => {
 		const id = await tournament('cto-inventado-absoluto-2026')
-		expect((await getTournament(db, id))?.related).toBeNull()
+		expect(await getTournament(db, id)).toMatchObject({ source: 'info64', sourceKey: 'cto-inventado-absoluto-2026', related: null })
 		await db.prepare('UPDATE tournaments SET related = ?1 WHERE id = ?2').bind(JSON.stringify(group), id).run()
 		expect((await getTournament(db, id))?.related).toEqual(group)
 	})
