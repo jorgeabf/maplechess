@@ -1,11 +1,12 @@
 ---
 import { env } from 'cloudflare:workers'
+import FiltrosPlegables from '../../components/FiltrosPlegables.astro'
 import Pagination from '../../components/Pagination.astro'
 import Segmented from '../../components/Segmented.astro'
 import Base from '../../layouts/Base.astro'
 import { madridDate } from '../../lib/dates'
 import { searchTournaments } from '../../lib/db/tournaments'
-import { formatNumber, formatRange } from '../../lib/format'
+import { formatDate, formatNumber, formatRange } from '../../lib/format'
 import { tournamentFilters, withParams } from '../../lib/params'
 
 const filters = tournamentFilters(Astro.url.searchParams)
@@ -17,45 +18,70 @@ const tabs = [
 	{ id: 'proximos', label: `Próximos (${formatNumber(result.upcoming)})` }
 ]
 const tabHref = (id: string) => withParams(Astro.url, { cuando: id, p: null, ...(id ? { con_partidas: null } : {}) })
+// «Quitar filtros» deja el nombre o el lugar, y la pestaña.
+const filtered = Boolean(filters.from || filters.to || filters.type || filters.withGames)
+const unfiltered = withParams(Astro.url, { desde: null, hasta: null, modalidad: null, con_partidas: null, p: null })
+// Con resultados, el formulario se pliega en el móvil y el resumen dice lo buscado.
+const searchSummary = [
+	filters.q,
+	filters.type && (filters.type === 'team' ? 'por equipos' : 'individual'),
+	filters.from && `desde el ${formatDate(filters.from)}`,
+	filters.to && `hasta el ${formatDate(filters.to)}`,
+	filters.withGames && 'sólo con partidas'
+].filter((part): part is string => Boolean(part))
 ---
 
-<Base title="Torneos" section="torneos">
+<Base title={filters.q ? `Torneos: ${filters.q}` : 'Torneos'} section="torneos">
 	<h1>Torneos</h1>
-	<Segmented label="Torneos" options={tabs} current={filters.upcoming ? 'proximos' : ''} href={tabHref} />
-	<form method="get" role="search" class="filters form-row">
-		{filters.upcoming && <input type="hidden" name="cuando" value="proximos" />}
-		<label class="grow">
-			Nombre o lugar
-			<input name="q" type="search" value={filters.q} placeholder="Campeonato, open, ciudad…" autocomplete="off" />
-		</label>
-		<label>
-			Desde
-			<input name="desde" type="date" value={filters.from} />
-		</label>
-		<label>
-			Hasta
-			<input name="hasta" type="date" value={filters.to} />
-		</label>
-		<label>
-			Modalidad
-			<select name="modalidad">
-				<option value="">Cualquiera</option>
-				<option value="individual" selected={filters.type === 'individual'}>Individual</option>
-				<option value="equipos" selected={filters.type === 'team'}>Por equipos</option>
-			</select>
-		</label>
-		{
-			!filters.upcoming && (
-				<label class="check">
-					<input type="checkbox" name="con_partidas" value="1" checked={filters.withGames} />
-					Sólo con partidas
-				</label>
-			)
-		}
-		<button class="button" type="submit">Buscar</button>
-	</form>
+	<div class="when">
+		<Segmented label="Torneos" options={tabs} current={filters.upcoming ? 'proximos' : ''} href={tabHref} />
+	</div>
+	<FiltrosPlegables label="Búsqueda" summary={searchSummary} fold={searchSummary.length > 0 && result.total > 0}>
+		<form method="get" role="search" class="filters form-row">
+			{filters.upcoming && <input type="hidden" name="cuando" value="proximos" />}
+			<label class="grow">
+				Nombre o lugar
+				<input
+					name="q"
+					type="search"
+					value={filters.q}
+					placeholder="Campeonato, open, ciudad…"
+					autocomplete="off"
+					autocorrect="off"
+					spellcheck="false"
+					minlength="2"
+				/>
+			</label>
+			<label>
+				Desde
+				<input name="desde" type="date" value={filters.from} />
+			</label>
+			<label>
+				Hasta
+				<input name="hasta" type="date" value={filters.to} />
+			</label>
+			<label>
+				Modalidad
+				<select name="modalidad">
+					<option value="">Cualquiera</option>
+					<option value="individual" selected={filters.type === 'individual'}>Individual</option>
+					<option value="equipos" selected={filters.type === 'team'}>Por equipos</option>
+				</select>
+			</label>
+			{
+				!filters.upcoming && (
+					<label class="check">
+						<input type="checkbox" name="con_partidas" value="1" checked={filters.withGames} />
+						Sólo con partidas
+					</label>
+				)
+			}
+			<button class="button" type="submit">Buscar</button>
+			{filtered && <a href={unfiltered}>Quitar filtros</a>}
+		</form>
+	</FiltrosPlegables>
 
-	<Pagination page={result.page} pages={result.pages} total={result.total} noun={['torneo', 'torneos']} />
+	{result.total > 0 && <Pagination page={result.page} pages={result.pages} total={result.total} noun={['torneo', 'torneos']} />}
 	{
 		result.rows.length > 0 ? (
 			<div class="table-wrap stack">
@@ -95,11 +121,16 @@ const tabHref = (id: string) => withParams(Astro.url, { cuando: id, p: null, ...
 			<p>No hay torneos con esos filtros.</p>
 		)
 	}
-	<Pagination page={result.page} pages={result.pages} total={result.total} noun={['torneo', 'torneos']} />
+	{result.pages > 1 && <Pagination page={result.page} pages={result.pages} total={result.total} noun={['torneo', 'torneos']} />}
 </Base>
 
 <style>
+	/* El hueco de las pestañas al formulario, plegado o no. */
+	.when {
+		margin-bottom: var(--space-4);
+	}
+
 	.filters {
-		margin-block: var(--space-4);
+		margin-bottom: var(--space-4);
 	}
 </style>

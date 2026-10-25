@@ -1,8 +1,10 @@
 ---
-// Fila de filtros (.selectors) del dossier y del repertorio. En el móvil va
-// plegada en un <details> cuyo resumen dice lo elegido: los tres o cuatro
-// selectores, con su rótulo encima, ocupaban de 219 a 296 px de los 812 de la
-// pantalla antes del contenido, que además ya repite el color elegido.
+// Filtros o búsqueda plegados en el móvil, en un <details> cuyo resumen dice
+// lo elegido. En el dossier y el repertorio, su fila de filtros (.selectors):
+// los tres o cuatro selectores, con su rótulo encima, ocupaban de 219 a 296 px
+// de los 812 de la pantalla antes del contenido, que además ya repite el color
+// elegido. En /partidas y /torneos, el formulario tras buscar: ocupaba de 271
+// a 304 px, y la primera partida empezaba en y=626.
 //
 // A partir de 40rem, siempre desplegada y sin el resumen. El contenido de un
 // <details> cerrado lo oculta el navegador con content-visibility: hidden en
@@ -10,19 +12,42 @@
 // tienen Chrome 131, Safari 18.4 y Firefox 143 en adelante) también se pliega
 // a lo ancho: funciona, con un toque más. Sin JavaScript.
 interface Props {
-	/** Lo elegido en cada filtro, en minúsculas: «juegas con negras», «todas las fechas». */
+	/** Lo elegido en cada filtro, en minúsculas: «juegas con negras», «todas las fechas»; en una búsqueda, lo buscado. */
 	summary: string[]
+	/**
+	 * Qué se pliega: una fila de selectores («Filtros»), que va en .selectors, o
+	 * el formulario de una búsqueda («Búsqueda»), que va tal cual.
+	 */
+	label?: 'Filtros' | 'Búsqueda'
+	/**
+	 * Sin nada que resumir (aún no se ha buscado) o sin resultados (hay que
+	 * cambiar la búsqueda), false: el contenido va tal cual, sin plegar.
+	 */
+	fold?: boolean
 }
 
-const { summary } = Astro.props
+const { summary, label = 'Filtros', fold = true } = Astro.props
 ---
 
-<details class="filters">
-	<summary>Filtros<span class="muted">: {summary.join(' · ')}</span></summary>
-	<div class="selectors">
+{
+	fold ? (
+		<details class="filters">
+			<summary>
+				{label}
+				<span class="muted">: {summary.join(' · ')}</span>
+			</summary>
+			{label === 'Filtros' ? (
+				<div class="selectors">
+					<slot />
+				</div>
+			) : (
+				<slot />
+			)}
+		</details>
+	) : (
 		<slot />
-	</div>
-</details>
+	)
+}
 
 <style>
 	.filters {
@@ -48,8 +73,8 @@ const { summary } = Astro.props
 				display: none;
 			}
 
-			/* Sin el hueco que deja global.css bajo un summary. */
-			.selectors {
+			/* Sin el hueco que deja global.css bajo un summary: aquí no se ve. */
+			.filters > :global(summary + *) {
 				margin-top: 0;
 			}
 		}
