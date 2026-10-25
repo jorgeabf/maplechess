@@ -36,6 +36,7 @@ const searchSummary = [
 	<h1>Torneos</h1>
 	<div class="when">
 		<Segmented navigation label="Torneos" options={tabs} current={filters.upcoming ? 'proximos' : ''} href={tabHref} />
+		<a href="/torneos/campeones">Campeones de España</a>
 	</div>
 	<FiltrosPlegables label="Búsqueda" summary={searchSummary} fold={searchSummary.length > 0 && result.rows.length > 0}>
 		<form method="get" role="search" class="filters form-row">
@@ -126,9 +127,20 @@ const searchSummary = [
 </Base>
 
 <style>
-	/* El hueco de las pestañas al formulario, plegado o no. */
+	/*
+	 * El hueco de las pestañas al formulario, plegado o no. Los campeones van
+	 * junto a las pestañas, en su línea, y debajo si no caben (el móvil).
+	 */
 	.when {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: var(--space-2) var(--space-5);
 		margin-bottom: var(--space-4);
+	}
+
+	.when > a {
+		font-size: var(--text-s);
 	}
 
 	.filters {

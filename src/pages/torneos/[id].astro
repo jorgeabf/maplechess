@@ -9,6 +9,7 @@ import PestanasGrupo from '../../components/PestanasGrupo.astro'
 import PlayerName from '../../components/PlayerName.astro'
 import Segmented from '../../components/Segmented.astro'
 import Base from '../../layouts/Base.astro'
+import { championshipsOf } from '../../lib/campeonatos'
 import { pointsTiebreaks, tiebreakLabel } from '../../lib/chess/tiebreaks'
 import { TIME_CLASS_LABEL, timeClassOf } from '../../lib/chess/timecontrol'
 import { madridDate } from '../../lib/dates'
@@ -101,6 +102,10 @@ const summary = fromLichess
 			tournamentSummary(formatCount(teamsInField, 'equipo', 'equipos'), participants, standings?.rows.map((s) => s.rating) ?? [])
 		: players > 0 &&
 			tournamentSummary(formatCount(players, 'jugador', 'jugadores'), field, field.map((p) => p.rating))
+// Si es un Campeonato de España de la lista (lib/campeonatos.ts), un enlace a
+// la tabla de su categoría en /torneos/campeones; un absoluto mixto, a la del
+// absoluto. Sin D1: la lista va en el código.
+const championship = championshipsOf(tournament.source, tournament.sourceKey)[0]
 // Las páginas del torneo y de su retransmisión, sólo si son de una fuente.
 const tournamentUrl = sourceUrl(tournament.url)
 const broadcastUrl = sourceUrl(tournament.gamesSourceUrl)
@@ -220,6 +225,7 @@ const indexItems = sections.flatMap((s) => {
 					</a>
 				)
 			}
+			{championship && <a href={`/torneos/campeones#${championship.category}`}>Campeones de España</a>}
 		</p>
 	</header>
 
@@ -494,6 +500,11 @@ const indexItems = sections.flatMap((s) => {
 </Base>
 
 <style>
+	/* Los campeones, junto a los botones y de su tamaño de letra. */
+	.page-actions > a:not(.button) {
+		font-size: var(--text-s);
+	}
+
 	/* Al tamaño del nombre, con relleno: la zona que se pulsa llega a los 24 px. */
 	.prepare a {
 		padding-block: var(--space-1);

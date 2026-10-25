@@ -217,6 +217,7 @@ const title = Object.fromEntries(sections.map((s) => [s.id, s.title])) as Record
 				<li>su año de nacimiento no sale en ninguna página, tampoco junto a su nombre;</li>
 				<li>su ficha no sale en los buscadores;</li>
 				<li>no hay repertorio ni dossier, ni sus descargas;</li>
+				<li>en los campeones de España, la fila de su título sale sin su nombre;</li>
 				<li>
 					su próxima partida sale en la página del torneo, como en la fuente, pero no en su ficha, salvo para quien ha
 					pulsado en ella «Soy yo».
@@ -319,15 +320,15 @@ const title = Object.fromEntries(sections.map((s) => [s.id, s.title])) as Record
 				<div>
 					<dt>Sexo y año</dt>
 					<dd>
-						Que no se vean tu sexo, tu año de nacimiento o los dos. Ocultar el sexo sólo te saca del ranking femenino y
-						de la búsqueda por sexo, porque no sale en ninguna página; los títulos femeninos de la FIDE (WGM, WIM, WFM y
-						WCM) se siguen viendo, porque son el título oficial. Ocultar el año te saca de los rankings por edad, y deja
-						de verse en tu ficha y en tu nombre, si la FIDE lo lleva para distinguirte de otro jugador que se llama
-						igual: en los torneos, las partidas y las descargas en PGN. Se sigue guardando sin enseñarlo, para saber si
-						puedes ser menor. También puedes pedir a la FIDE, a través de tu federación, que los oculte en su web: el
-						año de tu ficha desaparece entonces también de aquí con la importación del mes siguiente a que lo aplique,
-						pero ya no hay forma de saber si eres menor (ver <a href="#menores">{title.menores}</a>). El sexo no,
-						porque la lista de la FIDE lo trae siempre.
+						Que no se vean tu sexo, tu año de nacimiento o los dos. Ocultar el sexo sólo te saca del ranking femenino, de la
+						búsqueda por sexo y de las campeonas de España, porque no sale en ninguna página; los títulos femeninos de la
+						FIDE (WGM, WIM, WFM y WCM) se siguen viendo, porque son el título oficial. Ocultar el año te saca de los rankings
+						por edad y de los campeones de veteranos, y deja de verse en tu ficha y en tu nombre, si la FIDE lo lleva para
+						distinguirte de otro jugador que se llama igual: en los torneos, las partidas y las descargas en PGN. Se sigue
+						guardando sin enseñarlo, para saber si puedes ser menor. También puedes pedir a la FIDE, a través de tu
+						federación, que los oculte en su web: el año de tu ficha desaparece entonces también de aquí con la importación
+						del mes siguiente a que lo aplique, pero ya no hay forma de saber si eres menor
+						(ver <a href="#menores">{title.menores}</a>). El sexo no, porque la lista de la FIDE lo trae siempre.
 					</dd>
 				</div>
 			</dl>
