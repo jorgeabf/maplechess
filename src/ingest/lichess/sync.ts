@@ -182,9 +182,15 @@ export class LichessSyncWorkflow extends WorkflowEntrypoint<Env, LichessSyncPara
 
 		const pending = await step.do('pendientes', async () => {
 			// Las sensibles (torneos_sensibles) y las de menores no se leen, ni con
-			// force. Con tours aún no se sabe el nombre: lo mira syncTour.
+			// force. Con tours aún no se sabe el nombre: lo mira syncTour. Las
+			// del listado son de estos días; las de rounds pueden ser antiguas, y
+			// con la fecha de hoy una temporada («2019-2020») parecería de niños.
 			const excluded = await loadExcluded(db, SOURCE)
-			const allowed = candidates.filter((c) => !excluded.has(c.id) && !isMinorsTournament(c.name))
+			const dateOf = (c: BroadcastCandidate) => {
+				const info = preloaded.get(c.id)
+				return info ? dayOf(info.tour.dates?.[0]) : today
+			}
+			const allowed = candidates.filter((c) => !excluded.has(c.id) && !isMinorsTournament(c.name, dateOf(c)))
 			return selectTours(
 				allowed,
 				await loadLichessTours(
@@ -375,7 +381,7 @@ export async function syncTour(
 	const info = preloaded ?? (await lichess(`torneo ${candidate.id}`, () => loadTour(db, candidate)))
 	if (!info) return skip('sin_espanoles')
 	// De menores (con tours, sólo ahora se sabe su nombre): no se guarda ni se apunta.
-	if (isMinorsTournament(info.tour.name)) return skip(null)
+	if (isMinorsTournament(info.tour.name, dayOf(info.tour.dates?.[0]))) return skip(null)
 	return lichess(`partidas ${candidate.id}`, () => syncTourGames(db, candidate, info, listed))
 }
 

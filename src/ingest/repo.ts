@@ -9,6 +9,7 @@ import { madridYear } from '../lib/dates'
 import { withoutHomonymYear } from '../lib/format'
 import { lichessUrl } from '../lib/licenses'
 import { tournamentPlace } from '../lib/lugares'
+import { COMMUNITY_CODES, federationColumn, FEDERATIONS } from './federaciones'
 import type { FidePlayer } from './fide/parse'
 import type { DerivedColumns, GameRow, Participant, TournamentContext } from './games'
 import type { Pairing, PairedPlayer, StandingsPage, TournamentPlayer, TournamentType } from './info64/parse'
@@ -183,7 +184,8 @@ export async function upsertTournament(db: D1Database, t: TournamentInput): Prom
  * Sustituye los participantes del torneo (el ranking inicial puede cambiar
  * entre lecturas). Los nombres, sin el año de los menores ni el de quien ha
  * pedido ocultarlo; los datos, rectificados (rectificaciones.ts), y los
- * retirados, anonimizados (nombres.ts). Una lista vacía no borra la guardada:
+ * retirados, anonimizados (nombres.ts). De la columna Fed., sólo los códigos de
+ * federación (federaciones.ts). Una lista vacía no borra la guardada:
  * es una página que cambió o vino a medias (un torneo aún sin inscritos no
  * tiene nada guardado).
  * Devuelve false si se ha conservado una lista guardada, para avisar.
@@ -202,7 +204,9 @@ export async function replaceParticipations(
 	const hiddenYears = await loadHiddenYears(db)
 	const rectifications = await loadRectifications(db, tournamentId)
 	const hits = new Set<number>()
-	const rows = players.map((player) => {
+	const feds = federationColumn(players, await loadSpanishPlayers(db, players))
+	const rows = players.map((entrant, i) => {
+		const player = { ...entrant, fed: feds[i] }
 		// La retirada y el año oculto, después: miran a quien es de verdad.
 		const p = rectifyParticipant(player, rectifications, hits, year)
 		if (isRetired(retired, p.fideId, p.name)) {
@@ -235,6 +239,24 @@ export async function replaceParticipations(
 		...markApplied(db, appliedRows(rectifications, hits, 'participantes'), new Date().toISOString())
 	])
 	return true
+}
+
+/**
+ * Quiénes de los que traen «MAD», «AND» o «CAN» en la columna Fed. están en
+ * la lista FIDE española (federationColumn): una fila por cada uno, por la
+ * clave. Sin ninguno, no pregunta.
+ */
+async function loadSpanishPlayers(
+	db: D1Database,
+	players: readonly { fed: string | null; fideId: number | null }[]
+): Promise<Set<number>> {
+	const ids = players.filter((p) => p.fideId !== null && p.fed !== null && COMMUNITY_CODES.has(p.fed)).map((p) => p.fideId)
+	if (ids.length === 0) return new Set()
+	const { results } = await db
+		.prepare('SELECT fide_id AS fideId FROM players WHERE fide_id IN (SELECT value FROM json_each(?1))')
+		.bind(JSON.stringify(ids))
+		.all<{ fideId: number }>()
+	return new Set(results.map((r) => r.fideId))
 }
 
 export async function loadParticipants(db: D1Database, tournamentId: number): Promise<Participant[]> {
@@ -1034,6 +1056,34 @@ export async function updateTournamentPlaces(
 	return results.reduce((n, r) => n + r.meta.changes, 0)
 }
 
+/**
+ * Deja en la columna Fed. de lo guardado sólo los códigos de federación, como
+ * replaceParticipations al escribir (federationColumn). Primero «MAD», «AND» y
+ * «CAN» de quien está en la lista española o, sin FIDE ID, en un torneo que
+ * trae algo que no es un código; después, lo que no es un código, que la
+ * primera necesita para decidir. Recorre los participantes unas tres veces
+ * (unas 2 M de filas) y devuelve cuántas cambian.
+ */
+export async function clearNonFederations(db: D1Database): Promise<number> {
+	const federations = JSON.stringify([...FEDERATIONS])
+	const [communities, others] = await db.batch([
+		db
+			.prepare(
+				`UPDATE participations SET fed = NULL
+				WHERE fed IN (SELECT value FROM json_each(?2)) AND (
+					EXISTS (SELECT 1 FROM players p WHERE p.fide_id = participations.fide_id)
+					OR (fide_id IS NULL AND tournament_id IN (
+						SELECT tournament_id FROM participations
+						WHERE fed IS NOT NULL AND fed NOT IN (SELECT value FROM json_each(?1)))))`
+			)
+			.bind(federations, JSON.stringify([...COMMUNITY_CODES])),
+		db
+			.prepare('UPDATE participations SET fed = NULL WHERE fed IS NOT NULL AND fed NOT IN (SELECT value FROM json_each(?1))')
+			.bind(federations)
+	])
+	return communities.meta.changes + others.meta.changes
+}
+
 /** Si el jugador de la fila de json_each ha pedido ocultar `campo` (tabla ocultaciones). */
 const hidden = (campo: 'sexo' | 'anio') =>
 	`EXISTS (SELECT 1 FROM ocultaciones o WHERE o.fide_id = json_extract(value, '$.fideId') AND o.campo = '${campo}')`
@@ -1227,15 +1277,15 @@ export async function loadTournamentsStarting(
 	from: string,
 	to: string,
 	today: string
-): Promise<{ key: string; id: number; type: TournamentType }[]> {
+): Promise<{ key: string; id: number; type: TournamentType; name: string; startDate: string }[]> {
 	const { results } = await db
 		.prepare(
-			`SELECT source_key AS key, id, type FROM tournaments
+			`SELECT source_key AS key, id, type, name, start_date AS startDate FROM tournaments
 			WHERE start_date BETWEEN ?2 AND ?3 AND start_date <= ?4 AND source = ?1
 			ORDER BY start_date, id`
 		)
 		.bind(source, from, to, today)
-		.all<{ key: string; id: number; type: TournamentType }>()
+		.all<{ key: string; id: number; type: TournamentType; name: string; startDate: string }>()
 	return results
 }
 
