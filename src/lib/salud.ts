@@ -43,14 +43,13 @@ const HOUR_MS = 3_600_000
  * Tiempo máximo desde el fin de la última pasada. Llevan margen sobre el
  * intervalo de cada una, para que una pasada larga o el cambio de hora no den
  * una falsa alarma:
- * - info64 (05:00 UTC) y lichess (06:30 UTC): diarias;
- * - emparejamientos: la diaria y las de las 15:00 y las 22:00 de Madrid. El
- *   mayor hueco, de la de las 22:00 a la diaria, es de unas 9 h;
+ * - info64 (00:00 UTC) y lichess (06:30 UTC): diarias;
+ * - emparejamientos: los escribe la diaria de info64;
  * - FIDE: el día 3 de cada mes.
  */
 export const MAX_AGE_MS: Record<HealthRun, number> = {
 	info64: 26 * HOUR_MS,
-	emparejamientos: 14 * HOUR_MS,
+	emparejamientos: 26 * HOUR_MS,
 	lichess: 26 * HOUR_MS,
 	fide: 35 * 24 * HOUR_MS
 }

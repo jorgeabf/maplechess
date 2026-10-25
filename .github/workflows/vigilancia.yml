@@ -15,8 +15,8 @@
 name: Vigilancia
 
 on:
-  # Después de las pasadas de la mañana (info64 a las 05:00 y lichess a las
-  # 06:30 UTC) y de la de emparejamientos de las 22:00 de Madrid.
+  # Después de las pasadas diarias (info64 a las 00:00 y lichess a las 06:30
+  # UTC), y otra vez antes de la siguiente de info64.
   schedule:
     - cron: '30 7 * * *'
     - cron: '30 23 * * *'

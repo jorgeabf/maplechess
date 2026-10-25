@@ -68,8 +68,8 @@ export interface Info64SyncParams {
 	/**
 	 * Emparejamientos publicados de la próxima ronda de cada torneo individual
 	 * que juegue en los próximos PAIRINGS_DAYS días: 'also', además de la
-	 * ventana; 'only', sólo eso (las pasadas de las 15:00 y las 22:00, que no
-	 * usan from y to). Con keys, sólo los de esos torneos.
+	 * ventana (la diaria); 'only', sólo eso, sin usar from y to (a mano). Con
+	 * keys, sólo los de esos torneos.
 	 */
 	pairings?: 'also' | 'only'
 	/**
@@ -136,10 +136,33 @@ export const RECHECK_DAYS = 14
  */
 export const PAIRINGS_DAYS = 8
 
+/**
+ * Horas de Madrid en que una pasada puede empezar a pedir a info64. Su
+ * administración pidió el 25-oct-2026 que el robot le consulte sólo de 00:00 a
+ * 06:00: fuera de esa franja puede responder 429. Se empieza a las 00:05 y no
+ * después de las 05:00, para acabar antes de las 06:00 (la diaria tarda unos
+ * 20 minutos; una carga larga en ventanas encadenadas sigue a la noche siguiente).
+ */
+export const INFO64_HOURS = { from: '00:05', until: '05:00' }
+
+/** Milisegundos que faltan para que una pasada pueda empezar a pedir a info64: 0 si ya puede. */
+export function msUntilInfo64Hours(date: Date): number {
+	const time = madridDateTime(date).slice(11, 16)
+	if (time >= INFO64_HOURS.from && time < INFO64_HOURS.until) return 0
+	const minutes = (hhmm: string) => Number(hhmm.slice(0, 2)) * 60 + Number(hhmm.slice(3, 5))
+	// Antes de las 00:05, unos minutos; después de las 05:00, hasta las 00:05 del
+	// día siguiente. El cambio de hora es a las 02:00 o las 03:00: nunca por medio.
+	const wait = (minutes(INFO64_HOURS.from) - minutes(time) + 24 * 60) % (24 * 60)
+	return wait * 60_000 - (date.getTime() % 60_000)
+}
+
 export class Info64SyncWorkflow extends WorkflowEntrypoint<Env, Info64SyncParams> {
 	async run(event: WorkflowEvent<Info64SyncParams>, step: WorkflowStep): Promise<void> {
 		const params = event.payload
 		const db = this.env.DB
+		// Lanzada a mano o encadenada fuera de la franja de info64: la espera.
+		const wait = await step.do('franja de info64', async () => msUntilInfo64Hours(new Date()))
+		if (wait > 0) await step.sleep('espera a la franja de info64', wait)
 		if (params.standings === 'only') {
 			await this.syncStoredStandings(params, step)
 		} else {
