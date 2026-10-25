@@ -120,7 +120,14 @@ describe('isMinorsTournament', () => {
 			'Business Meets Chess&Kids Inventado',
 			'Los Viernes Inventados Opening Kids 2030',
 			'I Torneo Inventado para niños',
-			'Torneo de Ninguna Parte para niñas'
+			'Torneo de Ninguna Parte para niñas',
+			'Torneo de Xadrez Inventado para nenos',
+			'Xadrez Inventado para rapazas',
+			'Torneig Inventat per a nens i nenes',
+			"Torneig d'Escacs per a infants Inventat",
+			'I Inventatuko Txapelketa Umeentzat',
+			'Haurrentzat Xake Txapelketa Inventatua',
+			'Inventatuko Xake Txapelketa Txikientzat'
 		]) {
 			expect(isMinorsTournament(name), name).toBe(true)
 		}
@@ -146,6 +153,8 @@ describe('isMinorsTournament', () => {
 			'Jornada de Entrenamiento G8',
 			'Jornada de Entrenamiento G9',
 			'Torneo de los Santos Niños Inventado ABSOLUTO',
+			'Open Inventado Aves Rapaces',
+			'Memorial Txiki Inventado',
 			'German University Chess Championship 2030',
 			'Campeonato Absoluto de Ninguna Parte',
 			'Memorial Benjamina Inventada'
