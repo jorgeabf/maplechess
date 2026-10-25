@@ -99,10 +99,14 @@ class VisorPartida extends HTMLElement {
 		if (this.nodes.length === 0) return
 
 		const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)')
+		// Lo que pide el enlace (#j12, #j12+g1f3) o, si no, el final de la partida.
+		const start = this.linkTarget() ?? { node: this.lastOf(0), variant: [] }
 		// Las piezas del bando que mueve se mueven (showPosition pone sus destinos):
 		// como en el explorador del repertorio, se arrastran o se pulsan pieza y casilla.
 		this.cg = Chessground(this.querySelector<HTMLElement>('.board')!, {
-			fen: this.nodes[0].fen,
+			// Ya en la posición que se va a enseñar: con la inicial, al ir a ésta
+			// (goTo, abajo) chessground animaba las piezas desde la salida.
+			fen: (start.variant.at(-1) ?? this.nodes[start.node]).fen,
 			// El servidor ya ha ordenado las barras de los jugadores con este lado.
 			orientation: this.dataset.orientation === 'black' ? 'black' : 'white',
 			coordinates: true,
@@ -168,8 +172,7 @@ class VisorPartida extends HTMLElement {
 		this.movesResize = new ResizeObserver(() => this.revealCurrent())
 		this.movesResize.observe(this.movesBox)
 
-		// Lo que pide el enlace (#j12, #j12+g1f3) o, si no, el final de la partida.
-		if (!this.goToLink()) this.goTo(this.lastOf(0), false)
+		this.goTo(start.node, false, start.variant)
 		this.panel.restore()
 	}
 
@@ -376,13 +379,22 @@ class VisorPartida extends HTMLElement {
 	}
 
 	/**
-	 * Va a lo que pide el enlace (followLink): el nodo y, si trae variante, su
-	 * última jugada. Lo que no es legal se descarta sin aviso, y la URL no se
-	 * toca hasta la siguiente jugada. false si no pide una jugada de la partida.
+	 * Lo que pide el enlace (followLink): el nodo y la variante propia que sale
+	 * de él. Lo que no es legal se descarta sin aviso. null si no pide una
+	 * jugada de la partida.
+	 */
+	private linkTarget(): { node: number; variant: LineMove[] } | null {
+		const link = parseLink(location.hash)
+		return link && followLink(this.nodes, link)
+	}
+
+	/**
+	 * Va a lo que pide el enlace (linkTarget): el nodo y, si trae variante, su
+	 * última jugada. La URL no se toca hasta la siguiente jugada. false si no
+	 * pide una jugada de la partida.
 	 */
 	private goToLink(): boolean {
-		const link = parseLink(location.hash)
-		const target = link && followLink(this.nodes, link)
+		const target = this.linkTarget()
 		if (!target) return false
 		this.goTo(target.node, false, target.variant)
 		return true
