@@ -1,8 +1,8 @@
 // Torneos de menores: no se guardan (ver CLAUDE.md, «Torneos de menores»).
 // Son los de hasta Sub 14 y los escolares, que dicen la edad o el colegio de
-// quien juega aunque su ficha no enseñe el año. Se reconocen sólo por el
-// nombre (y su fecha, para los años de nacimiento), al importarlos; los
-// guardados los borra el reprocesado.
+// quien juega aunque su ficha no enseñe el año. Se reconocen por el nombre (y
+// su fecha, para los años de nacimiento) y, los pocos que no lo dicen en él,
+// por una lista a mano, al importarlos; los guardados los borra el reprocesado.
 import { words } from '../lib/chess/names'
 
 /**
@@ -29,10 +29,12 @@ const FIDE_AGE = /(?:\s[-–]|\|)\s*[OG]0?[6-9]\s*$/i
  * Los de niños: «Kids» y «para niños», también en gallego («para nenos», «para
  * rapaces»), catalán («per a nens», «per a infants») y euskera («Umeentzat»,
  * «Haurrentzat», «Txikientzat»: el «I Aiarako Txapelketa Umeentzat» se
- * colaba). «Santos Niños», una fiesta, no entra.
+ * colaba). «Santos Niños», una fiesta, no entra. Y el Torneo Regional
+ * Imaginalia de Albacete: en sus dos ediciones guardadas (2024 y 2026), todos
+ * los que tienen año, de 7 a 16 años.
  */
 const KIDS =
-	'kids|para nin[oa]s|para nen[oa]s|para rapa(?:ces|zas)|per a (?:nen(?:s|es)|infants)|umeentzat|haurrentzat|txikientzat'
+	'kids|para nin[oa]s|para nen[oa]s|para rapa(?:ces|zas)|per a (?:nen(?:s|es)|infants)|umeentzat|haurrentzat|txikientzat|imaginalia'
 
 /**
  * Las categorías hasta infantil (Sub 14), también en catalán y gallego, y
@@ -135,4 +137,30 @@ export function isMinorsTournament(name: string, date?: string | null): boolean 
 		(BY_AGE.test(text) && !OLDER.test(text) && !PLUS_AGE.test(name)) ||
 		yearRuns(name).some((run) => isBirthYearGroup(run, year))
 	)
+}
+
+/**
+ * Los que no lo dicen en el nombre, sólo en su dirección en la fuente
+ * (decidido el 28-oct-2026, medido en producción), por `source` y `source_key`
+ * de tournaments; en lichess, el id de la retransmisión. La regla no puede
+ * mirar el slug de info64: los organizadores lo reutilizan, y el Torneo
+ * Absoluto del Albariño lleva el de uno infantil.
+ */
+const LISTED = new Set([
+	// Open Promoción Santa Catalina Park 2021 (Las Palmas): de 7 a 12 años.
+	'info64:open-sub-08-12-santa-catalina-park-2021',
+	// III Torneo Semana Cultural de Navarrés (2025), de 7 a 16, y la
+	// retransmisión de la que salen sus partidas: borrado el torneo, la pasada
+	// de lichess la guardaría como torneo propio.
+	'info64:torneo-infantil-de-navarres',
+	'lichess:xKQlu56P',
+	// Jocs «La Vila-Gasparot» (Villajoyosa, 2024): juegos escolares.
+	'info64:jocs-escolars-la-vila',
+	// II Torneo de Carnavales Sub 18 II Circuito Inter[escolar] (Alcalá, 2019).
+	'info64:ii-torneo-de-reyes-sub-18-circuito-interescolar'
+])
+
+/** ¿Está en la lista de los de menores que no lo dicen en el nombre? */
+export function isListedMinors(source: string, key: string): boolean {
+	return LISTED.has(`${source}:${key}`)
 }

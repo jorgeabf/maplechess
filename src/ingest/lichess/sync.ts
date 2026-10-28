@@ -50,7 +50,7 @@ import {
 	type LichessTour,
 	type LichessTourStatus
 } from '../repo'
-import { isMinorsTournament } from '../menores'
+import { isListedMinors, isMinorsTournament } from '../menores'
 import { looksSensitive } from '../sensibles'
 import {
 	fetchBroadcastPgn,
@@ -190,7 +190,9 @@ export class LichessSyncWorkflow extends WorkflowEntrypoint<Env, LichessSyncPara
 				const info = preloaded.get(c.id)
 				return info ? dayOf(info.tour.dates?.[0]) : today
 			}
-			const allowed = candidates.filter((c) => !excluded.has(c.id) && !isMinorsTournament(c.name, dateOf(c)))
+			const allowed = candidates.filter(
+				(c) => !excluded.has(c.id) && !isListedMinors(SOURCE, c.id) && !isMinorsTournament(c.name, dateOf(c))
+			)
 			return selectTours(
 				allowed,
 				await loadLichessTours(

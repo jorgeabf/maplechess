@@ -37,7 +37,7 @@ import { lichessUrl } from '../lib/licenses'
 import { tournamentPlace } from '../lib/lugares'
 import { derivedColumns, type DerivedColumns } from './games'
 import { LICHESS_STEP, parseBroadcastUrl, resolveTourId, type BroadcastRef } from './lichess/api'
-import { isMinorsTournament } from './menores'
+import { isListedMinors, isMinorsTournament } from './menores'
 import { isRetired, nameKey, publicName, publicPgnNames, RETIRED_NAME, withoutHiddenYear } from './nombres'
 import {
 	anonymizeRetiredParticipations,
@@ -439,15 +439,18 @@ export async function applyPlaces(db: D1Database): Promise<PlacesCleanup> {
 }
 
 /**
- * Borra los torneos de menores guardados (isMinorsTournament, por el nombre),
- * que la ingesta ya no lee. Recorre los nombres de todos los torneos: sólo lo
- * usa el reprocesado. Repetirlo no cambia nada. Devuelve cuántos ha borrado.
+ * Borra los torneos de menores guardados (isMinorsTournament, por el nombre, o
+ * isListedMinors, por la lista), que la ingesta ya no lee. Recorre los nombres
+ * de todos los torneos: sólo lo usa el reprocesado. Repetirlo no cambia nada.
+ * Devuelve cuántos ha borrado.
  */
 export async function applyMinorsTournaments(db: D1Database): Promise<{ deleted: number }> {
 	const { results } = await db
-		.prepare('SELECT id, name, start_date AS startDate FROM tournaments')
-		.all<{ id: number; name: string; startDate: string | null }>()
-	const ids = results.filter((t) => isMinorsTournament(t.name, t.startDate)).map((t) => t.id)
+		.prepare('SELECT id, source, source_key AS key, name, start_date AS startDate FROM tournaments')
+		.all<{ id: number; source: string; key: string; name: string; startDate: string | null }>()
+	const ids = results
+		.filter((t) => isListedMinors(t.source, t.key) || isMinorsTournament(t.name, t.startDate))
+		.map((t) => t.id)
 	await deleteTournaments(db, ids)
 	if (ids.length > 0) await refreshTotals(db)
 	return { deleted: ids.length }

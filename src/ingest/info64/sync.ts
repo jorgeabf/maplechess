@@ -31,7 +31,7 @@ import {
 	type CheckedTournament,
 	type GamesSource
 } from '../repo'
-import { isMinorsTournament } from '../menores'
+import { isListedMinors, isMinorsTournament } from '../menores'
 import { looksSensitive } from '../sensibles'
 import {
 	parseEvents,
@@ -223,7 +223,9 @@ export class Info64SyncWorkflow extends WorkflowEntrypoint<Env, Info64SyncParams
 			// Los sensibles (torneos_sensibles) y los de menores no se leen ni a
 			// mano. Con keys, el nombre es el slug, que lleva las mismas palabras.
 			const excluded = await loadExcluded(this.env.DB, SOURCE)
-			const allowed = candidates.filter((c) => !excluded.has(c.key) && !isMinorsTournament(c.name, c.firstRound))
+			const allowed = candidates.filter(
+				(c) => !excluded.has(c.key) && !isMinorsTournament(c.name, c.firstRound) && !isListedMinors(SOURCE, c.key)
+			)
 			const checked = await loadCheckedTournaments(
 				this.env.DB,
 				SOURCE,
@@ -292,7 +294,11 @@ export class Info64SyncWorkflow extends WorkflowEntrypoint<Env, Info64SyncParams
 		const keys = params.keys?.map((k) => keyToCandidate(k).key)
 		const excluded = await step.do('torneos sensibles', async () => [...(await loadExcluded(this.env.DB, SOURCE))])
 		const upcoming = rounds.filter(
-			(r) => (!keys || keys.includes(r.key)) && !excluded.includes(r.key) && !isMinorsTournament(r.name, r.startsAt)
+			(r) =>
+				(!keys || keys.includes(r.key)) &&
+				!excluded.includes(r.key) &&
+				!isMinorsTournament(r.name, r.startsAt) &&
+				!isListedMinors(SOURCE, r.key)
 		)
 		const ids = await step.do('torneos con ronda próxima', () =>
 			loadTournamentIds(
@@ -346,13 +352,14 @@ export class Info64SyncWorkflow extends WorkflowEntrypoint<Env, Info64SyncParams
 	private async syncStoredStandings(params: Info64SyncParams, step: WorkflowStep): Promise<void> {
 		const tournaments = await step.do('torneos guardados', async () => {
 			// Uno sensible o de menores aún guardado (sin reprocesar) no se lee. El
-			// de menores, por su nombre y su fecha o, con keys, por el slug.
+			// de menores, por la lista o por su nombre y su fecha o, con keys, por
+			// el slug.
 			const excluded = await loadExcluded(this.env.DB, SOURCE)
-			const skipped = (key: string) => excluded.has(key) || isMinorsTournament(key)
+			const skipped = (key: string) => excluded.has(key) || isMinorsTournament(key) || isListedMinors(SOURCE, key)
 			if (!params.keys) {
 				const stored = await loadTournamentsStarting(this.env.DB, SOURCE, params.from, params.to, isoDate(new Date()))
 				return stored
-					.filter((t) => !excluded.has(t.key) && !isMinorsTournament(t.name, t.startDate))
+					.filter((t) => !excluded.has(t.key) && !isListedMinors(SOURCE, t.key) && !isMinorsTournament(t.name, t.startDate))
 					.map(({ key, id, type }) => ({ key, id, type }))
 			}
 			const candidates = params.keys.map(keyToCandidate).filter((c) => !skipped(c.key))
