@@ -10,7 +10,7 @@
 import { WorkflowEntrypoint, type WorkflowEvent, type WorkflowStep, type WorkflowStepConfig } from 'cloudflare:workers'
 import { buildGameRows } from '../games'
 import { fetchText } from '../http'
-import { isMinorsTournament } from '../menores'
+import { isListedMinors, isMinorsTournament } from '../menores'
 import { loadExcluded, proposeSensitive, replaceParticipations, saveGames, upsertTournament } from '../repo'
 import { looksSensitive } from '../sensibles'
 import { FCA_FILES, fcaFileUrl, fcaPageUrl, fcaTournaments, type FcaFile } from './archivo'
@@ -74,7 +74,7 @@ export async function importFile(db: D1Database, file: FcaFile, pgnText: string,
 	const summary: FcaFileSummary = { tournaments: 0, games: 0, linked: 0, players: 0, avisos: 0 }
 	const excluded = await loadExcluded(db, SOURCE)
 	const tournaments = fcaTournaments(file, pgnText).filter(
-		(t) => !excluded.has(t.key) && !isMinorsTournament(t.name, t.startDate)
+		(t) => !excluded.has(t.key) && !isListedMinors(SOURCE, t.key) && !isMinorsTournament(t.name, t.startDate)
 	)
 	if (tournaments.length === 0) return summary
 	const matcher = new FideMatcher(await loadFidePlayers(db))

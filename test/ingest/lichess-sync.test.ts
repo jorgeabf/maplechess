@@ -518,6 +518,18 @@ describe('syncTour', () => {
 		expect(await count('SELECT count(*) AS n FROM tournaments')).toBe(0)
 	})
 
+	it('no pide una retransmisión de la lista de menores, ni con force', async () => {
+		const requested = mockLichess()
+		const step = {
+			do: async (_name: string, ...rest: unknown[]) => (rest.at(-1) as () => Promise<unknown>)(),
+			sleep: async () => {}
+		} as unknown as WorkflowStep
+		const event = { payload: { tours: ['xKQlu56P'], force: true }, timestamp: new Date() } as WorkflowEvent<LichessSyncParams>
+		await (Object.assign(Object.create(LichessSyncWorkflow.prototype), { env }) as LichessSyncWorkflow).run(event, step)
+		expect(requested).toEqual([])
+		expect(await count('SELECT count(*) AS n FROM tournaments')).toBe(0)
+	})
+
 	it('no guarda ni apunta una retransmisión de menores (con tours, se mira al leerla)', async () => {
 		const requested = mockLichess()
 		const info = { tour: { ...detail.tour, name: 'Campeonato Inventado Sub 12 | U12' }, finished: true }

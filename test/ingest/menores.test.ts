@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { buildGameRows } from '../../src/ingest/games'
 import { Info64SyncWorkflow, type Info64SyncParams } from '../../src/ingest/info64/sync'
 import type { TournamentPlayer } from '../../src/ingest/info64/parse'
-import { isMinorsTournament } from '../../src/ingest/menores'
+import { isListedMinors, isMinorsTournament } from '../../src/ingest/menores'
 import {
 	deleteTournaments,
 	replacePairings,
@@ -141,7 +141,8 @@ describe('isMinorsTournament', () => {
 			"Torneig d'Escacs per a infants Inventat",
 			'I Inventatuko Txapelketa Umeentzat',
 			'Haurrentzat Xake Txapelketa Inventatua',
-			'Inventatuko Xake Txapelketa Txikientzat'
+			'Inventatuko Xake Txapelketa Txikientzat',
+			'IV Torneo Regional Imaginalia Inventado'
 		]) {
 			expect(isMinorsTournament(name), name).toBe(true)
 		}
@@ -255,9 +256,20 @@ describe('isMinorsTournament', () => {
 	})
 })
 
+describe('isListedMinors', () => {
+	it('reconoce los de la lista por su fuente y su clave', () => {
+		expect(isListedMinors('info64', 'torneo-infantil-de-navarres')).toBe(true)
+		expect(isListedMinors('lichess', 'xKQlu56P')).toBe(true)
+		expect(isListedMinors('fca', 'torneo-infantil-de-navarres')).toBe(false)
+		expect(isListedMinors('info64', 'open-inventado')).toBe(false)
+	})
+})
+
 describe('torneos de menores en la pasada de info64', () => {
 	const MINORS = 'campeonato-inventado-sub-12'
 	const OTHER = 'open-inventado'
+	// De la lista: ni su nombre ni el del calendario lo dicen.
+	const LISTED = 'torneo-infantil-de-navarres'
 	// El calendario quita el último paréntesis del título (la ciudad): los años
 	// de nacimiento sólo se ven en la página.
 	const BY_YEARS = 'circuito-inventado-cat-b'
@@ -281,7 +293,9 @@ describe('torneos de menores en la pasada de info64', () => {
 			{ title: 'R.1 - Campeonato Inventado Sub 12', url: `/${MINORS}/`, start: '2026-09-01T17:00:00' },
 			{ title: 'R.2 - Campeonato Inventado Sub 12', url: `/${MINORS}/`, start: `${tomorrow}T17:00:00` },
 			{ title: 'R.1 - Open Inventado', url: `/${OTHER}/`, start: '2026-09-01T17:00:00' },
-			{ title: 'R.1 - Circuito Inventado. Cat. B (2015-2016)', url: `/${BY_YEARS}/`, start: '2026-09-01T10:00:00' }
+			{ title: 'R.1 - Circuito Inventado. Cat. B (2015-2016)', url: `/${BY_YEARS}/`, start: '2026-09-01T10:00:00' },
+			{ title: 'R.1 - Torneo Semana Cultural Inventada', url: `/${LISTED}/`, start: '2026-09-01T10:00:00' },
+			{ title: 'R.2 - Torneo Semana Cultural Inventada', url: `/${LISTED}/`, start: `${tomorrow}T10:00:00` }
 		]),
 		[BY_YEARS]: `<h1>Circuito Inventado. Cat. B (2015-2016)</h1><table id="initial-ranking-table"><tbody>${ranking('Niño')}</tbody></table>`,
 		[MINORS]: `<h1>Campeonato Inventado Sub 12</h1><table id="initial-ranking-table"><tbody>${ranking('Menor')}</tbody></table>`,
@@ -334,6 +348,13 @@ describe('torneos de menores en la pasada de info64', () => {
 		expect(requested).not.toContain(`${BY_YEARS}/games`)
 		expect(await count('SELECT count(*) AS n FROM tournaments WHERE source_key = ?1', BY_YEARS)).toBe(0)
 		expect(await count('SELECT count(*) AS n FROM participations')).toBe(2)
+	})
+
+	it('tampoco pide los de la lista, que no lo dicen en el nombre', async () => {
+		await run(window)
+		await run({ from: '', to: '', pairings: 'only' })
+		expect(requested.filter((path) => path.startsWith(LISTED))).toEqual([])
+		expect(await count('SELECT count(*) AS n FROM tournaments WHERE source_key = ?1', LISTED)).toBe(0)
 	})
 
 	it('la pasada de emparejamientos no pide su ronda', async () => {
@@ -454,6 +475,20 @@ describe('applyMinorsTournaments', () => {
 		expect(kept.map((t) => t.key)).toEqual(['liga', 'cat-b-sin-fecha'])
 		expect(kept.map((t) => t.id)).not.toContain(minors)
 		expect(kept.map((t) => t.id)).not.toContain(byAge)
+	})
+
+	it('borra los de la lista por su fuente y su clave, aunque el nombre no lo diga', async () => {
+		await store(tournament('torneo-infantil-de-navarres', 'Torneo Semana Cultural Inventada'), [])
+		await store({ ...tournament('xKQlu56P', 'Torneo Semana Cultural Inventada'), source: 'lichess' }, [])
+		await store({ ...tournament('torneo-infantil-de-navarres', 'Torneo Semana Cultural Inventada'), source: 'fca' }, [])
+		await store(tournament('open-inventado', 'Open Inventado'), [])
+
+		expect(await applyMinorsTournaments(db)).toEqual({ deleted: 2 })
+		const kept = await db.prepare('SELECT source, source_key AS key FROM tournaments ORDER BY id').all()
+		expect(kept.results).toEqual([
+			{ source: 'fca', key: 'torneo-infantil-de-navarres' },
+			{ source: 'info64', key: 'open-inventado' }
+		])
 	})
 
 	it('borra por trozos', async () => {
