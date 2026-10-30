@@ -1,6 +1,6 @@
 # Decisiones de MapleChess
 
-La historia, las medidas y los casos concretos que salieron del `CLAUDE.md` el 30-oct-2026, bajo sus mismos títulos. Cada viñeta va entera, tal como estaba, con las de encima para situarla. Lo que sigue siendo una regla está también, más corto, en el `CLAUDE.md`, que es el que manda.
+La historia, las medidas, los casos concretos y el detalle de cada página que salieron del `CLAUDE.md` el 30-oct-2026, bajo sus mismos títulos. Cada viñeta va entera, tal como estaba, con las de encima para situarla. Antes de cambiar algo de una sección, lee aquí la suya. Las reglas están también, más cortas, en el `CLAUDE.md`: si dicen cosas distintas, manda el `CLAUDE.md`.
 
 ## Stack
 
@@ -8,6 +8,8 @@ La historia, las medidas y los casos concretos que salieron del `CLAUDE.md` el 3
 
 - **Workflows** para la ingesta: `INFO64_SYNC` (`src/ingest/info64/sync.ts`), `LICHESS_SYNC` (`src/ingest/lichess/sync.ts`), `FIDE_SYNC` (`src/ingest/fide/sync.ts`) y `FCA_IMPORT` (`src/ingest/fca/sync.ts`, sólo a mano: ver «Fuentes de datos»). Crons en `wrangler.jsonc` y `src/ingest/schedule.ts`: las expresiones tienen que coincidir.
   - Clasificación (tabla `standings`, migración 0011): `INFO64_SYNC` lee `/{slug}/standings` de cada torneo tras sus participantes, en su paso. Una pasada de sólo emparejamientos (`'only'`) la relee en los torneos ya empezados con ronda próxima, para prepararla con la de la ronda anterior; la diaria no, porque ya la ha leído en la ventana. Si falla o una guarda no la deja guardar, es un aviso, y las partidas se leen igual. Los torneos propios de lichess no tienen: su API sólo cuenta las partidas retransmitidas y no aplica los desempates del torneo.
+    - En los individuales no se guarda el jugador: la página lo toma de `participations` por su número inicial (`start_rank`), ya sin el año de los menores y con los retirados anonimizados. En los de equipos, el nombre y el ELO medio de cada equipo.
+    - Título (`standingsHeading` en `src/lib/db/standings.ts`): «Clasificación final» si va tras la última ronda; si no, «Clasificación tras la ronda X». Los de equipos no dicen la ronda: final si ya ha pasado la fecha de fin y, mientras dura, «Clasificación». La regla de «final» es `standingsOver`, que usa también la ficha del jugador (`standingProgress`).
     - `{"standings":"only"}` sólo la lee, de los torneos de info64 guardados que empiezan en la ventana o de los de `keys`, sin calendario ni partidas: para cargar la de los torneos que ya no se releen. Sus ventanas encadenadas se llaman `info64-clasificacion-…`, porque las `info64-…` de la carga inicial ya existen y la cadena se pararía al encontrarlas.
 
 #### info64 sólo de madrugada
@@ -33,6 +35,7 @@ La historia, las medidas y los casos concretos que salieron del `CLAUDE.md` el 3
 ### Ajedrez
 
 - **Ajedrez:** `chessops` (PGN, SAN, FEN) en servidor y cliente, `@lichess-org/chessground` (tablero) y Stockfish 19 *lite single-thread* en un Web Worker.
+  - Al ser de un solo hilo, no necesita cabeceras COOP/COEP.
   - Cada búsqueda para en la profundidad 22 o a los 10 s, lo que llegue antes (`ENGINE_DEPTH` y `ENGINE_TIME_MS` en `motor.ts`): con un hilo, la 22 de una posición táctica eran 34 s en escritorio, y en un móvil, de uno a dos minutos. Con la pestaña oculta se para y, al volver, sigue si no había terminado (`onVisibility` en `panel-motor.ts`).
     - Terminada la búsqueda, «Seguir analizando» en la línea de estado sigue con esa posición sin topes (`go infinite`) hasta pasar a otra. Mientras dura, el mismo botón queda inactivo y dice «sin límite»: explica por qué no para y no pierde el foco. Es un verbo porque es una acción, y no «análisis infinito», que es el nombre de un modo y promete algo que no ocurre: para al cambiar de jugada.
     - Con el panel por debajo de 18rem, la línea de estado guarda siempre dos renglones (`min-block-size: 2lh`, en `PanelMotor.astro`). Terminada la búsqueda, «Seguir analizando» la partía en dos, y el panel crecía y encogía 18 px con cada jugada. Pide unos 258 px con Segoe UI; el margen es para otras fuentes.
@@ -65,6 +68,10 @@ La historia, las medidas y los casos concretos que salieron del `CLAUDE.md` el 3
   - Pesa 1,2 KB: Vite la incrusta en el CSS como `data:`, de ahí el `font-src 'self' data:` de la CSP. Con `font-display: block` no asoma la letra. El script falla si llega a 4 KB.
   - Las figuras salen de las piezas (`scripts/piezas/figuras/`). Si cambia una, `node scripts/piezas.mjs <pieza>` y `python scripts/fuente-figuras.py`.
 
+#### Flechas
+
+- Flechas: la mejor jugada del motor, en `paleBlue` en el visor y en el explorador; la vista previa (una jugada del explorador, la línea del motor señalada), en `paleGrey`. Nunca en verde, que es el de los resultados.
+
 #### Tablero pintado en el servidor, en el explorador
 
 - **Tablero pintado en el servidor, en el explorador** (`components/visor/Tablero.astro` y `src/lib/chess/tablero.ts`; decidido con Jorge el 25-oct-2026): el explorador pinta la posición con el mismo marcado que chessground 10.4 (`cg-board`, `piece`, `square` y `coords`). Cada pieza lleva un `transform: translate` en tantos por ciento de su casilla, que la CSP admite en `style-src-attr`. Después chessground se monta en el mismo `.board`.
@@ -79,13 +86,41 @@ La historia, las medidas y los casos concretos que salieron del `CLAUDE.md` el 3
 
 - `src/ingest/`: ingesta. Se divide en:
 
+#### `info64/parse.ts`
+
+- `info64/parse.ts`: HTMLRewriter.
+
+#### `lichess/api.ts`
+
+- `lichess/api.ts`: API de retransmisiones; `lichess/sync.ts`: el Workflow de las oficiales con españoles.
+
+#### `fide/`
+
+- `fide/`: lista FIDE.
+
+#### `fca/`
+
+- `fca/`: el archivo de partidas de la Federación Cántabra (ver «Fuentes de datos»).
+
+#### `nombres.ts`
+
+- `nombres.ts`: el nombre que se guarda, sin el año de los menores (`publicName`, ver «Menores») ni el de quien lo ha ocultado (`withoutHiddenYear`, ver «Ocultar el sexo o el año»).
+
+#### `federaciones.ts`
+
+- `federaciones.ts`: la columna Fed. que se guarda, sólo con códigos de federación (ver «Menores»).
+
 #### Torneos sensibles
 
 - **Torneos sensibles** (`sensibles.ts`; tabla `torneos_sensibles`, migración 0012): los que revelan un dato de salud de quien juega (art. 9 RGPD), como los de ciegos (FEDC, clasificatorios de la ONCE), sordos (FEDS, ICCD) o discapacidad física (IPCA) y los campeonatos de ajedrez inclusivo. **No se guardan** (decidido el 23-oct-2026): anonimizarlos como a los retirados no bastaba, porque con el ELO, la ronda y la mesa la fuente dice quién es cada uno.
+  - Se deciden a mano, por `source` y `source_key`: `excluido` 1, no se guarda; 0, se guarda como los demás; NULL, por revisar.
+  - La ingesta se los salta antes de pedir nada: info64 (la ventana, `keys`, los emparejamientos y la clasificación) y lichess, también con `force`.
   - Los que lo parecen por el nombre (`looksSensitive`, en castellano, inglés, catalán y gallego) los apunta por revisar la ingesta al guardarlos (info64 y torneos propios de lichess) y, mientras, los guarda como los demás. `/api/estado` da entonces la alarma (ver «Producción»). Cómo revisarlos, en la guía de operación.
     - «A la ciega» y «a la cega» no cuentan: es jugar sin ver el tablero. El 23-oct-2026 cinco torneos así (el Desafío a la Ciega de València y el Pablo Morán de Oviedo) dieron la alarma y se marcaron con 0.
     - «Parainclusivo», junto, cuenta desde el 25-oct-2026: los I y II Juegos Parainclusivos de la Comunidad de Madrid (2018 y 2019) se colaban.
+  - El reprocesado (`{"sensibles":true}`, `applySensitive`) borra los marcados, con sus partidas, participantes, emparejamientos y clasificación en cascada, y apunta los guardados que lo parecen y no están en la tabla.
   - **Sus retransmisiones de lichess:** borrado un torneo de info64, la pasada de lichess no reconocería su retransmisión (ya no hay participantes con los que cruzarla) y la guardaría como torneo propio. Por eso, antes de borrar, el reprocesado marca también (`source` `lichess`, `excluido` 1) las que esa pasada ha decidido del torneo (`lichess_tours`) y la que enlaza info64, de la que salen sus partidas (`games_source_url`). Si el enlace es de una ronda, pregunta a lichess de qué torneo es (`resolveTourId`); por eso el paso lleva los reintentos de lichess. Una ya revisada con 0 no cambia.
+    - Queda un hueco: una retransmisión que nadie había enlazado antes de borrar el torneo. Si el nombre lo parece, se apunta; si no, se guardaría.
   - Los benéficos («Jaque al Alzheimer», «Blitz solidario…») y los abiertos a todos no revelan nada de quien juega: el detector no los mira, o se marcan con 0.
     - Tampoco los inclusivos en los que juegan juntas personas con y sin discapacidad, si no la separan en categorías ni en premios (decidido por Jorge el 25-oct-2026): el de La Serranía en Alpuente (de 2024 a 2026, con categorías sólo por edad) y los Juegos Parainclusivos de Madrid van con 0. Los Campeonatos de España de ajedrez inclusivo, con 1: sus premios van por grado de discapacidad.
 
@@ -118,10 +153,16 @@ La historia, las medidas y los casos concretos que salieron del `CLAUDE.md` el 3
       - los de un colegio: los torneos FEC Vedruna (tres), «Ajedrez en el recreo» (tres), «I.E.S.» con puntos (dos) y el «Circuito … Inter Esc», con el nombre recortado (uno);
       - «Eskola Txapelketa», el campeonato escolar en euskera (los tres de Lekunberri). «Eskola» sola sigue siendo un club.
     - Los grupos «Especial» de los torneos de jóvenes de Navarra (de 12 a 16 años; seis torneos) se quedan, como un Sub 16 (decidido por Jorge el 25-oct-2026). El Cto. de Navarra absoluto por equipos «Especial» es la división.
+  - El reprocesado (`{"menores":true}`, `applyMinorsTournaments`) borra los guardados con todo lo suyo en cascada, de 100 en 100 (`deleteTournaments`). Se lanza tras desplegar y si cambia la regla.
+  - El mismo hueco que con los sensibles: la retransmisión de lichess de un torneo de info64 de menores se guardaría como torneo propio si su nombre no lo dice.
 
 ### `src/lib/chess/`
 
 - `src/lib/chess/`: nombres, PGN, ECO, árbol de jugadas, UCI y repertorio. Se comparte entre servidor y cliente.
+
+#### `repertoire.ts`
+
+- `repertoire.ts`: árbol de aperturas de un jugador (`/jugadores/{id}/repertorio`). Repite `games.opening_moves` (las 40 primeras medias jugadas en UCI) y compara por posición, así que junta transposiciones. `explore` consulta una posición; `indexPositions` indexa todas en una pasada (dossier).
 
 #### `dossier.ts`
 
@@ -131,10 +172,19 @@ La historia, las medidas y los casos concretos que salieron del `CLAUDE.md` el 3
     - Cada jugada lleva su % de partidas y enlaza al repertorio en esa posición. La puntuación (ScoreBar) va en la jugada de la primera columna: con negras, la suya contra cada primera jugada, que es lo que eliges tú.
     - Una jugada sale sola si se juega en al menos el 5 % de las partidas de la posición, como mucho 4 (3 respuestas). Las demás se suman en «otras».
     - Sale del mismo índice que las líneas: ninguna lectura de D1 más.
+  - La cabecera del dossier y la del repertorio cuentan todas las partidas y, si no todas tienen jugadas desde la posición inicial (`repertoireGames`), también cuántas sí: «162 partidas suyas con blancas (156 con jugadas)». Las líneas, la primera jugada y el explorador salen de éstas.
 
 #### `clock.ts`
 
 - `clock.ts`: apuros de tiempo del dossier a partir de `games.clocks` (segundos que le quedan a cada jugador tras cada media jugada, del `[%clk]` del PGN; lo trae el 43 % de las partidas). Cuenta como apuro bajar del 5 % del tiempo inicial, y el resumen no mezcla ritmos.
+
+#### `timecontrol.ts`
+
+- `timecontrol.ts`: clasifica el ritmo (estándar, rápidas, blitz) según la FIDE a partir del texto libre del torneo o de la cabecera `TimeControl`.
+
+#### `rating.ts`
+
+- `rating.ts`: ELO verosímiles (1000–3000).
 
 ### `src/lib/db/`
 
@@ -177,6 +227,7 @@ La historia, las medidas y los casos concretos que salieron del `CLAUDE.md` el 3
   - **Los datos** están en `data/lugares/` (INE e IGN, CC BY 4.0). Los citan `/acerca` y `/aviso-legal`, con `INE_MUNICIPIOS` e `IGN_NUCLEOS` de `licenses.ts`.
     - `node scripts/lugares.mjs` genera `src/lib/lugares.json`.
     - Cada febrero, cuando el INE publica la relación del año: `--descargar <año>`, después la fecha y el enlace de `INE_MUNICIPIOS`, y luego el reprocesado `{"lugares":true}`.
+  - **Las ciudades se buscan por su texto:** «Donostia» no encuentra un torneo cuya ciudad dice «San Sebastián».
 
 #### Las búsquedas
 
@@ -185,13 +236,19 @@ La historia, las medidas y los casos concretos que salieron del `CLAUDE.md` el 3
   - **Un solo resultado** lleva a la ficha (303) sólo con el nombre completo (al menos dos palabras de 2 letras o más), en la página 1 y sin filtros. Con una palabra no: la búsqueda va por prefijo, y «caruana» da un único jugador español que no es el GM.
   - **Sin jugadores,** «Buscar «x» en partidas (N) · en torneos (M)», cada enlace sólo si su cifra pasa de 0. Las cuentan `countGamesByName` (`games_fts`) y `countTournamentsByName` (el WHERE de `searchTournaments`, `tournamentsWhere`, con los ya empezados), con el tope (`countSql`) y sólo en ese caso. En remoto: 28 filas con «gukesh» y 1.000 con «garcia»; en torneos, 1 con «gukesh» y 1.480 con «madrid».
   - **«Quitar filtros»** va junto al botón cuando hay algún filtro además del nombre, en las tres búsquedas y en la ficha. Un enlace en un `.form-row` tiene el alto de los campos (`.form-row > a`, como `.check`): alineado por abajo, su texto quedaba más bajo que el del botón.
+  - **Con 0 resultados,** ni recuento ni paginación, y la de abajo sólo con más de una página. En la última página de una búsqueda con tope, cómo afinarla (`refine` de `Pagination`).
   - **En el móvil,** `/partidas` y `/torneos` pliegan el formulario tras buscar, si hay resumen y filas en la página (`FiltrosPlegables` con `label="Búsqueda"`): el primer resultado subió de y = 626 a 351 en `/partidas`.
+  - El título de la pestaña lleva lo buscado («Partidas: x», «Torneos: x»). Los campos de nombre llevan `autocorrect="off"`, `spellcheck="false"` y `minlength="2"`, y el del ECO, un `title` con el formato.
 
 #### Menores
 
 - **Menores:** puede serlo quien es sub-18 por año natural (`mayBeMinor`); sin año en la lista FIDE, o sin FIDE ID, cuenta como adulto. Las tres primeras medidas son de la auditoría legal del 23-oct-2026:
+  - **Su ficha** (`minor` de `getPlayer`) no se indexa ni entra en el sitemap, y no enseña su próxima partida salvo en la suya (`isOwn`). Sigue en la página del torneo, en «Se juegan pronto» y, con su cookie, en la portada.
   - **Sin dossier ni repertorio, ni sus PGN**, ni siquiera con su cookie `yo`, que no prueba quién eres (ver `src/lib/me.ts`). Responden con `jugadores/[fideId]/no-disponible.astro` (404, `noindex`; el PGN, el mismo texto en plano, `MINOR_UNAVAILABLE`). Se quedan así hasta que lo vea un abogado.
     - Los enlaces a ellos (la ficha, la próxima partida, el torneo y «Se juegan pronto») salen sólo con `hasDossier` (`hasDossierSql`: tiene partidas y no puede ser menor). La edad se mira tras las partidas: una fila más por jugador con partidas.
+    - «Tú contra…» sí cruza las partidas de un menor en el dossier de un adulto, si «tú» eres él.
+  - El ranking sub-18 y «Los que más suben» sub-18 se quedan: son una categoría oficial de la FIDE y la FEDA.
+  - **Su año de nacimiento** no sale en ninguna página, aunque la FIDE lo publique. Lo quitan las consultas de `players.ts`. Tampoco el de quien ha pedido ocultarlo (ver «Ocultar el sexo o el año»).
   - **La columna Fed.** (`federaciones.ts`, 25-oct-2026): sólo códigos de federación de la FIDE (los 207 y FID).
     - Desde mayo de 2024 el árbitro de info64 puede poner ahí otro campo, y la página del torneo enseñaba la categoría o el año («S12», «2017») junto al nombre.
     - Muchos campeonatos de España traen la comunidad de los españoles (AND, MAD, CAT) junto a la federación de los extranjeros. Lo que no es un código se vacía. MAD, AND y CAN son códigos (Madagascar, Andorra, Canadá) y también comunidades: se vacían en quien está en la lista FIDE española (por su FIDE ID, una fila por cada uno) y, sin FIDE ID, si la columna trae algo que no es un código (`federationColumn`). Así se conservan los extranjeros de verdad, también en un torneo con una errata («ESp»).
@@ -203,18 +260,26 @@ La historia, las medidas y los casos concretos que salieron del `CLAUDE.md` el 3
 #### Retirada de datos
 
 - **Retirada de datos** (tabla `retiradas`, migraciones 0010 y 0013; `/privacidad` explica cómo pedirla):
+  - Quien está en la tabla no tiene ficha: la lista FIDE no lo importa (`upsertFidePlayers`) y la importación borra la fila que tuviera.
   - En participantes, partidas y emparejamientos, su nombre pasa a «Jugador retirado» (`RETIRED_NAME`), sin FIDE ID ni título. En el PGN, también sus cabeceras.
   - Las partidas de sus rivales se conservan.
+  - Se anonimiza al escribir (`replaceParticipations`, `saveGames`, `replacePairings` en `repo.ts`), después de cruzar: el cruce necesita su nombre y su ID para saber que es él.
+  - Con FIDE ID se reconoce sólo por él. Sin él, por el nombre (`isRetired`), así que un homónimo sin ID también se anonimiza: en la duda, se protege a quien lo pidió.
   - Quien no tiene FIDE ID va con `fide_id` NULL. Hasta la 0013 era la clave primaria, y con NULL SQLite le daba el mayor de la tabla más uno: el FIDE ID de otra persona, que se quedaba sin ficha.
+  - Una petición se aplica a lo guardado con el reprocesado (`{"retiradas":true}`, `applyRetired`), sin recorrer todas las partidas. Cómo atenderla en producción está en la guía de operación (ver «Producción»).
+  - Quedan copias en Time Travel (30 días) y en los registros (7 días), que caducan solas.
 
 #### Ocultar el sexo o el año
 
 - **Ocultar el sexo o el año** (tabla `ocultaciones`, migración 0015; art. 21 RGPD, decidido el 24-oct-2026): quien lo pide deja de enseñar su sexo, su año de nacimiento o los dos. Los trae la lista FIDE, que no deja de traerlos: el sexo viene siempre, y el año sólo desaparece si la FIDE lo oculta.
   - Una fila por FIDE ID y `campo` (`'sexo'` o `'anio'`), con la petición (`P-AAAA-NNN`). Sin FIDE ID no hay ficha que ocultar.
+  - **El sexo** se guarda NULL (`upsertFidePlayers`): sale del ranking femenino, de «Los que más suben» femenino y del filtro `sexo`, sin tocar sus consultas. No sale en ninguna página. Los títulos femeninos (WGM…) se siguen viendo: son el título.
   - **El año** se guarda igual, con `birth_year_hidden` 1, porque hace falta para saber si puede ser menor (`mayBeMinor`, `hasDossierSql`, el sitemap); sin año contaría como adulto. No sale en ninguna página (`publicBirthYear` en `players.ts`, como el de los menores) y el jugador no entra en los rankings por edad (`rankingQueries`). La marca va en la misma fila: el plan y las filas de los rankings no cambian.
+    - Una consulta nueva que enseñe el año o filtre por edad tiene que mirar `birth_year_hidden`; una que mire si puede ser menor, no.
   - **Tampoco en el nombre de los homónimos** («…, Nombre 1980», unos 900 adultos): `withoutHiddenYear` (`nombres.ts`) lo quita de todo nombre que se guarda, como `publicName` el de los menores y también después de cruzar. Como la retirada, con FIDE ID sólo por él y sin él por el nombre y el año, contra la ficha (`yearKey`).
   - **Al escribir:** la lista FIDE en el SQL de `upsertFidePlayers`, por el índice único de la tabla y sin cargarla (una fila leída más por jugador que está en ella; el nombre sin el año va en `bareName`, sólo en los homónimos); los participantes, las partidas (también el PGN) y los emparejamientos, con `loadHiddenYears`, que se lee en cada escritura como `loadRetired`.
   - A lo ya guardado lo aplica el reprocesado (`{"ocultaciones":true}`, `applyHidden`), sin recorrer las partidas: las candidatas, por FIDE ID y por el FTS (`loadGameCandidates`, el de la retirada). Los participantes sí se recorren enteros (unas 700.000 filas leídas), para encontrar a los homónimos.
+  - Si se borra la fila, vuelven con la importación siguiente; el nombre de los torneos, cuando se releen. El sexo no está en otra parte.
 
 #### Rectificación y limitación
 
@@ -232,6 +297,7 @@ La historia, las medidas y los casos concretos que salieron del `CLAUDE.md` el 3
 
 - `src/lib/me.ts`: «tú» en el dossier: el FIDE ID propio llega en el campo `yo` de un formulario POST (desde el dossier o con «Soy yo» en tu ficha, `readMeField`) y se recuerda en la cookie funcional `yo` (un año, `HttpOnly`); `yo` vacío la borra. Con ella, tu ficha, tu dossier y tu repertorio te hablan a ti (`isOwn`: «Mi dossier», «Tus líneas principales»), y el panel de la lupa enlaza a tu ficha. Es la única cookie (ver `/privacidad`).
   - Guardada o borrada, la ficha y el dossier vuelven a sí mismos por GET (303), con el ancla del formulario (#tu). El dossier no lo hace con un ID que no existe o es el del rival, ni con un nombre: responde al POST diciendo por qué o con la lista (`redirectsAfterForm`). Esa respuesta no entra en bfcache (un POST no puede) y, al volver a ella con Atrás, el navegador pide reenviar el formulario.
+  - Astro rechaza con un 403 los POST de formularios de otros sitios (`security.checkOrigin`, activo por defecto).
   - En el dossier, `yo` puede traer tu nombre en vez del ID (`meName`). La tarjeta «Tú contra…» lista los 8 primeros que casan (`findPlayersByName` en `db/players.ts`, sin el rival), en un formulario donde cada nombre es un botón que envía su ID. No hay parámetro de vuelta desde la ficha: sería una redirección abierta.
 
 #### Por POST, no en la URL
@@ -242,6 +308,10 @@ La historia, las medidas y los casos concretos que salieron del `CLAUDE.md` el 3
 
 - **No prueba quién eres:** cualquiera la consigue con «Soy yo». De un posible menor (ver «Menores»), con su cookie se ven su próxima partida en su ficha, que sale igual en la página del torneo, y en el dossier de un adulto «Tú contra…», que cruza sus partidas con las del adulto.
 
+### `src/lib/charts.ts`
+
+- `src/lib/charts.ts`: escalas y trazados para los gráficos SVG generados en el servidor (evaluación de la partida, ELO).
+
 ### `src/layouts/Base.astro`
 
 - `src/layouts/Base.astro`: cabecera, pie y `<title>`. El nombre del sitio (`siteName`, «MapleChess») va detrás del título de cada página; la portada lo pone delante y Base no lo repite.
@@ -250,6 +320,7 @@ La historia, las medidas y los casos concretos que salieron del `CLAUDE.md` el 3
 
 - **Cabecera:** 64 px en escritorio, con el logo a 40 px y el nombre a `--text-xl`. El logo, el relleno y el hueco crecen de 320 a 640 px de ancho; en el móvil, con el menú en otra fila, mide 98 px a 375. El visor (`100svh - 20rem`) y el explorador del repertorio (`23rem`) le reservan el alto: si la cabecera crece, hay que revisarlos.
   - La pestaña de la sección lleva `aria-current="page"` en su página y `"true"` en lo que cuelga de ella (una ficha, una partida, un torneo). Si no caben (a 250 px, la letra al 150 %), la lista lleva la sombra de borde de `.table-wrap` y se abre en la activa con `scroll-initial-target: nearest`, como mejora progresiva. Su `scroll-padding-inline-start` es el relleno: sin él, Chromium pegaba la primera al borde.
+  - La lupa lleva `title="Buscar jugador"` y, en su panel, con la cookie `yo`, «Mi ficha» (sin D1).
 
 #### Pie
 
@@ -274,11 +345,13 @@ La historia, las medidas y los casos concretos que salieron del `CLAUDE.md` el 3
 
 - `src/pages/`: páginas (formularios GET, funcionan sin JS) y endpoints `.pgn`.
   - La portada (`index.astro`) lleva un tablero de fondo en la esquina de arriba a la derecha, sólo con CSS (`repeating-conic-gradient` de `--board-dark` y `--board-light`, y una máscara). Como mucho al 12 %: sobre una casilla de nogal, el gris queda a 4,9:1. No sale al imprimir ni con `forced-colors` o `prefers-contrast: more`.
+  - `api/admin/sync.ts` lanza y consulta Workflows, protegido con el secreto `ADMIN_TOKEN`.
 
 #### Torneos de la ficha
 
 - **Torneos de la ficha** (`TorneosJugador.astro`, que la ficha usa dos veces): se ven los 20 más recientes y, si hay más de 25, el resto va en un `<details>` «Ver los N anteriores». Con 279 torneos, la ficha medía 36.100 px a 375 de ancho (24-oct-2026). El gráfico de ELO sigue con todos.
   - No se pagina: no ahorraría filas de D1, porque el gráfico, el recuento y el orden por fecha necesitan todos los torneos (838 filas con `LIMIT` y sin él, en esa ficha).
+  - En escritorio, la tabla plegada calcula sus propios anchos de columna.
   - «Nº inicial» y «Partidas con PGN» van en dos líneas (`<br>`): en una sola le quitaban unos 100 px a la columna del torneo. En los torneos por equipos, el número es el tablero y va con el equipo.
   - **Puesto y puntos** (decidido con Jorge el 25-oct-2026, sobre maquetas): la última columna dice el puesto y los puntos de la clasificación del torneo, «1.º · 8 / 9». Antes salían sólo los puntos de las partidas con PGN, que faltan en unos 4 de cada 5 torneos; sin clasificación, siguen ésos.
     - Si no es la final (`standingsOver`), «tras la ronda 5» debajo, y los puntos sobre las rondas jugadas (`standingProgress`). Apilada, tras una coma.
@@ -293,6 +366,7 @@ La historia, las medidas y los casos concretos que salieron del `CLAUDE.md` el 3
 - **Las tres páginas del jugador** (decidido con Jorge el 25-oct-2026, sobre maquetas): bajo la cabecera de la ficha, del dossier y del repertorio van las pestañas «Ficha · Preparar · Repertorio» (`PestanasJugador.astro`; en las tuyas, «Mi ficha · Mi dossier · Mi repertorio»), con `aria-current="page"` en la actual. «Jugadores» del menú lleva `"true"`, y la miga de jugadas del explorador, `"step"`: el lector oye una sola «página actual».
   - Van sin caja, con la raya de las pestañas del menú, porque los `Segmented` de los filtros, justo debajo, llevan caja. A 250 px, las tuyas parten en dos líneas.
   - A un posible menor no se le ponen (`hasDossier`).
+  - Entre el dossier y el repertorio conservan el color, el periodo y el ritmo; en los dos, `color` es el del jugador. Al dossier el color va siempre: sin él, abriría con el de vuestra próxima partida.
   - Sustituyen a «← Ficha de …» de `CabeceraJugador`, que llevaba al mismo sitio.
   - **El repertorio, desde la ficha,** va en «Aperturas más jugadas», que ya va por su color: «Explorar su repertorio con blancas», en su propia fila al final de cada grupo. En la fila del color formaría parte de la cabecera del grupo, y el lector la repetiría en cada celda. En la fila de preparar, «con blancas» era el tuyo en los botones y el suyo en el enlace.
 
@@ -311,9 +385,13 @@ La historia, las medidas y los casos concretos que salieron del `CLAUDE.md` el 3
 
 - **Página del torneo** (`torneos/[id].astro`; decidido con Jorge el 25-oct-2026, sobre maquetas): primero lo que resume el torneo. La próxima ronda, la clasificación (o, sin ella, los participantes), las partidas y, en uno por equipos, las plantillas al final. Sin ninguna partida, «Partidas» va la última, con «Aún no ha empezado.» si empieza después de hoy (`madridDate`). El orden sale de la lista `sections`, y el índice, de la misma.
   - Medido el 25-oct-2026 en producción: la clasificación del CE Absoluto 2025 pasó de 6.393 a 356 px a 375, y de 2.952 a 288 a 1280.
+  - **Índice «En esta página»** (`IndicePagina.astro`, con `items: { href, label, count? }[]`): rótulo y anclas en una línea, sin JS ni D1, sólo con las secciones que hay y la cifra de su título (la de «Participantes» o «Plantillas», no, si la da el resumen). Con menos de dos, no sale. Va sin caja, para que no parezca un `Segmented`.
+  - **La próxima ronda** se titula «Emparejamientos de la ronda N · …». Cada mesa lleva `id="mesa-N"` (`boardIds` de `Emparejamientos`, sólo aquí: en `/partidas` se mezclan torneos) y se resalta con `:target`, a un cuarto de pantalla del borde (`scroll-margin-top: 25svh`). «mesa N» de la próxima partida lleva ahí, y su torneo, a `#proxima-ronda`.
   - **Torneos del grupo** (`PestanasGrupo.astro`; decidido con Jorge el 25-oct-2026, sobre maquetas): las pestañas del «Grupo de Torneos» de info64, bajo la cabecera y antes del índice.
     - La ingesta las lee de la página del torneo, que ya pide (`parseTournamentPage`), y las guarda en `tournaments.related` (migración 0018) si son dos o más e incluyen el propio torneo (`relatedGroup`). Se guarda el grupo entero, también los torneos que no tenemos, y una lectura sin pestañas no lo borra (`coalesce`, como la ciudad).
     - No se rellenó lo guardado: la diaria lo trae en unas dos semanas a los torneos vivos, y los antiguos no lo tienen. Rellenarlo sería pedir `/schedule` (26 KB) de cada torneo, de madrugada.
+    - Salen sólo los guardados, en el orden de info64 (`getTournamentGroup`): los de menores y los sensibles no están. Con uno solo, nada.
+    - **El rótulo** es el del organizador sin las palabras que comparten todos al principio y al final (`groupLabels`): «Absoluto · Primera · Tercera». Se recorta menos si a alguno no le queda una palabra que diga algo o si dos quedan iguales: «Grupo A · Grupo B» y «Sub 2000 · Sub 1600» se quedan como están. Si dice que es de menores o parece sensible, la pestaña lleva el nombre del torneo.
     - **Se desplazan** en una fila, como el menú, y se abren en la actual: partiendo línea, cinco pestañas ocupaban cuatro filas a 250 px.
     - **La consulta** va con `CROSS JOIN` sobre `json_each`, por la clave única: de 4 a 24 filas. Con `JOIN`, SQLite recorría todos los torneos de info64; con `IN (SELECT …)`, contaba además la lista.
   - **Resumen** (decidido con Jorge el 25-oct-2026): bajo la línea gris, «100 jugadores · 7 GM · 16 IM · ELO medio 2211» (`tournamentSummary`), de la clasificación o de los participantes, ya leídos: 0 filas más. Sólo GM e IM, y el ELO medio de los que lo tienen. Por equipos, los títulos de las plantillas y la media del ELO medio de los equipos de la clasificación. No va en los torneos propios de lichess: sus jugadores son sólo los de sus partidas.
@@ -331,16 +409,30 @@ La historia, las medidas y los casos concretos que salieron del `CLAUDE.md` el 3
   - **Siete categorías,** desde 2015: Absoluto, Femenino, Rápido, Relámpago, Veteranos +50 y +65, y División de Honor. Sin las de menores (Sub 16, Sub 18, sus rápidos, las selecciones cadete y la Copa Sub-18), ni los tramos de ELO ni el Universitario. Faltan las ediciones que no están en D1 (el Rápido de 2017 y 2020, el Relámpago de 2015 a 2017 y de 2020, los Veteranos de 2020).
   - **El campeón** es el primero de la clasificación final; con empate, el primero por desempate. Si no lo es, la edición lleva su número inicial (`startRank`), nunca su nombre ni su FIDE ID, porque el repositorio es público: la mejor mujer de un absoluto mixto (desde 2018, y en 2016) o el mejor español de un abierto («1.º español»: el Rápido de 2015, que encabeza un jugador de Perú).
     - Comprobado con la FEDA (hasta 2020), Wikipedia y OlimpBase. En Veteranos +50 de 2015 el primero por desempate tenía Fed. «FID» en el torneo y no hay resultado publicado: se queda él.
+  - **El nombre** es el de la lista FIDE si está en ella (cada torneo lo escribe a su manera) y, si no, el de participante. Los dos ya van saneados.
+  - **Un posible menor** sale sin nombre ni enlace, con el torneo y los puntos. **Quien ha pedido ocultar** lo que dice su categoría no sale en ella: el sexo en Femenino y el año en los Veteranos. En el Absoluto, sí. Lo dice `/privacidad`.
   - **Unas 440 filas por visita** (`getChampions`, una sentencia por edición en un `db.batch`): 4 por edición, 2 en las de equipos y, con número inicial, además tantas como el puesto, hasta llegar a su fila de `standings`.
+  - **Cada temporada** (de agosto a diciembre, de 6 a 8 ediciones), cuando cada campeonato tenga la clasificación final: su `source_key` y, en un mixto, el número inicial de la mejor mujer, a la cabeza de su categoría. Cotejarlo con la noticia de la FEDA. Un test comprueba que no se repiten categoría y año.
 
 #### Páginas legales
 
 - **Páginas legales:** `privacidad.astro` y `aviso-legal.astro`, junto a `acerca.astro` en el pie, con `.page-head` y `.prose`. La política cuenta lo que hace `main`, no lo previsto: el PR que cambia qué se publica, se guarda o se registra de alguien (la ingesta, los menores, las retiradas, una cookie, un proveedor) la actualiza a la vez, con su fecha.
+  - `src/lib/legal.ts`: los titulares (`OWNERS`, «Oscar Arce y Jorge Arce», por ese orden), en el aviso legal y su copyright; el responsable de los datos (`CONTROLLER`, sólo Jorge Arce), en la política; y el correo.
   - `/privacidad` abre con el resumen (la capa básica del art. 11 LOPDGDD) en filas de `.def-list` y un índice que sale de la misma lista que los títulos de los apartados (`sections`). Desde 66rem el índice va a la derecha del texto y se queda fijo al bajar; por debajo, tras el resumen. Sus anclas (`#oposicion`, `#derechos`…) las enlazan el README y las otras páginas: no se cambian.
+  - `/acerca` dice en «Cuándo se actualizan» la hora de la diaria de info64 (`CRON_INFO64_DAILY`): si cambia, también allí.
+
+#### `500.astro`
+
+- `500.astro`: el error de servidor, con `Base`, que no consulta D1, para que salga aunque la base de datos falle. No enseña el error (Astro se lo pasa en la prop `error`): queda en el registro de Workers.
 
 ### `src/middleware.ts`
 
 - `src/middleware.ts`: `Cache-Control: private, max-age=0, must-revalidate` por defecto (`private`: las páginas cambian con la cookie `yo`). Una ruta sólo fija la suya si admite caché (las descargas PGN). Además, `X-Content-Type-Options: nosniff`, `X-Frame-Options: SAMEORIGIN` y HSTS de un año en todas las respuestas, y el límite de ritmo (ver «D1 cobra por filas recorridas»). Sin `Referrer-Policy`: «← Volver» depende del valor por defecto.
+  - Las URL de las fuentes que se enlazan pasan por `sourceUrl` (`src/lib/urls.ts`): sólo `https://info64.org/`, `https://lichess.org/` y `https://www.fcajedrez.es/` (`FCA_SITE`). En los textos, la fuente se nombra con `sourceName` («Ver en fcajedrez.es»).
+
+#### Redirección al dominio
+
+- **Redirección al dominio** (`canonicalUrl`): un GET o HEAD a la URL de workers.dev o a `www` recibe una 301 a la misma dirección de `site` (`astro.config.mjs`). Va por host exacto, así que no redirige las URL de vista previa ni el entorno local. Los POST no se redirigen: tras una 301 llegarían como GET. La 301 lleva la caché por defecto, para que los navegadores no se queden con ella si hay que volver atrás.
 
 #### CSP
 
@@ -362,6 +454,18 @@ La historia, las medidas y los casos concretos que salieron del `CLAUDE.md` el 3
   - Antes, en un móvil lento, el hueco quedaba vacío de 0,3 a 0,55 s y las piezas entraban volando desde la salida.
   - Pintar en el servidor el tablero del visor se descartó: el servidor no ve el `#j`, y con un enlace a una jugada enseñaría otra posición durante unos 0,3 s.
 
+#### Teclado del visor
+
+- **Teclado del visor:**
+  - ← y → valen en toda la página.
+  - ↑, ↓, Inicio, Fin y F (girar), sólo con el foco en el visor: un atajo de una letra en toda la página incumple WCAG 2.1.4.
+  - De la lista de jugadas sólo la actual está en el tabulador (`tabindex` itinerante, `markCurrent`), y el foco la sigue. En la posición inicial, la primera jugada.
+  - Los botones de navegación van en un `role="group"`, no `toolbar`: una barra de herramientas promete moverse con las flechas entre sus botones.
+  - El tablero lleva `aria-hidden`: chessground pinta las coordenadas como texto.
+  - Los botones con atajo lo llevan también en `aria-keyshortcuts` (`ArrowUp Home`, `ArrowLeft`, `ArrowRight`, `ArrowDown End`, `F`): el `title` no lo leen todos los lectores de pantalla y con el teclado no se ve. Mayús+← y Mayús+→ son otra acción y sólo van en el `title`.
+  - En el explorador, ← sigue «← Atrás» (`onKey` en `explorador-repertorio.ts`), con las mismas excepciones y sin repetir con la tecla mantenida, porque cada jugada es una página nueva. Su `title` y su `aria-keyshortcuts` los pone el script: sin JS no hay atajo que anunciar.
+  - Los botones del tablero llevan `touch-action: manipulation`: con `auto`, iOS amplía con dos toques seguidos. Sin JavaScript, las jugadas de la lista no tienen mano ni fondo al pasar (`@media (scripting: enabled)`), porque no hacen nada.
+
 #### La vuelta desde la partida
 
 - **La vuelta desde la partida** (`backTarget` en `params.ts` y `backLink` en `partidas/[id].astro`; 25-oct-2026): «← Volver a la búsqueda», «← Volver a Partidas» (`/partidas` sin búsqueda) y, si es de uno de los dos jugadores, «← Volver a la ficha de {nombre}», al dossier o al repertorio (los tuyos, «a mi ficha»). Tras «Anterior» o «Siguiente del torneo», «← Volver al torneo», a la ronda y la página de la partida (`gameRoundPage`: una fila por mesa anterior de la ronda, por el índice único). Sin lecturas de D1 más que ésa: el Referer se compara con las partidas adyacentes, que ya se leen. Si el enlace es la página de antes, vuelve con el historial (`onBack`).
@@ -374,12 +478,14 @@ La historia, las medidas y los casos concretos que salieron del `CLAUDE.md` el 3
 
 - **Variante propia** (`visor-partida.ts`, `variante.ts`; decidido con Jorge el 24-oct-2026, sobre maquetas): en el visor se mueven las piezas del bando al que le toca, como en el explorador (o se escribe la jugada, ver «Escribir jugadas»), y pulsar una línea del motor la convierte en variante. No se guarda nada ni cambia el PGN.
   - Jugar la jugada de la partida o la de una variante del PGN sigue la partida. Si no, empieza la variante, en una franja encima del motor (en una columna, bajo los botones): «Variante propia», «Volver a la partida» y sus jugadas. Una jugada nueva en mitad de la variante sustituye a lo que seguía.
+  - Dentro de la variante, ←, →, Inicio y Fin la recorren desde la posición de la partida de la que sale; Mayús+← o «Volver a la partida» salen.
   - **En el enlace** (decidido con Jorge el 25-oct-2026): el `#j` lleva la variante hasta la jugada que se ve, `#j12+g1f3+b8c6` (UCI estándar, separada por `+`; desde la inicial, `#j0+e2e4`), y «Copiar enlace» la copia. Al retroceder en la variante se acorta, y con «Volver a la partida» queda `#j12`.
     - Al cargar (y con `hashchange`), `followLink` (`variante.ts`) juega las jugadas desde el nodo: mientras coinciden con la partida o con una variante del PGN, se siguen por ella, y desde la primera que no, son variante propia.
     - Lo que no es legal se descarta sin aviso, y la URL no se toca hasta la siguiente jugada.
     - «Copiar PGN» copia la partida sin la variante, y «Copiar FEN», la posición del tablero. Los tres van en la barra de acciones de la página, dentro de `<visor-partida>`: el botón cuadrado «FEN» salió de los controles el 25-oct-2026.
   - Las líneas del motor son botones (`.pv-line`). Llevan su primera jugada en `data-uci`, para la flecha gris al señalarlas, y se actualizan sobre los mismos nodos: si se rehacían, unas siete veces por segundo, se perdían el clic y el foco. En el explorador, pulsar una línea juega su primera jugada.
   - Deslizar sobre el tablero vale si el dedo no empieza en una pieza del bando que mueve ni hay una pieza elegida (`onlyBoard`): del 76 % del tablero en la apertura al 92 % en el final. Al tocar una pieza, chessground no deja desplazar la página, como en el explorador.
+  - Mover piezas es con puntero, porque chessground no tiene teclado. Con el teclado, la jugada se escribe en el campo «Tu jugada» o se pulsa una línea del motor.
 
 #### Coronar
 
@@ -396,6 +502,7 @@ La historia, las medidas y los casos concretos que salieron del `CLAUDE.md` el 3
   - `readMove` lee SAN o UCI, y también lo que chessops no acepta: «nf3», «0-0», «e2-e4», «bd5» (la «b» minúscula es primero el peón) y los signos de detrás. Una coronación sin pieza abre el diálogo de coronar. Lo ambiguo («Puede ser Nbd4 o Nfd4.», con figuras) y lo ilegal se dicen bajo el campo, en una región viva y con `aria-invalid`.
   - Las jugadas legales van en un `<datalist>`, que se rellena al entrar en el campo y tras cada jugada. Con `list`, el campo es un combobox.
     - `MoveInput.focus()` lo rellena antes de poner el foco: si pasa de vacío a lleno con el foco dentro, Chrome baja hasta el campo aunque se pida `preventScroll`, y en el explorador, tras escribir una jugada, el tablero se iba de la vista en el móvil. Así se ven el tablero y las primeras jugadas, y al teclear el navegador trae el campo.
+  - En el visor, el campo se vacía y se queda con el foco. En el explorador, la jugada lleva a la página siguiente con `#jugada`: no es el id de ningún elemento, el explorador se pone a la vista y el foco vuelve al campo.
 
 #### Lo que puede fallar o limitarse va después del estado
 
@@ -408,6 +515,27 @@ La historia, las medidas y los casos concretos que salieron del `CLAUDE.md` el 3
 #### bfcache
 
 - **bfcache:** todas las páginas entran (salvo la respuesta a un POST del dossier, ver `me.ts`), también la partida con el motor (su Worker se congela y sigue al volver). Comprobado el 23-oct-2026 en Chrome, con el evento `Page.backForwardCacheNotUsed` de CDP: `notRestoredReasons` sólo dice «masked», y Playwright arranca Chromium sin bfcache.
+  - Para no perderlo: nada de `unload` ni de `Cache-Control: no-store`.
+  - Lo que haya que hacer al salir, en `pagehide`: escribir el `#j` pendiente, cerrar el buscador.
+
+### `public/robots.txt`
+
+- `public/robots.txt`: bloquea repertorio, dossier y PGN, que no aportan al índice y cada visita lee todas las partidas de un jugador; el repertorio, además, tiene un enlace por jugada y es un espacio de URL casi infinito. Su línea `Sitemap:` lleva la URL absoluta del dominio, escrita: si cambia `site` (`astro.config.mjs`), cambiarla también.
+
+### Sitemap
+
+- **Sitemap** (`src/pages/sitemap.xml.ts` y `src/pages/sitemap/[parte].xml.ts`): un índice y trozos de hasta 50.000 URL (`src/lib/sitemap.ts`, consultas en `src/lib/db/sitemap.ts`), con la misma URL canónica que da Base.
+  - Las páginas fijas (`paginas.xml`) y, por trozos, los torneos con partidas o al menos dos jugadores (`indexableTournamentSql`), las partidas con jugadas y las fichas con torneos o partidas que no son de posibles menores. Lo que lleva `noindex` no entra.
+  - Torneos y partidas van por rangos de id. Los jugadores, por posición (`LIMIT`/`OFFSET`), porque los FIDE ID son dispersos.
+  - Sin `lastmod`: no hay una fecha fiable de cambio. Un trozo que no está en el índice da 404.
+
+### `public/_headers`
+
+- `public/_headers`: la caché de los archivos estáticos, que no pasan por el Worker (ni por `src/middleware.ts`). El adaptador le añade la regla de `/_astro/` (inmutable, un año); la del motor (`/engine/<versión>/`) es nuestra. El resto de `public/` va con la de Workers por defecto (`public, max-age=0, must-revalidate`). Todos llevan `nosniff` y HSTS, como las respuestas del Worker. No se redirigen al dominio: en workers.dev y `www` se sirven tal cual.
+
+### Nada de comentarios en lo que se sirve
+
+- **Nada de comentarios en lo que se sirve:** en las plantillas, `{/* … */}` y nunca `<!-- … -->`, que Astro deja en el HTML; `public/` va sin comentarios (lo que haya que explicar, aquí o en el script que genera el archivo). El JS y el CSS los minifica Vite.
 
 ### `src/assets/fonts/`
 
@@ -425,6 +553,10 @@ La historia, las medidas y los casos concretos que salieron del `CLAUDE.md` el 3
 
 - **Texto grande:** un mínimo en rem dentro de una rejilla o de un `clamp` va dentro de `min(100%, …)`. Con la letra del navegador al 150 %, `minmax(18rem, 1fr)` (las tarjetas de la portada) o `--board-min` desbordaban el móvil. Para comprobarlo, una ventana de 250 px equivale a 375 px con la letra al 150 %.
 
+#### Visor en horizontal
+
+- **Visor en horizontal:** dos columnas desde 54rem y, en horizontal, desde 40rem, lo que piden el tablero mínimo, el hueco y el lateral. Las cuatro consultas de `VisorPartida.astro` llevan esa condición o su complemento exacto.
+
 #### Barras del móvil
 
 - **Barras del móvil:**
@@ -432,11 +564,15 @@ La historia, las medidas y los casos concretos que salieron del `CLAUDE.md` el 3
   - No es el `--surface` de la cabecera porque Chrome Android descarta los colores con luminosidad HSL mayor que 0,94 (`isThemeColorTooBright`, la media del canal más alto y el más bajo): `--surface` da 0,98 y la barra se quedaba blanca. `--bg` da 0,937, justo en el límite, y el test lo comprueba.
   - En modo oscuro, Chrome no usa el color de la página en una pestaña normal, sólo en apps web instaladas (`shouldAllowThemingInNightMode`). Safari 26 sólo lo usa en la app instalada: en una pestaña tiñe con el fondo de la página, que es el mismo `--bg`.
   - Con `viewport-fit=cover`, la página llega hasta el borde de abajo: en Android 135+ con gestos no sale la barra de Chrome sobre la de gestos, y la franja enseña el fondo de la página.
+  - Todo lo que toque un borde de la pantalla deja su `env(safe-area-inset-*)`: la cabecera (arriba), `.page` (los lados, con `max()`), el pie (abajo) y el popover del buscador. Los insets son físicos, así que van con `padding-left`/`right`, no con `padding-inline`.
   - Un elemento fijo nuevo pegado a un borde (un aviso abajo, una barra) tiene que hacer lo mismo.
 
 #### App web instalable
 
 - **App web instalable** (`/manifest.webmanifest`, `src/lib/manifest.ts`):
+  - Chrome ofrece instalarla con nombre, `start_url`, `display` e iconos de 192 y 512 px. Un test lo comprueba, y también que cada icono exista en `public/`.
+  - `display` es `standalone`, con `display_override: ["minimal-ui"]`: en Android deja atrás y el menú para copiar o compartir el enlace; Safari no lee `display_override` y se queda con `standalone`.
+  - Sin service worker, a propósito: sin datos no sirve funcionar sin conexión, y un HTML guardado apuntaría, tras un despliegue, a CSS y JS con hash que ya no existen.
   - Un manifest no distingue claro y oscuro: Blink no lee colores oscuros del manifest, `color_scheme_dark` sigue en propuesta y los campos `dark_theme_color`/`dark_background_color` de Chrome son de un experimento abandonado. Por eso:
     - **`background_color` es el nogal (`--walnut`, `WALNUT` en `manifest.ts`).** En la app instalada es el fondo de la pantalla de arranque y la franja que asoma bajo la barra de gestos. Con el `--bg` claro, en modo oscuro quedaba una franja crema, y sin `background_color` Chrome pone `#F8F9FA` (`webapp_default_bg`, sin variante oscura). El nogal de la marca no se funde con la página en ningún modo, pero no desentona en ninguno. Un test lo compara con el token;
     - **no lleva `theme_color`, a propósito:** Chrome puede pintar con él la barra de abajo (`WebappIntentDataProvider.getNavigationBarColor`), con el mismo problema de un solo color. Quitarlo (#10) no cambió nada a la vista mientras `background_color` fue el claro. Un test lo comprueba;
@@ -457,6 +593,21 @@ La historia, las medidas y los casos concretos que salieron del `CLAUDE.md` el 3
 #### Enlaces
 
 - **Enlaces:** subrayado fino y tenue (el 40 % de su color), entero al pasar o enfocar. No se quita en ninguna parte: el acento frente al texto da 1,9:1 en claro y 1,5:1 en oscuro, y el color solo no basta (WCAG 1.4.1). En un titular (los nombres del h1 de la partida) el enlace va en el color del texto, con el mismo subrayado, y en el acento al pasar por encima: en acento, era lo que más pesaba de la página.
+
+#### Botón principal
+
+- **Botón principal** (`.button`): la acción principal de la vista (Buscar, preparar la partida). Descargar, copiar y navegar van en `.button.secondary`.
+  - Uno por vista. Si un componente trae el suyo, los demás pasan a secundarios: con la tarjeta de la próxima partida, los dos de «preparar» de la ficha.
+  - Todos a `--text-s` y, si parten línea, centrados y en líneas parejas. El único grande es el del buscador de la portada (`--control-height-l` y `--text-m`).
+  - Inactivo (el extremo de una lista: el visor, la paginación): `aria-disabled="true"`, nunca `disabled`, que pierde el foco justo al llegar al final.
+
+#### Etiquetas
+
+- **Etiquetas** (`.tag`): neutras, para datos de clasificación (el título FIDE, «Equipos» en los torneos por equipos, que son la excepción: los individuales no llevan nada). Con un color de significado, las del cruce del dossier. Nunca con el acento, que es para lo que se pulsa.
+
+#### Cabecera de página
+
+- **Cabecera de página** (`.page-head`): el enlace de vuelta encima (`.back`: «← Volver a …» en la partida; en las páginas del jugador, sus pestañas debajo), h1, sus datos en gris (`.page-meta`, a `--text-s`) y sus acciones (`.page-actions`). La usan la ficha, la partida, el torneo y `CabeceraJugador`.
 
 #### Tablas
 
@@ -487,6 +638,7 @@ La historia, las medidas y los casos concretos que salieron del `CLAUDE.md` el 3
 - `public/favicon.svg`: el logo «!?» con los colores escritos, la misma figura que `Logo.astro`. `scripts/iconos.mjs` (con resvg) saca de él `favicon.ico`, `apple-touch-icon.png` y los iconos del manifest; hay que volver a ejecutarlo si cambia.
   - Los del manifest son `icono-192.png`, `icono-512.png` e `icono-maskable-512.png`. El maskable va a sangre, con el «!?» al 80 %, dentro de la zona segura de Android: el círculo central de radio 0,4 del lado. Medido: el glifo llega a 170,6 px del centro, y la zona segura, a 204,8.
   - También la tarjeta para compartir, `src/assets/compartir.png`: la losa y el nombre apilados en el centro (algunas apps recortan a un cuadrado), sobre arce claro y con una franja de casillas de arce y nogal. Los colores salen de los tokens de `global.css`. resvg no lee WOFF2, así que el nombre va en trazos en `scripts/nombre-marca.svg`, que saca `scripts/nombre-marca.py` (fonttools, brotli y uharfbuzz) de la fuente de los titulares, con su interletraje.
+  - Botones, tarjetas, campos y tablas son **elementos nativos con clases globales** (`.button`, `.button.secondary`, `.link` (un botón con aspecto de enlace, para una acción dentro de una frase), `.card`, `.panel`, `.form-row`, `.field-label`, `.icon`, `.tag`, `select`, `.data-table`, `.group-row`, `.def-list` (filas de rótulo y dato), `.section-head`, `.eco`…). No hay componentes `Button` ni `Card`, porque sólo envolverían el elemento. Las reglas del tablero que comparten el visor y el explorador van en `components/visor/board.css`.
   - Componente sólo cuando se repite estructura o lógica: `Segmented.astro` (selector con enlaces de color, periodo, ritmo, ronda del torneo y pestañas de `/torneos`; las de periodo y ritmo están en `src/lib/options.ts`; con `showLabel`, el rótulo encima, como un campo. Cada opción mide al menos 2,5rem de ancho: las rondas medían 23,6 px en el móvil, y con 8 o más parten línea. Un filtro es `role="group"`, y sólo las pestañas de `/torneos` son un `nav` (`navigation`): con un `nav` por selector, el repertorio tenía siete zonas de navegación), `Icon.astro`, `RitmoSelect.astro`, `FiltrosPlegables.astro` (los filtros del dossier y del repertorio y, con `label="Búsqueda"`, el formulario de `/partidas` y `/torneos` tras buscar: en el móvil, plegados en un `<details>` que resume lo elegido; desde 40rem, siempre a la vista con `::details-content`), `CabeceraJugador.astro`, `ProximasPartidas.astro`, `Emparejamientos.astro` (mesas de la próxima ronda del torneo y, agrupadas por torneo, las de «Se juegan pronto») y `TorneosJugador.astro` (los torneos de la ficha, a la vista y plegados).
 
 ## Comandos
@@ -494,6 +646,13 @@ La historia, las medidas y los casos concretos que salieron del `CLAUDE.md` el 3
 ### `medir.mjs`
 
 - **`medir.mjs`** (25-oct-2026) usa `playwright-core`, fijado en la 1.60.0 porque es la de `chromium-1223`, el que ya está en la carpeta de navegadores de Playwright, que comparten otros proyectos. Dependabot no lo sube. Nunca `playwright install`: puede borrar de esa carpeta versiones que usan otros.
+  - Lanza Chromium con `channel: 'chromium'`: sin él busca `chromium_headless_shell`, que no está descargado.
+  - Sólo abre localhost y maplechess.es, y la carpeta de salida va fuera del repositorio.
+  - En Git Bash, una ruta que empieza por `/` llega como `C:/Program Files/Git/`: hay que lanzarlo con `MSYS_NO_PATHCONV=1` o desde PowerShell.
+
+### `worktree.mjs`
+
+- **`worktree.mjs`** sólo prepara una copia de este repositorio que esté fuera de OneDrive y de la carpeta temporal. El puerto tiene que ser el de una configuración de `.claude/launch.json`: `web` (4321), `web-4322` o `web-4323`, una por sesión que pruebe a la vez.
 
 ## Colaboración
 
@@ -501,19 +660,57 @@ La historia, las medidas y los casos concretos que salieron del `CLAUDE.md` el 3
 
 - **Repositorio público en GitHub** (`origin`, `SOURCE_CODE` en `src/lib/licenses.ts`, enlazado desde el pie y `/acerca`).
 
+#### Nada de datos personales
+
+- **Nada de datos personales:** los fixtures (`test/fixtures/`) son sintéticos. Conservan la estructura de las páginas de info64, del PGN de lichess y de la lista FIDE, las jugadas, los ELO, los títulos y los torneos, pero los nombres y los FIDE ID son inventados, y no hay árbitros ni contactos. Los tests usan nombres inventados («Supuesto Irreal, Otro»). Las únicas personas reales son GM de élite que salen en el ranking de la web, puestos de ejemplo en `scripts/humo.mjs` (que comprueba producción) y en algún comentario del código. Un fixture nuevo se recorta igual: sólo los elementos que lee el parser, con nombres e ID inventados.
+
 #### Capturas del README
 
 - **Capturas del README** (`docs/capturas/`, 25-oct-2026): de producción, en WebP y en claro y oscuro, que el README elige con `<picture>` y `prefers-color-scheme`. Sólo enseñan GM de élite (la partida 53051, Anton Guijarro contra Gukesh, y el dossier de Anton, 2285525) y nombres de torneos: nunca a otros jugadores ni a posibles menores. El visor, a 1280×800 con el motor encendido; las del móvil, a 390×844. Las ocho pesan unos 480 KB.
+
+### `main` es lo desplegado y está protegido
+
+- **`main` es lo desplegado y está protegido:** sólo entra por PR, con la CI en verde (`.github/workflows/ci.yml`: lint, `astro check` más `tsc` del cliente, y tests) y la revisión de la otra persona.
+  - Las acciones de la CI van fijadas por SHA, con la etiqueta en un comentario, porque una etiqueta se puede mover. Las actualiza Dependabot (`.github/dependabot.yml`): cada semana, con 7 días de espera desde que sale una versión, y sus PR pasan por la CI y la revisión como los demás.
 
 ## Fuentes de datos
 
 ### info64.org
 
 - **info64.org** (FEDA): Django sin API.
+  - PGN en `textarea#pgnText`: `/{slug}/games`.
+
+#### Calendario
+
+- Calendario: `/events.json?start=&end=`.
+
+#### Ranking inicial con FIDE ID
+
+- Ranking inicial con FIDE ID: `/{slug}`.
+
+#### Plantillas de equipos
+
+- Plantillas de equipos: `/team/{slug}/listing`.
+
+#### Grupo de torneos
+
+- Grupo de torneos: `#tournament-selection-nav`, encima del título en todas las páginas del torneo. Son las pestañas del «Grupo de Torneos» que crea el organizador, con su orden y su rótulo; la del propio lleva `class="active"`. Los enlaces son relativos, como nuestra `source_key`.
 
 #### Clasificación
 
 - Clasificación: `/{slug}/standings`. El título dice tras qué ronda va («Standings after the round 5»); sin resultados, y en los de equipos aunque hayan terminado, sólo «Standings», y entonces todos tienen 0 puntos. La cabecera de cada desempate es su código de Vega, distinto según el torneo y el año (BH, BH/M1, APRO; en 2015, BucT, Cmlt; en equipos, MatPnt). Las columnas van por la cabecera, porque las clases se repiten (`playerstartrank` vale para el puesto, el número inicial y los puntos). No da las partidas jugadas: sólo el cuadro cruzado, de 680 KB con 100 jugadores. Las rondas del torneo salen de los enlaces del menú.
+
+#### Rondas
+
+- Rondas: `/{slug}/{n}`, con la fecha y la hora en el título y `#pairing-table`; vacía si aún no está emparejada. Los jugadores van por su número del ranking inicial. En el calendario, cada entrada es una ronda («R.3 - …») con su hora.
+
+#### Como máximo 1 petición/s
+
+- **Como máximo 1 petición/s** (servidor modesto): `step.sleep` entre pasos.
+
+#### Sólo de 00:00 a 06:00 de Madrid
+
+- **Sólo de 00:00 a 06:00 de Madrid** (ver «info64 sólo de madrugada»). También cualquier prueba o análisis que pida páginas a info64 desde fuera de la ingesta.
 
 ### Lista FIDE
 
@@ -528,7 +725,9 @@ La historia, las medidas y los casos concretos que salieron del `CLAUDE.md` el 3
 
 - **lichess:** una petición cada vez; ante un 429, esperar al menos un minuto (`LICHESS_STEP`).
   - En `LICHESS_SYNC`, cada petición va en su paso y le sigue una pausa de 6 s (`LICHESS_PAUSE`). Desde Workers, a una petición cada uno o dos segundos, lichess respondía 429 tras unas quince seguidas: la primera tanda de la carga inicial (150 torneos) recibió 43 y tardó 2 h.
+  - Retransmisiones enlazadas desde info64: sólo si info64 no publica el PGN. Se guardan las partidas con jugadas y con algún participante del torneo.
   - Oficiales con españoles (`LICHESS_SYNC`), aunque info64 no las enlace. En la medición de abril a septiembre de 2026 eran unas 1.280 partidas nuevas al mes; el 97 % trae `%clk`.
+  - Volcados mensuales de las oficiales: `database.lichess.org/broadcast/lichess_db_broadcast_YYYY-MM.pgn.zst`, de 12 a 31 MB. Son de pzstd, con marcos saltables; `scripts/lichess-rondas.mjs` los lee para la carga inicial.
 
 #### Con un token de lichess de sólo lectura
 
@@ -541,45 +740,84 @@ La historia, las medidas y los casos concretos que salieron del `CLAUDE.md` el 3
 #### Licencia CC BY-SA 4.0
 
 - **Licencia CC BY-SA 4.0** (database.lichess.org): hay que citar la fuente y la licencia (pie, `/acerca`, torneo y partida, con `CC_BY_SA` de `src/lib/licenses.ts`). Lo derivado se ofrece con la misma licencia.
+  - En los PGN que se descargan o se copian, un comentario antes de la primera jugada (`licensedPgn` en `src/lib/licenses.ts`, que aplican `pgnResponse` y la página de la partida), puesto al entregarlo y no en el guardado.
   - Una partida es de lichess si sus cabeceras `GameURL`, `Site` o `BroadcastURL` llevan una dirección de lichess (`lichessUrl`), no por el torneo: las descargas no leen más filas, y también se encuentran las de info64 que son una exportación de lichess (el CE Absoluto 2025, con su análisis). Lo mismo decide el crédito de debajo de la partida: en esas de info64, «retransmisión de lichess publicada en info64 (FEDA)». Comprobado el 24-oct-2026: ninguna partida de un torneo con `games_source = 'lichess'` va sin esas cabeceras.
   - **La página del torneo** no lee los PGN: lo decide por `games_source` y, en los de info64, por `tournaments.lichess_games` (migración 0016), cuántas de sus partidas guardadas son de lichess según `lichessUrl`. Con todas, «Sus partidas son de una retransmisión de lichess publicada en info64 (FEDA)»; con algunas, «N de sus M partidas…».
+    - La escribe `saveGames`, con `games_count`, sobre las partidas que guarda (una oculta no cuenta). Lo ya guardado lo rellena la pasada completa de `GAMES_REPROCESS`, que suma los lotes y la guarda al final (`saveLichessGames`); retomada con `after`, no la guarda.
     - Medido el 24-oct-2026 en la D1 remota: 22 torneos de info64 con 2.574 partidas de lichess, 15 enteros (los CE Absolutos 2024 y 2025, el Iberoamericano…) y 7 en parte (el Memorial Pedro Lezcano 2026, 104 de 492).
 
 ### Archivo de la Federación Cántabra de Ajedrez (FCA)
 
 - **Archivo de la Federación Cántabra de Ajedrez (FCA)** (`src/ingest/fca/`, `FCA_IMPORT`; decidido con Jorge el 24-oct-2026): https://www.fcajedrez.es/partidas/, PGN estáticos de la Liga Regional y los campeonatos regionales de 2007 a 2010, de 2012 y de 2021, sin cambios desde abril de 2024. Ninguno de sus torneos estaba en info64.
+  - Lee la lista FIDE entera (unas 98.000 filas) una vez por archivo: unos 1,2 millones de filas por importación, que sólo se lanza a mano.
+
+#### Cómo se guarda
+
+- **Cómo se guarda:**
+  - `source = 'fca'`; un torneo por cabecera Event de cada archivo (`source_key`: el archivo y el evento);
+  - el nombre lleva la temporada si no trae año y «(Cantabria)» si no la nombra (`tournamentName`), para la búsqueda por sitio;
+  - la Liga, por equipos.
 
 #### Menores
 
 - **Menores:** los archivos de Sub 12 y Sub 14 no se piden, y de los demás se saltan los torneos de menores por el nombre (`isMinorsTournament`). Quedan 2.683 partidas en 46 torneos. Dos de 2021 vienen sin fecha y no salen en el listado de `/torneos`.
 
+#### Licencia CC BY 4.0
+
+- **Licencia CC BY 4.0** (`CC_BY`; el aviso legal de la FCA la da para todo lo publicado): citar a la federación, enlazar la licencia y avisar de los cambios.
+  - La importación pone el archivo en la cabecera `Source`, que da su aviso en el PGN (`fcaUrl`, `licensedPgn`) y el crédito de la partida.
+  - El torneo lo dice por `source`.
+  - También lo citan el pie, `/acerca`, el aviso legal y `/privacidad`.
+
 #### Sin FIDE ID
 
 - **Sin FIDE ID** (`FideMatcher`, `fca/jugadores.ts`): cada nombre se cruza con la lista FIDE española.
   - Los apellidos y el nombre de pila del archivo tienen que ser el principio de los de la lista: «Mora, Jesus» → «Mora Gutiérrez, Jesús María».
+  - Sin coma (los de 2021, «Nombre Apellidos»), se prueban todas las formas de partirlo.
+  - Sólo con un único candidato en toda la lista y un año de nacimiento que le deje haber jugado (`MIN_AGE`); si no, se queda sin FIDE ID.
   - Medido en local: 884 partidas con los dos jugadores enlazados, 1.343 con uno y 456 sin ninguno; 229 jugadores de la lista.
 
 ## Trampas conocidas
+
+### Botones dentro de un texto
+
+- **Botones dentro de un texto:** el navegador puede partir línea antes y después de un botón, aunque no haya espacio, porque es un elemento atómico. Lo que tiene que ir junto va en un `span` con `white-space: nowrap`: el número y su jugada, en `.ply` (la lista de jugadas y la franja de la variante).
 
 ### Fila entera como enlace (`GamesTable`)
 
 - **Fila entera como enlace (`GamesTable`):** el enlace del resultado se estira sobre la fila con un `::after`. No vale `position: relative` en un `<tr>` de tabla: Safari no lo trata como bloque contenedor hasta la 27 (WebKit 240961), y la capa de cada fila taparía la tabla entera. Por eso las filas son rejillas: con áreas en el móvil y con subgrid en la tabla ancha, todo bajo `@supports (grid-template-columns: subgrid)`. Con `display: grid` la tabla conserva sus roles: compruébalo con el `ariaSnapshot` de Playwright, no con un árbol aplanado. Por debajo de 60rem la cabecera queda sólo para los lectores de pantalla (oculta como `.visually-hidden`).
   - El explorador del repertorio hace lo mismo con la jugada de cada fila (25-oct-2026): con áreas por debajo de 19.5rem y con subgrid por encima, sobre columnas `auto`, así que la columna lateral no cambia. La tabla va a plomo con el título de la tarjeta, así que el fondo al pasar y el anillo del foco van en un `::before` de la fila que sobresale `--space-2` por los lados. La capa tapa la barra de resultados: su desglose («5 ganadas, 3 tablas, 4 perdidas», `formatResults`) va también en el `title` del enlace.
 
+### Lecturas vacías, parciales o con otra forma
+
+- **Lecturas vacías, parciales o con otra forma:** ninguna sustituye lo guardado (guardas en `repo.ts` y en `info64/sync.ts`). Cada guarda que no deja guardar suma un aviso a `salud.*`, y la pasada sigue.
+  - Una página sin título (`PageFormatError`) o un 404 fallan el paso a la primera (`failFast`, con `NonRetryableError`). Si info64 cambia su HTML, la pasada acaba pronto, con los fallos en `salud.info64`, en vez de gastar cinco reintentos por torneo.
+  - Las fechas imposibles de las fuentes (mes 13, año 9999) se guardan como NULL (`validDate` en `src/lib/dates.ts`): con una así, `addDays` lanzaba y la pasada diaria fallaba entera.
+
 ### Partidas repetidas en info64
 
 - **Partidas repetidas en info64:** a veces publica el PGN entero dos veces (Xàbia 2026, CE Absoluto 2024), o la misma partida con y sin relojes o resultado, cortada a las pocas jugadas o sin jugadas. `uniqueGames()` junta las copias con la misma ronda y jugadores cuando la línea de una es el principio de la de la otra: se queda la de más jugadas y, si no tiene resultado, toma el de la otra. Una partida sin terminar (`*`) con otras jugadas, junto a una terminada de los mismos jugadores en la misma ronda, se descarta: es una grabación fallida o un tablero mal asignado. `seq > 0` queda para partidas distintas con la misma ronda.tablero (encuentros por equipos, desempates).
+
+### ELO inverosímiles
+
+- **ELO inverosímiles:** info64 publica a veces otra cosa en la columna FIDE (de 1 a 20 en torneos de menores, 118, 4296). Se guardan como NULL y se quitan del PGN (`plausibleRating`).
+
+### Ritmo
+
+- **Ritmo:** `tournaments.time_control` es texto libre del organizador en varios idiomas («90'+30''», «Estandar: 60 min. + 30 seg.», «90min/40moves+30min/end+30sec»). La cabecera `TimeControl` de los PGN DGT de info64 viene en minutos («30+30»), no en segundos como dice el estándar.
 
 ### D1 cobra por filas recorridas
 
 - **D1 cobra por filas recorridas:** evita `count(*)` y `ORDER BY` sin índice en páginas con tráfico. Los totales de la portada están en `site_totals` y se recalculan al final de cada sincronización.
   - Cuenta las entradas de índice recorridas, no las lecturas de la fila por rowid: medido en producción, 228 partidas por `games_white` son 229 filas, se pidan las columnas que se pidan. Un índice cubriente no abarata nada.
   - Ordenar sin índice vuelve a contar cada fila, aunque haya `LIMIT`, y una función de ventana, otras dos más. Medido el 21-oct-2026 con las 872 partidas de una semana por `games_date`: 872 filas leerlas, 1.731 con `ORDER BY … LIMIT 10` y 3.471 con `ROW_NUMBER() OVER (PARTITION BY tournament_id …)`. Para elegir unas pocas de unos cientos, mejor leerlas sin ordenar y elegir en TS.
+  - Sí cuentan la búsqueda de cada fila por su clave primaria (`json_each` → `games`: dos por partida), cada coincidencia que da el FTS y la lista que materializa `x IN (SELECT …)`.
   - Si una consulta hay que ordenarla, una columna con subconsulta (un recuento) se calcula para cada fila que casa, antes del `LIMIT`. Hay que elegir primero la página de id y calcularla sólo para ella. En `searchTournaments` (25-oct-2026), la lista de «madrid» pasó así de 72.310 filas a 5.146.
 
 #### Búsquedas
 
 - **Búsquedas** (`searchGames`, `searchPlayers`, `findPlayersByName`; 22-oct-2026):
+  - el orden, sin `date IS NULL` ni `rating_std IS NULL`: en DESC, SQLite ya deja los NULL al final y puede seguir el índice;
   - las búsquedas, con tope: el recuento para en 1.001 filas (`countSql`) y las páginas en la 20 (`SEARCH_PAGES`, `searchPage`); por encima, «más de 1000». Si el nombre es el único filtro, se cuenta en el FTS. La ficha (`searchGames` con un jugador, también con un torneo o una lista) no lleva tope: su recuento va por su índice y es barato, así que da el total exacto y todas sus páginas. `pageParam` no pone tope, ni tampoco los torneos;
   - con el nombre o el ECO, el recuento va primero y decide si recorrer el índice del orden (`games_date`, `players_rating_std`) con `INDEXED BY` (`countAndPlan`, `walkOrderIndex`). Con muchas coincidencias se recorre en las 20 páginas. Con un apellido raro, recorrerlo leería la tabla entera. Con el recuento en el tope, en una página honda se cuenta hasta √(necesarias × filas de la tabla) para decidir: «santos» (1.263 partidas) lee en la página 20 6.315 filas ordenándolas y 105.076 recorriendo `games_date`. Con `LIMIT 5000` SQLite prefería ordenar la tabla, así que con sólo fechas se recorre siempre;
   - medido en la D1 remota, en la página 1 y en la 20: `/partidas?desde=1000-01-01`, 1.738 y 4.372 (antes del tope, 529.752 en cualquiera); `?eco=B`, 4.034 y 17.243; «garcia», 21.190 y 42.494; `/jugadores?q=garcia`, 12.241 y 43.918; `?sexo=F`, 22.840;
@@ -599,3 +837,22 @@ La historia, las medidas y los casos concretos que salieron del `CLAUDE.md` el 3
 
 - **Límite de ritmo** (`src/middleware.ts`, binding `RATE_LIMITER`): 30 peticiones caras por minuto y por IP (búsquedas, PGN, dossier, repertorio y los trozos del sitemap que salen de D1; nunca fichas, partidas, torneos ni `/api`), con la página 429 y `Retry-After`. En local, `RATE_LIMIT=on` en `.dev.vars`. `robots.txt` aparta además `/partidas?`, `/jugadores?` y `/torneos?`.
   - **Apagado en producción a propósito** (`"RATE_LIMIT": "off"` en `wrangler.jsonc`; decidido el 22-oct-2026). Va por IP, y la documentación de Cloudflare lo desaconseja porque muchos usuarios comparten la suya: la wifi de una sala de juego o de un club, los datos del móvil. Con 30 por minuto, una sala con muchos jugadores preparando la ronda se bloquearía, y el repertorio hace una petición por jugada. El coste ya lo acotan los topes de las búsquedas. Cuándo encenderlo está en la guía de operación.
+
+### Bloqueos de LaLiga
+
+- **Bloqueos de LaLiga:** en horario de partido, las operadoras españolas bloquean IP de Cloudflare, incluidas las de `workers.dev` (188.114.96.0/23); el dominio también va por Cloudflare. Si la web no carga desde España, mira hayahora.futbol antes de depurar. La API de Cloudflare (wrangler) sigue funcionando.
+
+## Producción
+
+- Las migraciones sólo añaden (tablas, columnas, índices): así el Worker anterior funciona con el esquema nuevo, y volver atrás el Worker no obliga a restaurar D1. La 0017 rehace además el FTS de torneos, porque un FTS5 no admite columnas nuevas. Como conserva el nombre y la columna `name`, el Worker anterior sigue funcionando.
+
+### Vigilancia de la ingesta
+
+- **Vigilancia de la ingesta** (`src/lib/salud.ts`):
+  - Al terminar, cada pasada guarda en `sync_state` la clave `salud.<pasada>` (`info64`, `emparejamientos`, `lichess` y `fide`) con un JSON `{fin, ok, fallos, avisos}`: torneos bien, torneos fallidos y avisos de las guardas. Se escribe con `saveHealth`. Las escriben sólo las pasadas programadas: la diaria de info64 (también `emparejamientos`), las de emparejamientos, la diaria de lichess y la FIDE (también sin cambios en la lista, y con un fallo si la importación falla). Una pasada a mano (`keys`, `chain`, `tours`, `rounds`) no, para no tapar que falle la programada.
+  - `GET /api/estado` es público y sin caché. Da 503 si alguna pasada está caducada (más de 26 h la diaria de info64, sus emparejamientos y la de lichess, y 35 días la FIDE) o con más del 20 % de torneos fallidos, y también si queda algún torneo sensible por revisar (`"sensibles":"por revisar"`, ver «Torneos sensibles») o alguna rectificación sin aplicar (`"rectificaciones":"por revisar"`, ver «Rectificación y limitación»). Si no, 200. Sólo dice el estado de cada pasada y de las revisiones, sin recuentos ni fechas. Una pasada que aún no ha escrito su clave sale «sin datos», con 200.
+
+### Guía de operación
+
+- **Guía de operación:** el dominio, el despliegue paso a paso, volver atrás, las credenciales, las sincronizaciones y cargas en producción, la retirada de datos y qué hacer ante un abuso. Es privada, en un repositorio aparte: quien opera la tiene en `~/.claude/maplechess-operacion/OPERACION.md`, y en otro equipo no existe.
+  - No se importa con `@`: una importación de fuera del proyecto pide aprobarla en un aviso que la app de escritorio no enseña, y la aprobación va por carpeta, así que cada worktree la pediría otra vez.
