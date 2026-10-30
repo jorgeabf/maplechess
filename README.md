@@ -278,7 +278,7 @@ src/styles/        Tokens y estilos globales (en @layer base)
 test/              Tests y fixtures sintéticos con la estructura de las fuentes
 ```
 
-[CLAUDE.md](CLAUDE.md) tiene las notas de trabajo detalladas: decisiones de diseño, trampas conocidas y cómo lanzar las sincronizaciones en producción.
+[CLAUDE.md](CLAUDE.md) tiene las notas de trabajo: las reglas, las trampas conocidas y cómo lanzar las sincronizaciones en producción. El porqué de cada decisión, con sus medidas y sus casos, está en [docs/decisiones.md](docs/decisiones.md).
 
 </details>
 
