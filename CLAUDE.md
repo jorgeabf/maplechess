@@ -427,7 +427,7 @@ curl -X POST localhost:4321/api/admin/sync -H "Authorization: Bearer $TOKEN" \
   - **Capturas del README** (`docs/capturas/`, 25-oct-2026): de producción, en WebP y en claro y oscuro, que el README elige con `<picture>` y `prefers-color-scheme`. Sólo enseñan GM de élite (la partida 53051, Anton Guijarro contra Gukesh, y el dossier de Anton, 2285525) y nombres de torneos: nunca a otros jugadores ni a posibles menores. El visor, a 1280×800 con el motor encendido; las del móvil, a 390×844. Las ocho pesan unos 480 KB.
 - **`main` es lo desplegado y está protegido:** sólo entra por PR, con la CI en verde (`.github/workflows/ci.yml`: lint, `astro check` más `tsc` del cliente, y tests) y la revisión de la otra persona.
   - Las acciones de la CI van fijadas por SHA, con la etiqueta en un comentario, porque una etiqueta se puede mover. Las actualiza Dependabot (`.github/dependabot.yml`): cada semana, con 7 días de espera desde que sale una versión, y sus PR pasan por la CI y la revisión como los demás.
-- **Ramas cortas desde `main` actualizado:** `feature/…` o `fix/…`. El PR explica qué cambia y cómo se ha probado; si toca páginas, también en `pnpm dev`. Antes de abrirlo: `pnpm test`, `pnpm lint` y `pnpm check` (con `pnpm dev` parado).
+- **Ramas cortas desde `main` actualizado:** `feature/…` o `fix/…`. El PR explica qué cambia y cómo se ha probado; si toca páginas, también en `pnpm dev`. Antes de abrirlo: `pnpm test`, `pnpm lint` y `pnpm check`.
 - **Producción sólo la opera quien despliega (Jorge), con su guía privada (ver «Producción»):**
   - `pnpm run deploy`, que sólo despliega `origin/main`;
   - `pnpm db:migrate:remote`;
@@ -489,7 +489,6 @@ curl -X POST localhost:4321/api/admin/sync -H "Authorization: Bearer $TOKEN" \
 
 ## Trampas conocidas
 
-- **No lances `pnpm check` (`astro check`) con `pnpm dev` arrancado:** comparten la caché de Vite (`node_modules/.vite`) y el servidor se queda con dependencias que ya no existen (error «file does not exist … optimize deps»). Para el servidor, comprueba y vuelve a arrancarlo.
 - **Tipos DOM frente a Workers:** los tipos globales de `worker-configuration.d.ts` definen un `Element` (el de HTMLRewriter) que oculta el del DOM. Por eso el código de navegador vive en `src/client/` con su propio `tsconfig`, excluido del raíz, y se carga con `<script src>` en vez de con `import`.
 - **Espacios en Astro:** como en JSX, si el texto parte de línea justo antes de una etiqueta o una expresión, el espacio desaparece. Dentro de un componente, también el espacio solo entre dos expresiones (`<CabeceraJugador>{a} {b}</CabeceraJugador>` salía «ab»). Pon `{' '}` explícito.
 - **Botones dentro de un texto:** el navegador puede partir línea antes y después de un botón, aunque no haya espacio, porque es un elemento atómico. Lo que tiene que ir junto va en un `span` con `white-space: nowrap`: el número y su jugada, en `.ply` (la lista de jugadas y la franja de la variante).

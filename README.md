@@ -255,8 +255,6 @@ curl -X POST localhost:4321/api/admin/sync -H "Authorization: Bearer $TOKEN" \
 | `pnpm db:migrate:local` / `pnpm db:migrate:remote` | Aplica las migraciones a la D1 local o a la de producción |
 | `pnpm openings` | Regenera la tabla de aperturas a partir de `data/openings/` |
 
-`pnpm check` y `pnpm dev` comparten la caché de Vite: para el servidor antes de comprobar.
-
 </details>
 
 <details>
