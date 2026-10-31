@@ -432,7 +432,7 @@ describe('groupLabels', () => {
 		])
 	})
 
-	it('parte por el punto pegado a una palabra con mayúscula', () => {
+	it('parte por el punto seguido de una palabra que empieza por mayúscula', () => {
 		expect(groupLabels(['Torneo Inventado 2026.GrupoA', 'Torneo Inventado 2026.GrupoB'])).toEqual(['GrupoA', 'GrupoB'])
 	})
 

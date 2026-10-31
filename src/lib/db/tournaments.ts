@@ -201,8 +201,8 @@ export async function getTournament(db: D1Database, id: number): Promise<Tournam
 const EDGE_WORD = /^(?:[-–—·:,;|/.]+|de|del|y|e|en)$/i
 
 // Una palabra del rótulo: lo que va entre espacios, partido además por el
-// punto que va pegado a una palabra con mayúscula («2026.GrupoA»). «1.ª»,
-// «1.800», «C.A.» o una fecha no se parten.
+// punto seguido de una palabra que empieza por mayúscula («2026.GrupoA»).
+// «1.ª», «1.800», «C.A.», «2026.A1» o una fecha no se parten.
 const WORD = /(?:[^\s.]|\.(?!\p{Lu}\p{L}))+/gu
 
 // El número romano de una edición, de I a XXXIX: el «IV» de «IV Open».
