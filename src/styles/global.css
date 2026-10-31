@@ -434,6 +434,61 @@
 		margin-top: var(--space-3);
 	}
 
+	/*
+	 * Pestañas justo bajo la cabecera de página, más cerca de ella que del
+	 * contenido: las del grupo de torneos (PestanasGrupo) y las páginas de un
+	 * jugador (PestanasJugador). Sin caja, con el subrayado de las del menú.
+	 * Cada componente pone la raya de debajo y lo que hacen si no caben.
+	 */
+	.page-tabs {
+		margin: calc(-1 * var(--space-3)) 0 var(--space-5);
+	}
+
+	.page-tabs ul {
+		display: flex;
+		margin: 0;
+		padding: 0;
+		list-style: none;
+	}
+
+	.page-tabs li {
+		display: flex;
+	}
+
+	/* De 44 px de alto: se tocan con el dedo. */
+	.page-tabs a {
+		display: flex;
+		align-items: center;
+		min-block-size: 2.75rem;
+		border-block-end: 3px solid transparent;
+		color: var(--text-muted);
+		font-size: var(--text-s);
+		font-weight: var(--weight-strong);
+		text-decoration: none;
+		white-space: nowrap;
+	}
+
+	.page-tabs a:hover {
+		border-block-end-color: var(--border-strong);
+		color: var(--text);
+	}
+
+	.page-tabs a[aria-current] {
+		border-block-end-color: var(--accent);
+		color: var(--accent);
+	}
+
+	/* En alto contraste, la actual con el color de selección del sistema, como el menú. */
+	@media (forced-colors: active) {
+		.page-tabs a {
+			border-block-end-color: Canvas;
+		}
+
+		.page-tabs a[aria-current] {
+			border-block-end-color: Highlight;
+		}
+	}
+
 	.muted {
 		color: var(--text-muted);
 	}
@@ -1065,8 +1120,9 @@
 	}
 
 	/* Impresión: el dossier del rival se puede llevar en papel. Siempre en claro,
-	   sin partir las tarjetas entre páginas y sin el enlace de vuelta; cada
-	   componente oculta sus controles en su propio estilo. */
+	   sin partir las tarjetas entre páginas y sin el enlace de vuelta ni las
+	   pestañas, que en papel no llevan a ninguna parte; cada componente oculta
+	   sus controles en su propio estilo. */
 	@media print {
 		:root {
 			color-scheme: light;
@@ -1076,7 +1132,8 @@
 			break-inside: avoid;
 		}
 
-		.back {
+		.back,
+		.page-tabs {
 			display: none;
 		}
 	}

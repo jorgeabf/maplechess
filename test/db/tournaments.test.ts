@@ -431,6 +431,25 @@ describe('groupLabels', () => {
 			'CE Absoluto'
 		])
 	})
+
+	it('separa las palabras también por el punto y deja el trozo del rótulo tal como viene', () => {
+		expect(groupLabels(['Torneo Inventado 2026.GrupoA', 'Torneo Inventado 2026.GrupoB'])).toEqual(['GrupoA', 'GrupoB'])
+		expect(groupLabels(['Grupo A.1 Inventado', 'Grupo A.2 Inventado'])).toEqual(['Grupo A.1', 'Grupo A.2'])
+	})
+
+	it('no cuenta el número romano de la edición como una palabra que diga algo', () => {
+		expect(groupLabels(['IV Open Inventado de Ajedrez', 'III Open Inventado de Ajedrez', 'II Open Inventado de Ajedrez'])).toEqual([
+			'IV Open',
+			'III Open',
+			'II Open'
+		])
+		expect(groupLabels(['Open Inventado CD', 'Open Inventado CM'])).toEqual(['CD', 'CM'])
+	})
+
+	it('devuelve sus palabras sólo al rótulo que se queda sin una que diga algo, primero por el principio', () => {
+		expect(groupLabels(['Open 2026', 'Open 2026 - Rápido'])).toEqual(['Open 2026', 'Rápido'])
+		expect(groupLabels(['Final X Circuito Inventado', 'Final B X Circuito Inventado'])).toEqual(['Final', 'Final B'])
+	})
 })
 
 describe('tournamentSummary', () => {

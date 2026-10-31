@@ -18,7 +18,7 @@ const { tabs, current } = Astro.props
 
 {
 	tabs.length > 1 && (
-		<nav class="group-tabs" aria-label="Torneos del grupo">
+		<nav class="page-tabs" aria-label="Torneos del grupo">
 			<ul>
 				{tabs.map((tab) => (
 					<li>
@@ -33,12 +33,9 @@ const { tabs, current } = Astro.props
 }
 
 <style>
-	/* Justo bajo la cabecera de la página (.page-head), más cerca de ella que del contenido. */
-	.group-tabs {
-		margin: calc(-1 * var(--space-3)) 0 var(--space-5);
-	}
-
 	/*
+	 * Lo común de las pestañas, en .page-tabs (global.css).
+	 *
 	 * Un grupo puede tener muchas pestañas o rótulos largos: en una fila, que se
 	 * desplaza como el menú de la cabecera y se abre en la actual. Una sombra
 	 * en el borde dice que hay más por ese lado, como en .table-wrap: sombras
@@ -55,12 +52,9 @@ const { tabs, current } = Astro.props
 	 * primera a plomo con el título.
 	 */
 	ul {
-		display: flex;
 		gap: 0 var(--space-4);
 		margin: 0 calc(-1 * var(--space-1));
-		padding: 0;
 		scroll-padding-inline: var(--space-5);
-		list-style: none;
 		overflow-x: auto;
 		overscroll-behavior-x: contain;
 		scrollbar-width: none;
@@ -72,62 +66,23 @@ const { tabs, current } = Astro.props
 			linear-gradient(to left, var(--border-strong), transparent) right / var(--space-3) 100% no-repeat;
 	}
 
-	li {
-		display: flex;
-	}
-
-	/* De 44 px de alto: se tocan con el dedo. */
 	a {
-		display: flex;
-		align-items: center;
-		min-block-size: 2.75rem;
 		padding-inline: var(--space-1);
-		border-block-end: 3px solid transparent;
-		color: var(--text-muted);
-		font-size: var(--text-s);
-		font-weight: var(--weight-strong);
-		text-decoration: none;
-		white-space: nowrap;
 	}
 
 	a:focus-visible {
 		outline-offset: -2px;
 	}
 
-	a:hover {
-		border-block-end-color: var(--border-strong);
-		color: var(--text);
-	}
-
-	/* Si no caben, la lista se abre desplazada hasta la actual (scroll-initial-target). */
+	/* Si no caben, la lista se abre desplazada hasta la actual. */
 	a[aria-current] {
-		border-block-end-color: var(--accent);
-		color: var(--accent);
 		scroll-initial-target: nearest;
 	}
 
-	/*
-	 * En alto contraste, la actual con el color de selección del sistema, como
-	 * el menú. El navegador quita los degradados: la raya pasa a ser un borde.
-	 */
+	/* En alto contraste el navegador quita los degradados: la raya pasa a ser un borde. */
 	@media (forced-colors: active) {
 		ul {
 			border-block-end: 1px solid;
-		}
-
-		a {
-			border-block-end-color: Canvas;
-		}
-
-		a[aria-current] {
-			border-block-end-color: Highlight;
-		}
-	}
-
-	/* En papel no llevan a ninguna parte. */
-	@media print {
-		.group-tabs {
-			display: none;
 		}
 	}
 </style>
