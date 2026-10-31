@@ -60,7 +60,7 @@ const outOf = (points: number, of: number | null) => (of ? `${formatPoints(point
 								)}
 							</td>
 							<td class="num">{formatRange(t.startDate, t.endDate)}</td>
-							<td>{t.city}</td>
+							<td class="city">{t.city}</td>
 							{/* Apilada en el móvil (.stack): cada cifra lleva su rótulo, sólo si la hay. */}
 							<td class="end num stat">{t.rating && <><span class="cell-label" aria-hidden="true">ELO </span>{t.rating}</>}</td>
 							<td class="end num stat">{!t.team && t.startRank ? <><span class="cell-label" aria-hidden="true">Nº inicial </span>{t.startRank}</> : null}</td>
@@ -108,6 +108,15 @@ const outOf = (points: number, of: number | null) => (of ? `${formatPoints(point
 	/* En los torneos por equipos, debajo del nombre del torneo: con qué equipo jugó. */
 	.team {
 		display: block;
+	}
+
+	/*
+	 * La ciudad parte línea: entera, una dirección larga hacía desplazarse la
+	 * tabla en paralelo. Sin el mínimo de .wrap (12rem), que ensanchaba las
+	 * cortas y partía más nombres de torneo.
+	 */
+	.tournaments .city {
+		white-space: normal;
 	}
 
 	/*
