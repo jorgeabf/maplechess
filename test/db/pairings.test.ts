@@ -3,9 +3,11 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { parseRoundPage, type TournamentPlayer } from '../../src/ingest/info64/parse'
 import { deletePastPairings, replacePairings, replaceParticipations, upsertTournament } from '../../src/ingest/repo'
 import {
+	getPairedRounds,
 	getTopUpcomingPairings,
 	getUpcomingGames,
 	getUpcomingRound,
+	PAIRED_ROUNDS_SQL,
 	PAIRINGS_BY_KEY_SQL
 } from '../../src/lib/db/pairings'
 import { formatRoundTime } from '../../src/lib/format'
@@ -242,6 +244,65 @@ describe('emparejamientos', () => {
 				.bind('[[1,2]]', 2008)
 				.all<{ detail: string }>()
 			expect(results.map((r) => r.detail).join(' | ')).toContain('PRIMARY KEY (tournament_id=? AND board=?)')
+		})
+	})
+
+	describe('próxima ronda de cada torneo, sin los jugadores', () => {
+		/** Un open de info64 con tres mesas antes que Bizkaia, uno ya empezado y uno de lichess. */
+		async function loadOthers(): Promise<void> {
+			const tournament = (source: string, key: string) =>
+				upsertTournament(db, {
+					source,
+					key,
+					type: 'individual',
+					name: key,
+					city: null,
+					startDate: '2026-10-17',
+					endDate: '2026-10-25',
+					timeControl: null,
+					url: `https://${source}.org/${key}`,
+					syncedAt: '2026-10-18T00:00:00.000Z'
+				})
+			const open = await tournament('info64', 'open-de-otono')
+			const started = await tournament('info64', 'ya-empezado')
+			const lichess = await tournament('lichess', 'zK5CoVvF')
+			const boards: [number, number, string][] = [
+				[open, 1, '2026-10-22 17:00'],
+				[open, 2, '2026-10-22 17:00'],
+				[open, 3, '2026-10-22 17:00'],
+				[started, 1, '2026-10-20 10:00'],
+				[lichess, 1, '2026-10-22 17:00']
+			]
+			await db.batch(
+				boards.map(([id, board, startsAt]) =>
+					db
+						.prepare(
+							`INSERT INTO pairings (tournament_id, round, board, starts_at, white_rank, white_name, black_rank, black_name)
+							VALUES (?1, 5, ?2, ?3, ?2, 'Blancas, Una', ?2 + 50, 'Negras, Otra')`
+						)
+						.bind(id, board, startsAt)
+				)
+			)
+		}
+
+		it('una por torneo de info64, con su ronda, su hora y sus mesas, por hora; sin las empezadas', async () => {
+			await loadRound()
+			await loadOthers()
+			expect(await getPairedRounds(db, BEFORE)).toEqual([
+				{ slug: 'open-de-otono', round: 5, startsAt: '2026-10-22 17:00', boards: 3 },
+				{ slug: 'campeonato-absoluto-de-bizkaia-2026', round: 2, startsAt: '2026-10-24 16:00', boards: 7 }
+			])
+			expect(await getPairedRounds(db, '2026-10-22 17:00')).toEqual([
+				{ slug: 'campeonato-absoluto-de-bizkaia-2026', round: 2, startsAt: '2026-10-24 16:00', boards: 7 }
+			])
+			expect(await getPairedRounds(db, '2026-10-24 16:00')).toEqual([])
+		})
+
+		it('recorre pairings y busca cada torneo por su clave primaria', async () => {
+			const { results } = await db.prepare(`EXPLAIN QUERY PLAN ${PAIRED_ROUNDS_SQL}`).bind(BEFORE).all<{ detail: string }>()
+			const plan = results.map((r) => r.detail)
+			expect(plan).toContain('SCAN pairings')
+			expect(plan).toContain('SEARCH t USING INTEGER PRIMARY KEY (rowid=?)')
 		})
 	})
 })

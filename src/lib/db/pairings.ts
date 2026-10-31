@@ -95,6 +95,41 @@ export async function getUpcomingRound(
 	}
 }
 
+/** Próxima ronda emparejada de un torneo de info64, sin los jugadores (/api/emparejamientos). */
+export interface PairedRoundSummary {
+	/** source_key: el slug de la URL de info64. */
+	slug: string
+	round: number
+	/** 'YYYY-MM-DD HH:MM', hora local. */
+	startsAt: string
+	/** Filas de la ronda en pairings. */
+	boards: number
+}
+
+/**
+ * La próxima ronda de cada torneo, de las que aún no han empezado (la hora, en
+ * ?1). Sólo hay una ronda por torneo (replacePairings la sustituye entera), así
+ * que su número y su hora son los de cualquiera de sus mesas. Recorre pairings
+ * entera, que es pequeña, y busca cada torneo por su clave primaria. Con JOIN,
+ * el planificador recorría antes los torneos de info64 por el índice único de
+ * (source, source_key): 8.830 filas en vez de 398, con 8.700 torneos y 360 mesas.
+ */
+export const PAIRED_ROUNDS_SQL = `SELECT t.source_key AS slug, r.round, r.startsAt, r.boards
+	FROM (SELECT tournament_id, round, starts_at AS startsAt, count(*) AS boards
+		FROM pairings WHERE starts_at > ?1 GROUP BY tournament_id) r
+	CROSS JOIN tournaments t ON t.id = r.tournament_id
+	WHERE t.source = 'info64'`
+
+/**
+ * La próxima ronda de cada torneo que ya está emparejada y aún no ha empezado,
+ * con el criterio de getUpcomingRound, por hora y slug. Los torneos sensibles y
+ * los de menores no están: la ingesta no los guarda.
+ */
+export async function getPairedRounds(db: D1Database, now = madridDateTime(new Date())): Promise<PairedRoundSummary[]> {
+	const { results } = await db.prepare(PAIRED_ROUNDS_SQL).bind(now).all<PairedRoundSummary>()
+	return results.sort((a, b) => a.startsAt.localeCompare(b.startsAt) || a.slug.localeCompare(b.slug))
+}
+
 /** Una mesa de la próxima ronda de cualquier torneo. */
 export interface UpcomingPairing extends RoundPairing {
 	tournamentId: number
