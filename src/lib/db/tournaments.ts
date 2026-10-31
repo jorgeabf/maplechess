@@ -200,42 +200,72 @@ export async function getTournament(db: D1Database, id: number): Promise<Tournam
 // de «- Fase Final», el «de» de «de Veteranos S50».
 const EDGE_WORD = /^(?:[-–—·:,;|/.]+|de|del|y|e|en)$/i
 
+// Una palabra del rótulo: lo que va entre espacios, partido además por el
+// punto seguido de una palabra que empieza por mayúscula («2026.GrupoA»).
+// «1.ª», «1.800», «C.A.», «2026.A1» o una fecha no se parten.
+const WORD = /(?:[^\s.]|\.(?!\p{Lu}\p{L}))+/gu
+
+// El número romano de una edición, de I a XXXIX: el «IV» de «IV Open».
+const EDITION = /^(?=[IVX])X{0,3}(?:IX|IV|V?I{0,3})$/
+
 /**
- * Una palabra que dice algo: con alguna letra, de dos caracteres o más y no
- * de borde. «S50» u «O11» sí; «A», «2» o «2000» solas no.
+ * Una palabra que dice algo: con alguna letra, de dos caracteres o más, no
+ * de borde ni el número de la edición. «S50», «O11» o «CD» sí; «A», «2»,
+ * «2000» o «IV» solas no.
  */
-const isWord = (word: string) => !EDGE_WORD.test(word) && /\p{L}/u.test(word) && /[\p{L}\p{N}]{2}/u.test(word)
+const isWord = (word: string) =>
+	!EDGE_WORD.test(word) && !EDITION.test(word) && /\p{L}/u.test(word) && /[\p{L}\p{N}]{2}/u.test(word)
 
 /**
  * Los rótulos de las pestañas sin las palabras que comparten todos al
  * principio y al final: «Campeonato Absoluto de Bizkaia 2026» y «Campeonato
- * Primera de Bizkaia 2026» pasan a «Absoluto» y «Primera». Se recorta menos,
- * primero por el principio, si a alguno no le queda una palabra que diga algo
- * («Grupo A» y «Grupo B», «Sub 2000» y «Sub 1600» se quedan como están) o si
- * dos quedan iguales al quitar el «de» del borde.
+ * Primera de Bizkaia 2026» pasan a «Absoluto» y «Primera». «2026.GrupoA»
+ * son dos palabras (WORD), y lo que queda es el trozo del rótulo tal como
+ * viene.
+ *
+ * Al que se queda sin una palabra que diga algo se le devuelven sólo a él las
+ * suyas, primero por el principio: «Open 2026» y «Open 2026 - Rápido» pasan a
+ * «Open 2026» y «Rápido»; «Grupo A» y «Grupo B», «Sub 2000» y «Sub 1600» se
+ * quedan como están. Si dos quedan iguales al quitar el «de» del borde, se
+ * recorta menos a todos.
  */
 export function groupLabels(labels: readonly string[]): string[] {
 	if (labels.length < 2) return [...labels]
-	const words = labels.map((label) => label.split(/\s+/).filter(Boolean))
+	const tokens = labels.map((label) => [...label.matchAll(WORD)])
+	const words = tokens.map((t) => t.map((match) => match[0]))
 	const shared = (at: (w: string[]) => string | undefined) =>
 		words.every((w) => at(w)?.localeCompare(at(words[0]) ?? '', 'es', { sensitivity: 'base' }) === 0)
 	const shortest = Math.min(...words.map((w) => w.length))
 	let head = 0
-	while (head < shortest - 1 && shared((w) => w[head])) head++
+	while (head < shortest && shared((w) => w[head])) head++
 	let tail = 0
-	while (head + tail < shortest - 1 && shared((w) => w.at(-1 - tail))) tail++
-	for (;;) {
-		const rest = words.map((w) => {
-			const kept = w.slice(head, w.length - tail)
-			while (head > 0 && kept.length > 1 && EDGE_WORD.test(kept[0])) kept.shift()
-			while (tail > 0 && kept.length > 1 && EDGE_WORD.test(kept.at(-1)!)) kept.pop()
-			return kept.join(' ')
-		})
-		const distinct = new Set(rest).size === new Set(labels).size
-		if (head + tail === 0 || (distinct && rest.every((label) => label.split(' ').some(isWord)))) return rest
-		if (head > 0) head--
-		else tail--
+	while (head + tail < shortest && shared((w) => w.at(-1 - tail))) tail++
+	// El rótulo i sin h palabras al principio ni t al final, ni lo que quede en
+	// el borde; null si no le queda una palabra que diga algo.
+	const cut = (i: number, h: number, t: number) => {
+		const w = words[i]
+		let from = h
+		let to = w.length - t
+		while (h > 0 && to - from > 1 && EDGE_WORD.test(w[from])) from++
+		while (t > 0 && to - from > 1 && EDGE_WORD.test(w[to - 1])) to--
+		if (!w.slice(from, to).some(isWord)) return null
+		return labels[i].slice(tokens[i][from].index, tokens[i][to - 1].index + w[to - 1].length)
 	}
+	for (; head + tail > 0; head > 0 ? head-- : tail--) {
+		const rest = labels.map((_, i) => {
+			let h = head
+			let t = tail
+			let label = cut(i, h, t)
+			while (label === null && h + t > 0) {
+				if (h > 0) h--
+				else t--
+				label = cut(i, h, t)
+			}
+			return label
+		})
+		if (rest.every((label): label is string => label !== null) && new Set(rest).size === new Set(labels).size) return rest
+	}
+	return [...labels]
 }
 
 /** Una pestaña del grupo: un torneo guardado. */
