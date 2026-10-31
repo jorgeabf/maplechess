@@ -414,6 +414,21 @@ La historia, las medidas, los casos concretos y el detalle de cada página que s
   - **Unas 440 filas por visita** (`getChampions`, una sentencia por edición en un `db.batch`): 4 por edición, 2 en las de equipos y, con número inicial, además tantas como el puesto, hasta llegar a su fila de `standings`.
   - **Cada temporada** (de agosto a diciembre, de 6 a 8 ediciones), cuando cada campeonato tenga la clasificación final: su `source_key` y, en un mixto, el número inicial de la mejor mujer, a la cabeza de su categoría. Cotejarlo con la noticia de la FEDA. Un test comprueba que no se repiten categoría y año.
 
+#### `api/emparejamientos.ts`
+
+- `api/emparejamientos.ts` (#92, 31-oct-2026): la próxima ronda ya emparejada de cada torneo de info64 que aún no ha empezado, `{"rondas":[{"info64":"<slug>","ronda":4,"empieza":"2026-11-07 16:00","mesas":7}]}`. La lee el build diario de la web de la Federación Alavesa (fadaajedrez.com), que así avisa en su portada en cuanto info64 publica los emparejamientos, en vez de 2 días antes a ciegas.
+  - `info64` es `tournaments.source_key`, lo que va tras `https://info64.org/`; `empieza`, `starts_at` tal cual (hora local de España); `mesas`, sus filas en `pairings`. Una entrada por torneo, por hora y slug, con el criterio de `getUpcomingRound` (`starts_at` posterior a `madridDateTime`).
+  - Sin nombres, FIDE ID ni ELO: `/privacidad` no cambia. Los torneos sensibles y los de menores no están porque no se guardan, y las páginas públicas no filtran nada más al leer: enseña lo mismo que ellas.
+  - 503 (`no-store`) si la pasada `emparejamientos` da la alarma (`isAlarm`, la regla de `/api/estado`): lo guardado puede no ser lo publicado, y la FADA vuelve a deducir la ronda de las fechas. «sin datos» da 200, como allí. Si no, `public, max-age=300`: los datos cambian una vez por noche.
+  - **Filas:** 398 en una siembra local de 8.700 torneos y 360 mesas (`pairings` entera y cada torneo por su clave primaria), y 12 la salud. Con `JOIN` en vez de `CROSS JOIN`, 8.830: el planificador recorría antes los torneos de info64 por el índice único de `(source, source_key)`. Un test comprueba el plan.
+  - **Lo que no sale,** así que un torneo que falta no siempre está «aún sin emparejar»:
+    - los torneos por equipos: no se leen sus emparejamientos;
+    - los de menores y los sensibles: no se guardan;
+    - la segunda ronda de un día con dos: se empareja durante el día, y la pasada es de madrugada;
+    - las rondas a más de 8 días (`PAIRINGS_DAYS`);
+    - una ronda emparejada después de la pasada: sale al día siguiente.
+  - **La hora:** la FADA lo lee contando con que la diaria de info64 ya ha acabado (los emparejamientos son lo último). Si lo lee a mitad, recibe lo de la noche anterior, que sigue valiendo: cada torneo se sustituye en un solo `batch`. Si cambia `CRON_INFO64_DAILY`, hay que avisarles.
+
 #### Páginas legales
 
 - **Páginas legales:** `privacidad.astro` y `aviso-legal.astro`, junto a `acerca.astro` en el pie, con `.page-head` y `.prose`. La política cuenta lo que hace `main`, no lo previsto: el PR que cambia qué se publica, se guarda o se registra de alguien (la ingesta, los menores, las retiradas, una cookie, un proveedor) la actualiza a la vez, con su fecha.
@@ -427,7 +442,7 @@ La historia, las medidas, los casos concretos y el detalle de cada página que s
 
 ### `src/middleware.ts`
 
-- `src/middleware.ts`: `Cache-Control: private, max-age=0, must-revalidate` por defecto (`private`: las páginas cambian con la cookie `yo`). Una ruta sólo fija la suya si admite caché (las descargas PGN). Además, `X-Content-Type-Options: nosniff`, `X-Frame-Options: SAMEORIGIN` y HSTS de un año en todas las respuestas, y el límite de ritmo (ver «D1 cobra por filas recorridas»). Sin `Referrer-Policy`: «← Volver» depende del valor por defecto.
+- `src/middleware.ts`: `Cache-Control: private, max-age=0, must-revalidate` por defecto (`private`: las páginas cambian con la cookie `yo`). Una ruta sólo fija la suya si admite caché (las descargas PGN y `/api/emparejamientos`). Además, `X-Content-Type-Options: nosniff`, `X-Frame-Options: SAMEORIGIN` y HSTS de un año en todas las respuestas, y el límite de ritmo (ver «D1 cobra por filas recorridas»). Sin `Referrer-Policy`: «← Volver» depende del valor por defecto.
   - Las URL de las fuentes que se enlazan pasan por `sourceUrl` (`src/lib/urls.ts`): sólo `https://info64.org/`, `https://lichess.org/` y `https://www.fcajedrez.es/` (`FCA_SITE`). En los textos, la fuente se nombra con `sourceName` («Ver en fcajedrez.es»).
 
 #### Redirección al dominio
