@@ -198,7 +198,12 @@ export async function getTournament(db: D1Database, id: number): Promise<Tournam
 
 // Lo que queda en el borde de un rótulo recortado y también se quita: el guion
 // de «- Fase Final», el «de» de «de Veteranos S50».
-const EDGE_WORD = /^(?:[-–—·:,;|/]+|de|del|y|e|en)$/i
+const EDGE_WORD = /^(?:[-–—·:,;|/.]+|de|del|y|e|en)$/i
+
+// Una palabra del rótulo: lo que va entre espacios, partido además por el
+// punto que va pegado a una palabra con mayúscula («2026.GrupoA»). «1.ª»,
+// «1.800», «C.A.» o una fecha no se parten.
+const WORD = /(?:[^\s.]|\.(?!\p{Lu}\p{L}))+/gu
 
 // El número romano de una edición, de I a XXXIX: el «IV» de «IV Open».
 const EDITION = /^(?=[IVX])X{0,3}(?:IX|IV|V?I{0,3})$/
@@ -214,9 +219,9 @@ const isWord = (word: string) =>
 /**
  * Los rótulos de las pestañas sin las palabras que comparten todos al
  * principio y al final: «Campeonato Absoluto de Bizkaia 2026» y «Campeonato
- * Primera de Bizkaia 2026» pasan a «Absoluto» y «Primera». Las palabras van
- * separadas por espacios o por puntos («2026.GrupoA»), y lo que queda es el
- * trozo del rótulo tal como viene.
+ * Primera de Bizkaia 2026» pasan a «Absoluto» y «Primera». «2026.GrupoA»
+ * son dos palabras (WORD), y lo que queda es el trozo del rótulo tal como
+ * viene.
  *
  * Al que se queda sin una palabra que diga algo se le devuelven sólo a él las
  * suyas, primero por el principio: «Open 2026» y «Open 2026 - Rápido» pasan a
@@ -226,7 +231,7 @@ const isWord = (word: string) =>
  */
 export function groupLabels(labels: readonly string[]): string[] {
 	if (labels.length < 2) return [...labels]
-	const tokens = labels.map((label) => [...label.matchAll(/[^\s.]+/g)])
+	const tokens = labels.map((label) => [...label.matchAll(WORD)])
 	const words = tokens.map((t) => t.map((match) => match[0]))
 	const shared = (at: (w: string[]) => string | undefined) =>
 		words.every((w) => at(w)?.localeCompare(at(words[0]) ?? '', 'es', { sensitivity: 'base' }) === 0)

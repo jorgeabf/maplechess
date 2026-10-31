@@ -432,9 +432,14 @@ describe('groupLabels', () => {
 		])
 	})
 
-	it('separa las palabras también por el punto y deja el trozo del rótulo tal como viene', () => {
+	it('parte por el punto pegado a una palabra con mayúscula', () => {
 		expect(groupLabels(['Torneo Inventado 2026.GrupoA', 'Torneo Inventado 2026.GrupoB'])).toEqual(['GrupoA', 'GrupoB'])
-		expect(groupLabels(['Grupo A.1 Inventado', 'Grupo A.2 Inventado'])).toEqual(['Grupo A.1', 'Grupo A.2'])
+	})
+
+	it('no parte el punto de un número, un ordinal o una fecha', () => {
+		expect(groupLabels(['Open Sub 1.800', 'Open Sub 2.800'])).toEqual(['Sub 1.800', 'Sub 2.800'])
+		expect(groupLabels(['Grupo 1.A', 'Grupo 2.A'])).toEqual(['Grupo 1.A', 'Grupo 2.A'])
+		expect(groupLabels(['Jornada 15.03.2026', 'Jornada 22.03.2026'])).toEqual(['Jornada 15.03.2026', 'Jornada 22.03.2026'])
 	})
 
 	it('no cuenta el número romano de la edición como una palabra que diga algo', () => {
