@@ -1103,9 +1103,19 @@ function* fideRows(players: FidePlayer[], year: number, retired: Retired) {
 		if (retired.ids.has(p.fideId)) continue
 		const name = publicName(p.name, year)
 		const bareName = withoutHomonymYear(name)
-		yield { ...p, name, ...(bareName === name ? {} : { bareName }), inactive: p.inactive ? 1 : 0 }
+		yield {
+			...p,
+			name,
+			...(bareName === name ? {} : { bareName }),
+			inactive: p.inactive ? 1 : 0,
+			rapidInactive: flag(p.rapidInactive),
+			blitzInactive: flag(p.blitzInactive)
+		}
 	}
 }
+
+/** Una marca de las listas de un ritmo, como la guarda SQLite: 1, 0 o NULL. */
+const flag = (value: boolean | null): number | null => (value === null ? null : value ? 1 : 0)
 
 /**
  * Guarda los jugadores de la lista FIDE del mes `period` ('YYYY-MM'). Si su
@@ -1134,7 +1144,7 @@ export async function upsertFidePlayers(
 		await db
 			.prepare(
 				`INSERT INTO players (fide_id, name, sex, title, birth_year, birth_year_hidden, rating_std, rating_rapid, rating_blitz,
-					inactive, seen_at, rating_list)
+					inactive, rapid_inactive, blitz_inactive, seen_at, rating_list)
 				SELECT json_extract(value, '$.fideId'),
 					CASE WHEN json_extract(value, '$.bareName') IS NOT NULL AND ${hidden('anio')}
 						THEN json_extract(value, '$.bareName') ELSE json_extract(value, '$.name') END,
@@ -1146,6 +1156,8 @@ export async function upsertFidePlayers(
 					json_extract(value, '$.ratingRapid'),
 					json_extract(value, '$.ratingBlitz'),
 					json_extract(value, '$.inactive'),
+					json_extract(value, '$.rapidInactive'),
+					json_extract(value, '$.blitzInactive'),
 					?1,
 					?2
 				FROM json_each(?3)
@@ -1162,6 +1174,8 @@ export async function upsertFidePlayers(
 					rating_rapid = excluded.rating_rapid,
 					rating_blitz = excluded.rating_blitz,
 					inactive = excluded.inactive,
+					rapid_inactive = excluded.rapid_inactive,
+					blitz_inactive = excluded.blitz_inactive,
 					seen_at = excluded.seen_at,
 					rating_list = excluded.rating_list`
 			)

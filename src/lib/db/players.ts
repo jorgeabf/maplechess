@@ -597,3 +597,66 @@ export function bestStandardRating(tournaments: ParticipationRow[], today: strin
 	}
 	return rated.size >= 2 ? best : null
 }
+
+/** El ELO de un ritmo: null si no tiene; `inactive` null si no se sabe. */
+export interface Rating {
+	rating: number
+	inactive: boolean | null
+}
+
+/** El título y el ELO de un jugador de la lista FIDE (/api/elo). */
+export interface PlayerRatings {
+	fideId: number
+	title: string | null
+	std: Rating | null
+	rapid: Rating | null
+	blitz: Rating | null
+}
+
+interface RatingsRow {
+	fideId: number
+	title: string | null
+	std: number | null
+	stdInactive: number
+	rapid: number | null
+	rapidInactive: number | null
+	blitz: number | null
+	blitzInactive: number | null
+	list: string | null
+}
+
+const rating = (value: number | null, inactive: number | null): Rating | null =>
+	value === null ? null : { rating: value, inactive: inactive === null ? null : inactive === 1 }
+
+/**
+ * El título y el ELO de los jugadores de `fideIds` que están en la lista FIDE
+ * española, en su orden, y el mes de la lista ('YYYY-MM'); sin nombre, año ni
+ * sexo. Cada uno, por la clave primaria. El inactivo de rápido y de relámpago
+ * es null hasta la primera importación que lee sus listas (migración 0020).
+ */
+export async function getRatings(
+	db: D1Database,
+	fideIds: readonly number[]
+): Promise<{ list: string | null; players: PlayerRatings[] }> {
+	if (fideIds.length === 0) return { list: null, players: [] }
+	const { results } = await db
+		.prepare(
+			`SELECT p.fide_id AS fideId, p.title, p.rating_std AS std, p.inactive AS stdInactive,
+				p.rating_rapid AS rapid, p.rapid_inactive AS rapidInactive, p.rating_blitz AS blitz, p.blitz_inactive AS blitzInactive,
+				p.rating_list AS list
+			FROM json_each(?1) k JOIN players p ON p.fide_id = k.value
+			ORDER BY k.key`
+		)
+		.bind(JSON.stringify(fideIds))
+		.all<RatingsRow>()
+	return {
+		list: results[0]?.list ?? null,
+		players: results.map((r) => ({
+			fideId: r.fideId,
+			title: r.title,
+			std: rating(r.std, r.stdInactive),
+			rapid: rating(r.rapid, r.rapidInactive),
+			blitz: rating(r.blitz, r.blitzInactive)
+		}))
+	}
+}
