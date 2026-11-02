@@ -1,5 +1,6 @@
-// Las listas de los endpoints públicos que se piden por lotes
-// (/api/clasificaciones, /api/elo): «?info64=a,b,c».
+// Los parámetros de los endpoints públicos de Eguidazu: las listas que se
+// piden por lotes (/api/clasificaciones, /api/elo: «?info64=a,b,c») y el 400
+// de un parámetro mal escrito (también /api/torneos).
 
 /**
  * Los valores de `name`, sin repetir y en su orden, o un error si no hay

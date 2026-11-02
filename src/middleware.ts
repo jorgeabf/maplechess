@@ -11,8 +11,8 @@ import { gameFilters, gameSearchKind, isPlayerSearch, playerFilters } from './li
  * hash que ya no existen. `private`, porque la portada, la ficha, el dossier, el
  * torneo y la partida cambian con la cookie yo: ninguna caché compartida debe
  * guardarlas, si un día se activa una en el dominio. Las rutas que admiten caché
- * (las descargas PGN, /api/emparejamientos, /api/clasificaciones y /api/elo)
- * ponen su propia cabecera.
+ * (las descargas PGN, /api/emparejamientos, /api/clasificaciones, /api/elo y
+ * /api/torneos) ponen su propia cabecera.
  */
 export const DEFAULT_CACHE_CONTROL = 'private, max-age=0, must-revalidate'
 

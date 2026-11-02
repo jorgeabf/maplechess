@@ -172,6 +172,43 @@ export async function countTournamentsByName(
 	return n > COUNT_LIMIT ? { total: COUNT_LIMIT, capped: true } : { total: n, capped: false }
 }
 
+/** Un torneo de info64 que encuentra /api/torneos. */
+export interface Info64Tournament {
+	/** Su slug en info64 (source_key). */
+	key: string
+	name: string
+	type: 'individual' | 'team'
+	city: string | null
+	startDate: string | null
+	endDate: string | null
+}
+
+/**
+ * Los torneos de info64 que encuentra /torneos con esos filtros, empezados o
+ * no: primero los que nombran el sitio buscado y, después, los más recientes.
+ * Como mucho `limit`, y `more` si hay más. Null si `q` no tiene palabras. La
+ * fuente va con `+`: sin estadísticas, el planificador tomaría la igualdad por
+ * selectiva y recorrería con su índice todos los torneos de info64.
+ */
+export async function findInfo64Tournaments(
+	db: D1Database,
+	f: Pick<TournamentFilters, 'q' | 'from' | 'to' | 'type'>,
+	limit: number
+): Promise<{ tournaments: Info64Tournament[]; more: boolean } | null> {
+	const { where, params, fts, terms } = tournamentsWhere(f)
+	if (!terms) return null
+	const named = terms.places.map((place) => `(${fts(place.named)})`).join(' + ')
+	const { results } = await db
+		.prepare(
+			`SELECT t.source_key AS key, t.name, t.type, t.city, t.start_date AS startDate, t.end_date AS endDate
+			FROM tournaments t WHERE ${[...where, "+t.source = 'info64'"].join(' AND ')}
+			ORDER BY ${named ? `${named} DESC, ` : ''}${NEWEST_FIRST} LIMIT ${limit + 1}`
+		)
+		.bind(...params)
+		.all<Info64Tournament>()
+	return { tournaments: results.slice(0, limit), more: results.length > limit }
+}
+
 /** Un torneo del grupo de la fuente (tournaments.related; migración 0018). */
 export interface RelatedTournament {
 	/** Su clave en la fuente (source_key). */
