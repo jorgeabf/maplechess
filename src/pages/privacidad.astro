@@ -25,7 +25,7 @@ const title = Object.fromEntries(sections.map((s) => [s.id, s.title])) as Record
 	<article class="legal">
 		<header class="page-head">
 			<h1>Política de privacidad</h1>
-			<p class="page-meta">Actualizada el 25 de octubre de 2026</p>
+			<p class="page-meta">Actualizada el 2 de noviembre de 2026</p>
 		</header>
 
 		{/* La capa básica del art. 11 LOPDGDD: con datos que no vienen del interesado, lleva también las categorías y las fuentes. */}
@@ -61,7 +61,7 @@ const title = Object.fromEntries(sections.map((s) => [s.id, s.title])) as Record
 				</div>
 				<div>
 					<dt>Quién los ve</dt>
-					<dd>Cualquiera que visite la web, y los buscadores.</dd>
+					<dd>Cualquiera que visite la web o lea su API pública, y los buscadores.</dd>
 				</div>
 				<div>
 					<dt>Tus derechos</dt>
@@ -187,6 +187,11 @@ const title = Object.fromEntries(sections.map((s) => [s.id, s.title])) as Record
 			<p>
 				Cualquiera que visite la web, sin registrarse. Los buscadores muestran las fichas (salvo las de quien puede ser
 				menor), los torneos y las partidas, pero no el repertorio, el dossier ni las descargas.
+			</p>
+			<p>
+				El título y el ELO de cada jugador, y quién va primero en la clasificación de cada torneo (sin el nombre de quien
+				puede ser menor), se pueden leer también por una API pública, sin registrarse. La usa, por ejemplo, la web de un
+				club para el ranking de sus socios.
 			</p>
 			<p>
 				Cloudflare los trata por encargo, para servir la web (ver <a href="#proveedores">{title.proveedores}</a>).

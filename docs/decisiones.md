@@ -435,6 +435,16 @@ La historia, las medidas, los casos concretos y el detalle de cada página que s
     - una ronda emparejada después de la pasada: sale al día siguiente.
   - **La hora:** la FADA lo lee contando con que la diaria de info64 ya ha acabado (los emparejamientos son lo último). Si lo lee a mitad, recibe lo de la noche anterior, que sigue valiendo: cada torneo se sustituye en un solo `batch`. Si cambia `CRON_INFO64_DAILY`, hay que avisarles.
 
+#### `api/clasificaciones.ts` y `api/elo.ts`
+
+- `api/clasificaciones.ts` y `api/elo.ts` (2-nov-2026): para los scripts de la web del club Eguidazu (eguidazu.com), que leían de info64 el primero de cada clasificación (`campeones:pendientes`) y de ratings.fide.com el perfil de cada socio (`generate:fide-data`). Así dejan de pedir a las fuentes y de mantener sus propios parsers. Contrato acordado con Jorge el 2-nov-2026: no se cambia sin avisar.
+  - **`/api/clasificaciones?info64=<slug>,…`** (hasta 50): `{"torneos":[{"info64","final","ronda","rondas","primero":{"titulo","nombre","fide"} | {"equipo"}}]}`. `info64` es `source_key`, como en el enlace de info64: los de equipos, con `team/`. `final` es `standingsOver`. El primero, con las reglas de `getChampions`: el nombre de la lista FIDE si está en ella, y sin nombre ni FIDE ID si puede ser menor o se ha retirado (la clasificación del torneo sí lo enseña); con un empate, el de número inicial más bajo. Los que no tiene (no guardados, de menores, sensibles o sin clasificación) no salen: Eguidazu sigue con su enlace, como con chess-results.
+  - **`/api/elo?fide=<id>,…`** (hasta 100): `{"lista":"2026-11","jugadores":[{"fide","titulo","estandar","rapido","relampago"}]}`, con cada ritmo como `{"elo","inactivo"}`, o null sin ELO. El título, en código FIDE (`FM`, `WGM`…). Sin nombre, año ni sexo: Eguidazu pinta el nombre de su ficha de socio. Los que no están en la lista española (otra federación, retirados) no salen. 503 (`no-store`) si la pasada `fide` da la alarma (`isAlarm`).
+  - **El inactivo de cada ritmo** sale de las listas de rápido y de relámpago (ver «Lista FIDE»). Medido el 2-nov-2026: en los 30 socios de Eguidazu, el ELO y el inactivo de los tres ritmos coinciden con su perfil FIDE. `inactivo` es null hasta la primera importación tras la migración 0020.
+  - `public, max-age=3600` en los dos: la clasificación cambia una vez por noche, y la lista, una vez al mes. Un 400 (lista vacía, demasiado larga o con un valor que no lo es) va con la caché por defecto.
+  - **Filas,** en una siembra de 3.000 torneos y 100.000 jugadores: 4 por torneo (el torneo por `(source, source_key)`, su primera fila de `standings`, el participante y su ficha, todo por clave) y 3 por jugador (su ficha por la clave primaria, y la ordenación de `k.key`). Con la lista llena, 200 y 300.
+  - `/privacidad` lo cuenta en «Quién los ve» desde el 2-nov-2026.
+
 #### Páginas legales
 
 - **Páginas legales:** `privacidad.astro` y `aviso-legal.astro`, junto a `acerca.astro` en el pie, con `.page-head` y `.prose`. La política cuenta lo que hace `main`, no lo previsto: el PR que cambia qué se publica, se guarda o se registra de alguien (la ingesta, los menores, las retiradas, una cookie, un proveedor) la actualiza a la vez, con su fecha.
@@ -448,7 +458,7 @@ La historia, las medidas, los casos concretos y el detalle de cada página que s
 
 ### `src/middleware.ts`
 
-- `src/middleware.ts`: `Cache-Control: private, max-age=0, must-revalidate` por defecto (`private`: las páginas cambian con la cookie `yo`). Una ruta sólo fija la suya si admite caché (las descargas PGN y `/api/emparejamientos`). Además, `X-Content-Type-Options: nosniff`, `X-Frame-Options: SAMEORIGIN` y HSTS de un año en todas las respuestas, y el límite de ritmo (ver «D1 cobra por filas recorridas»). Sin `Referrer-Policy`: «← Volver» depende del valor por defecto.
+- `src/middleware.ts`: `Cache-Control: private, max-age=0, must-revalidate` por defecto (`private`: las páginas cambian con la cookie `yo`). Una ruta sólo fija la suya si admite caché (las descargas PGN, `/api/emparejamientos`, `/api/clasificaciones` y `/api/elo`). Además, `X-Content-Type-Options: nosniff`, `X-Frame-Options: SAMEORIGIN` y HSTS de un año en todas las respuestas, y el límite de ritmo (ver «D1 cobra por filas recorridas»). Sin `Referrer-Policy`: «← Volver» depende del valor por defecto.
   - Las URL de las fuentes que se enlazan pasan por `sourceUrl` (`src/lib/urls.ts`): sólo `https://info64.org/`, `https://lichess.org/` y `https://www.fcajedrez.es/` (`FCA_SITE`). En los textos, la fuente se nombra con `sourceName` («Ver en fcajedrez.es»).
 
 #### Redirección al dominio
@@ -737,6 +747,7 @@ La historia, las medidas, los casos concretos y el detalle de cada página que s
 
 - **Lista FIDE** (`players_list.zip`, unos 45 MB): se descomprime en streaming con fflate, porque el Worker tiene 128 MB de memoria. Se filtra ESP (unos 98.000 jugadores; más de la mitad de los que tienen ELO, inactivos).
   - Al cambiar de lista, el ELO estándar que había pasa a `rating_std_prev` («Los que más suben»). `rating_list` guarda el mes de la lista (`YYYY-MM`) de la que sale el ELO de cada jugador, y es el mes en que se importa: así un reintento o un `force` en el mismo mes no lo pisa (`upsertFidePlayers` en `repo.ts`). No vale el `Last-Modified`, porque FIDE regenera el fichero a mitad de mes sin cambiar los ELO. El comentario de la migración 0007, ya aplicada, aún habla del `Last-Modified`. La primera lista con ELO anterior es la de noviembre de 2026.
+  - **Inactivo por ritmo** (2-nov-2026, migración 0020): la combinada sólo trae una marca (`Flag`), la del estándar. Medido ese día con 30 jugadores frente a su perfil FIDE: coincide con el inactivo del estándar, y 13 de ellos eran inactivos en rápido o en relámpago sin marca en la combinada. Las listas de rápido (`rapid_rating_list.zip`, 11 MB) y de relámpago (`blitz_rating_list.zip`, 8 MB) traen la suya, con el mismo ancho fijo y el ELO en una columna con el nombre del mes («NOV26»), que no se lee: se descargan en el mismo paso, con `FLAGS_LIST`, y cada jugador lleva `rapid_inactive` y `blitz_inactive` (NULL si no está en esa lista, porque no tiene ELO de ese ritmo). Ese día traían 22.438 y 15.275 jugadores ESP, los mismos que tienen ese ELO en la combinada; si una trae menos del 90 %, la importación falla y conserva lo guardado. Lo usa `/api/elo`.
 
 #### El filtro va sobre los bytes
 

@@ -66,7 +66,9 @@ describe('upsertFidePlayers', () => {
 		ratingStd,
 		ratingRapid: null,
 		ratingBlitz: null,
-		inactive: false
+		inactive: false,
+		rapidInactive: null,
+		blitzInactive: null
 	})
 	const ratings = async () =>
 		(
@@ -112,6 +114,22 @@ describe('upsertFidePlayers', () => {
 		expect(await names()).toEqual([{ name: 'Inventado Ficticio, Nombre' }, { name: 'Supuesto Irreal, Otro 2007 I' }])
 		await upsertFidePlayers(db, list, '2027-01', '2027-01-03T06:00:00.000Z')
 		expect(await names()).toEqual([{ name: 'Inventado Ficticio, Nombre 2008' }, { name: 'Supuesto Irreal, Otro 2007 I' }])
+	})
+
+	it('guarda el inactivo de rápido y de relámpago, y NULL si no está en su lista', async () => {
+		await upsertFidePlayers(
+			db,
+			[{ ...player(1, 1850), rapidInactive: true, blitzInactive: false }, player(2, 1500)],
+			'2026-10',
+			'2026-10-03T06:00:00.000Z'
+		)
+		const { results } = await db
+			.prepare('SELECT rapid_inactive AS rapid, blitz_inactive AS blitz FROM players ORDER BY fide_id')
+			.all<{ rapid: number | null; blitz: number | null }>()
+		expect(results).toEqual([
+			{ rapid: 1, blitz: 0 },
+			{ rapid: null, blitz: null }
+		])
 	})
 })
 

@@ -1,5 +1,6 @@
 // Clasificación de un torneo (tabla standings; ver la migración 0011), tal
 // como la publica la fuente.
+import { RETIRED_NAME } from '../../ingest/nombres'
 import { madridYear } from '../dates'
 import { hasDossierSql, minorsBornSince } from './players'
 
@@ -109,4 +110,79 @@ export function standingsHeading(
 ): string {
 	if (standingsOver(standings, endDate, today)) return 'Clasificación final'
 	return standings.round === null ? 'Clasificación' : `Clasificación tras la ronda ${standings.round}`
+}
+
+/** El primero de la clasificación guardada de un torneo de info64 (/api/clasificaciones). */
+export interface FirstPlace {
+	/** Su slug en info64 (source_key). */
+	slug: string
+	/** Si es la clasificación final (standingsOver). */
+	final: boolean
+	round: number | null
+	rounds: number | null
+	/**
+	 * El jugador, con su nombre de la lista FIDE si está en ella y, si no, con
+	 * el de participante; sin nombre ni FIDE ID si puede ser menor, si se ha
+	 * retirado o si ya no está entre los participantes. O el equipo.
+	 */
+	first: { title: string | null; name: string | null; fideId: number | null } | { team: string | null }
+}
+
+// Una sentencia por torneo, como CHAMPION en campeones.ts: el torneo por su
+// clave natural, su primera fila recorriendo la clave de standings, el jugador
+// por la clave de participations y su nombre y su edad por la de players. ?2
+// es el año de minorsBornSince.
+const FIRST_PLACE = `SELECT t.type, t.rounds, t.standings_round AS round, t.end_date AS endDate,
+		CASE WHEN t.type = 'team' THEN s.name ELSE coalesce(m.name, p.name) END AS name, p.title, p.fide_id AS fideId,
+		m.birth_year >= ?2 AS minor
+	FROM tournaments t
+	JOIN standings s ON s.tournament_id = t.id
+	LEFT JOIN participations p ON t.type = 'individual' AND p.tournament_id = t.id AND p.team = '' AND p.start_rank = s.start_rank
+	LEFT JOIN players m ON m.fide_id = p.fide_id
+	WHERE t.source = 'info64' AND t.source_key = ?1
+	ORDER BY s.pos, s.start_rank LIMIT 1`
+
+interface FirstPlaceRow {
+	type: 'individual' | 'team'
+	rounds: number | null
+	round: number | null
+	endDate: string | null
+	name: string | null
+	title: string | null
+	fideId: number | null
+	minor: 0 | 1 | null
+}
+
+/**
+ * El primero de cada torneo de info64 de `slugs` que tiene clasificación
+ * guardada, en su orden; los demás (no guardados, de menores, sensibles o sin
+ * clasificación) no salen. Con un empate en el primer puesto, el de número
+ * inicial más bajo. Quien puede ser menor (mayBeMinor) sale sin nombre, como en
+ * los campeones de España.
+ */
+export async function getFirstPlaces(db: D1Database, slugs: readonly string[], today: string): Promise<FirstPlace[]> {
+	if (slugs.length === 0) return []
+	const statement = db.prepare(FIRST_PLACE)
+	const bornSince = minorsBornSince(Number(today.slice(0, 4)))
+	const results = await db.batch<FirstPlaceRow>(slugs.map((slug) => statement.bind(slug, bornSince)))
+	return slugs.flatMap((slug, i) => {
+		const row = results[i].results[0]
+		if (!row) return []
+		const { type, rounds, round, endDate, name, title, fideId, minor } = row
+		const hidden = minor === 1 || name === RETIRED_NAME
+		return [
+			{
+				slug,
+				final: standingsOver({ round, rounds }, endDate, today),
+				round,
+				rounds,
+				first:
+					type === 'team'
+						? { team: name }
+						: hidden
+							? { title: null, name: null, fideId: null }
+							: { title, name, fideId }
+			}
+		]
+	})
 }

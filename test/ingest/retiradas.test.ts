@@ -203,7 +203,9 @@ describe('retiradas en la ingesta', () => {
 			ratingStd: 1800,
 			ratingRapid: null,
 			ratingBlitz: null,
-			inactive: false
+			inactive: false,
+			rapidInactive: null,
+			blitzInactive: null
 		})
 		await upsertFidePlayers(db, [fide(930001, 'Rival Uno, Alguien'), fide(RETIRED.fideId, RETIRED.name)], '2026-10', '2026-10-03T06:00:00.000Z')
 		expect(await count('SELECT count(*) AS n FROM players')).toBe(1)

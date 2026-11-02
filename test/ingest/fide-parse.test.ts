@@ -1,12 +1,26 @@
 import { describe, expect, it } from 'vitest'
-import { FideListParser, parseHeader, parsePlayerLine, type FidePlayer } from '../../src/ingest/fide/parse'
+import {
+	FideListParser,
+	FLAGS_LIST,
+	parseFlagLine,
+	parseHeader,
+	parsePlayerLine,
+	PLAYERS_LIST,
+	type FideFlag,
+	type FidePlayer
+} from '../../src/ingest/fide/parse'
 import sample from '../fixtures/fide/players_list_sample.txt?raw'
 
 const header = sample.split('\n')[0].replace(/\r$/, '')
 
+// La cabecera de rapid_rating_list.txt y blitz_rating_list.txt (2-nov-2026):
+// el ELO va en una columna con el nombre del mes.
+const flagsHeader =
+	'ID Number      Name                                                         Fed Sex Tit  WTit OTit           FOA NOV26 Gms K  B-day Flag'
+
 /** Construye una línea de ancho fijo con las posiciones de la cabecera real. */
-function line(values: Record<string, string>): string {
-	const layout = parseHeader(header)
+function line(values: Record<string, string>, from = header): string {
+	const layout = parseHeader(from, [])
 	let text = ''
 	for (const [name, { start }] of layout) {
 		text = text.padEnd(start, ' ') + (values[name] ?? '')
@@ -54,7 +68,9 @@ describe('parsePlayerLine', () => {
 			ratingStd: 2646,
 			ratingRapid: 2600,
 			ratingBlitz: null,
-			inactive: false
+			inactive: false,
+			rapidInactive: null,
+			blitzInactive: null
 		})
 	})
 
@@ -70,7 +86,7 @@ describe('parsePlayerLine', () => {
 describe('FideListParser', () => {
 	it('filtra la federación aunque los bytes lleguen partidos en trozos arbitrarios', () => {
 		const players: FidePlayer[] = []
-		const parser = new FideListParser('ESP', (p) => players.push(p))
+		const parser = new FideListParser('ESP', PLAYERS_LIST, (p) => players.push(p))
 		const bytes = new TextEncoder().encode(sample)
 		for (let i = 0; i < bytes.length; i += 37) parser.push(bytes.subarray(i, i + 37))
 		parser.end()
@@ -80,5 +96,40 @@ describe('FideListParser', () => {
 		expect(players.every((p) => p.fed === 'ESP')).toBe(true)
 		expect(players[0]).toMatchObject({ fideId: 9960119, name: 'Nevunenaman Lefop, Uzeba', ratingStd: 1800, birthYear: 1936, inactive: true })
 		expect(players.find((p) => p.fideId === 97937734)?.title).toBeNull()
+	})
+})
+
+describe('lista de rápido y de relámpago', () => {
+	it('lee el FIDE ID, la federación y la marca, sin la columna del mes', () => {
+		const layout = parseHeader(flagsHeader, FLAGS_LIST.columns)
+		expect(parseFlagLine(line({ 'ID Number': '9227924', Name: 'X, Y', Fed: 'ESP', NOV26: '2600', Flag: 'wi' }, flagsHeader), layout)).toEqual({
+			fideId: 9227924,
+			fed: 'ESP',
+			inactive: true
+		})
+		expect(parseFlagLine(line({ 'ID Number': '1', Fed: 'ESP', NOV26: '1500', Flag: 'w' }, flagsHeader), layout)).toMatchObject({
+			inactive: false
+		})
+	})
+
+	it('falla si falta la marca', () => {
+		expect(() => parseHeader('ID Number      Name      Fed', FLAGS_LIST.columns)).toThrow(/Flag/)
+	})
+
+	it('filtra la federación', () => {
+		const text = [
+			flagsHeader,
+			line({ 'ID Number': '1', Fed: 'ESP', Flag: 'i' }, flagsHeader),
+			line({ 'ID Number': '2', Fed: 'FRA', Flag: '' }, flagsHeader),
+			line({ 'ID Number': '3', Fed: 'ESP', Flag: '' }, flagsHeader)
+		].join('\r\n')
+		const flags: FideFlag[] = []
+		const parser = new FideListParser('ESP', FLAGS_LIST, (f) => flags.push(f))
+		parser.push(new TextEncoder().encode(text))
+		parser.end()
+		expect(flags).toEqual([
+			{ fideId: 1, fed: 'ESP', inactive: true },
+			{ fideId: 3, fed: 'ESP', inactive: false }
+		])
 	})
 })

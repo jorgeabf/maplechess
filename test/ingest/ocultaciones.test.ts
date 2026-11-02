@@ -32,7 +32,9 @@ const player = (fideId: number, name: string, sex: string, birthYear: number, ra
 	ratingStd,
 	ratingRapid: null,
 	ratingBlitz: null,
-	inactive: false
+	inactive: false,
+	rapidInactive: null,
+	blitzInactive: null
 })
 
 // En 2026: +50 hasta 1976, +65 hasta 1961, sub-18 desde 2008.
