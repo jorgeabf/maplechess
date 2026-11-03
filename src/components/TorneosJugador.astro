@@ -111,16 +111,6 @@ const outOf = (points: number, of: number | null) => (of ? `${formatPoints(point
 	}
 
 	/*
-	 * La ciudad parte línea: entera, una dirección larga hacía desplazarse la
-	 * tabla en paralelo. Con la tabla justa parte también una de varias
-	 * palabras, y a cambio parten menos nombres de torneo. Sin el mínimo de
-	 * .wrap (12rem), que ensanchaba las cortas y partía más nombres.
-	 */
-	.tournaments .city {
-		white-space: normal;
-	}
-
-	/*
 	 * El puesto y los puntos parten línea antes que ensanchar la tabla, que en
 	 * paralelo ya pedía 958 px de los 960: tras «1.º ·», en la nota y en el
 	 * rótulo, que entonces va en tres líneas. Así la columna no pide más que

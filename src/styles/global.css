@@ -859,6 +859,17 @@
 		min-width: 12rem;
 	}
 
+	/*
+	 * El lugar de un torneo (la ficha y /torneos) parte línea: entero, una
+	 * dirección larga hacía desplazarse la tabla en paralelo. Con la tabla
+	 * justa parte también una ciudad de varias palabras, y a cambio parten
+	 * menos nombres de torneo. Sin el mínimo de .wrap, que ensanchaba las
+	 * ciudades cortas y partía más nombres.
+	 */
+	.data-table td.city {
+		white-space: normal;
+	}
+
 	.data-table .end {
 		text-align: end;
 	}
@@ -876,7 +887,7 @@
 	 * indicara. Por debajo de 60rem de contenedor, como GamesTable, cada fila
 	 * pasa a un bloque: la primera celda (el nombre) a todo el ancho y, debajo
 	 * y en pequeño, las demás seguidas, cada cifra con su rótulo (.cell-label).
-	 * En paralelo piden de 725 a 934 px (medido el 21-oct-2026), así que desde
+	 * En paralelo piden de 653 a 745 px (medido el 3-nov-2026), así que desde
 	 * 60rem caben sin desplazarse.
 	 *
 	 * La cabecera queda sólo para los lectores de pantalla, que siguen oyendo
