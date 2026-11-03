@@ -259,8 +259,6 @@ const me = resolveMe(null, Astro.cookies.get(ME_COOKIE)?.value).fideId
 	 * pestañas, el menú encoge y se desplaza; la lupa queda siempre a la vista.
 	 */
 	.end {
-		/* Grosor del subrayado de la pestaña. */
-		--marca: 3px;
 		display: flex;
 		min-width: 0;
 	}
@@ -310,7 +308,7 @@ const me = resolveMe(null, Astro.cookies.get(ME_COOKIE)?.value).fideId
 		display: flex;
 		align-items: center;
 		padding: var(--space-2) var(--space-3);
-		border-block: var(--marca) solid transparent;
+		border-block: var(--mark-width) solid transparent;
 		color: var(--text-muted);
 		text-decoration: none;
 		font-weight: var(--weight-strong);
@@ -349,7 +347,7 @@ const me = resolveMe(null, Astro.cookies.get(ME_COOKIE)?.value).fideId
 		margin-inline-end: calc(-1 * var(--space-3));
 		padding: var(--space-2) var(--space-3);
 		border: 0;
-		border-block: var(--marca) solid transparent;
+		border-block: var(--mark-width) solid transparent;
 		background: none;
 		color: var(--text-muted);
 		cursor: pointer;
