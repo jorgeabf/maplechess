@@ -110,7 +110,7 @@ const searchSummary = [
 									)}
 								</td>
 								<td class="num">{formatRange(t.startDate, t.endDate)}</td>
-								<td>{t.city}</td>
+								<td class="city">{t.city}</td>
 								{/* Apilada en el móvil (.stack): cada cifra lleva su rótulo, sólo si la hay. */}
 								<td class="end num">{t.players ? <><span class="cell-label" aria-hidden="true">Jugadores </span>{formatNumber(t.players)}</> : null}</td>
 								{!filters.upcoming && <td class="end num">{t.gamesCount ? <><span class="cell-label" aria-hidden="true">Partidas </span>{formatNumber(t.gamesCount)}</> : null}</td>}
