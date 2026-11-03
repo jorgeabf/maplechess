@@ -150,6 +150,12 @@
 		--control-height-l: 3rem;
 
 		/*
+		 * Grosor de la raya de acento que marca lo actual: el subrayado de las
+		 * pestañas (el menú, la lupa y .page-tabs) y la mesa enlazada.
+		 */
+		--mark-width: 3px;
+
+		/*
 		 * Madera de la marca: arce natural y nogal frío. Son fijas en los dos
 		 * modos, como el tablero, y distintas de las maderas de lichess y chess24
 		 * (tostadas y anaranjadas). La marca es identidad (logo, favicón,
@@ -460,7 +466,7 @@
 		display: flex;
 		align-items: center;
 		min-block-size: 2.75rem;
-		border-block-end: 3px solid transparent;
+		border-block-end: var(--mark-width) solid transparent;
 		color: var(--text-muted);
 		font-size: var(--text-s);
 		font-weight: var(--weight-strong);
