@@ -6,6 +6,7 @@ import { loadParticipants, replaceParticipations, saveGames, upsertTournament } 
 import { parseGames } from '../../src/lib/chess/pgn'
 import {
 	countGamesByName,
+	countPlayerTournamentGames,
 	exportGameIds,
 	gameRoundPage,
 	gamesPgn,
@@ -14,6 +15,7 @@ import {
 	getHeadToHead,
 	getTopRecentGames,
 	getTournamentGames,
+	PLAYER_TOURNAMENT_GAMES_SQL,
 	RECENT_GAMES_SQL,
 	ROUND_POSITION_SQL,
 	searchGames,
@@ -135,6 +137,29 @@ describe('getTournamentGames', () => {
 		expect(games.rows).toEqual([])
 		expect(games.total).toBe(0)
 		expect(rounds).toHaveLength(9)
+	})
+})
+
+describe('countPlayerTournamentGames', () => {
+	it('cuenta las partidas del jugador en el torneo, con blancas y con negras', async () => {
+		const id = (await db.prepare('SELECT id FROM tournaments').first<{ id: number }>())!.id
+		const { results } = await db
+			.prepare('SELECT white_fide_id AS white, black_fide_id AS black FROM games WHERE tournament_id = ?1')
+			.bind(id)
+			.all<{ white: number | null; black: number | null }>()
+		const fideId = results.find((g) => g.white !== null)!.white!
+		const expected = results.filter((g) => g.white === fideId || g.black === fideId).length
+		expect(results.some((g) => g.black === fideId)).toBe(true)
+		expect(await countPlayerTournamentGames(db, id, fideId)).toBe(expected)
+		expect(await countPlayerTournamentGames(db, id + 1000, fideId)).toBe(0)
+	})
+
+	it('va por el índice del torneo, no por las partidas de toda su carrera', async () => {
+		const { results } = await db
+			.prepare(`EXPLAIN QUERY PLAN ${PLAYER_TOURNAMENT_GAMES_SQL}`)
+			.bind(1, 1)
+			.all<{ detail: string }>()
+		expect(results.map((r) => r.detail).join('\n')).toContain('(tournament_id=?)')
 	})
 })
 

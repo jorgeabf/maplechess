@@ -151,7 +151,7 @@
 
 		/*
 		 * Grosor de la raya de acento que marca lo actual: el subrayado de las
-		 * pestañas (el menú, la lupa y .page-tabs) y la mesa enlazada.
+		 * pestañas (el menú, la lupa y .page-tabs), la fila enlazada y lo tuyo (.tu).
 		 */
 		--mark-width: 3px;
 
@@ -837,6 +837,37 @@
 
 	.data-table tbody tr:last-child > * {
 		border-bottom: 0;
+	}
+
+	/*
+	 * Lo tuyo (.tu, con la cookie yo: tu fila, tu mesa y tus partidas en la
+	 * página del torneo) y la fila a la que lleva un enlace (#mesa-12, #tu):
+	 * el fondo de lo actual y una raya del acento a la izquierda; el fondo solo
+	 * apenas se distingue del de la tabla. El fondo va en la fila, que vale en
+	 * la tabla y en las filas que son rejillas; la raya, en la primera celda.
+	 * Donde la primera celda no ocupa el alto de la fila por la izquierda (las
+	 * filas de GamesTable, que son rejillas, y los participantes apilados), la
+	 * raya va en la fila. La fila enlazada queda a un cuarto de la
+	 * pantalla y no pegada arriba, para ver también las de antes. Con colores
+	 * forzados, que quitan fondos y sombras, un contorno.
+	 */
+	.data-table tbody tr:is(.tu, :target) {
+		background: var(--accent-soft);
+	}
+
+	.data-table tbody tr:is(.tu, :target) > :first-child {
+		box-shadow: inset var(--mark-width) 0 var(--accent);
+	}
+
+	.data-table tbody tr:target {
+		scroll-margin-top: 25svh;
+	}
+
+	@media (forced-colors: active) {
+		.data-table tbody tr:is(.tu, :target) {
+			outline: var(--mark-width) solid CanvasText;
+			outline-offset: calc(-1 * var(--mark-width));
+		}
 	}
 
 	/* Fila de resumen (el total del explorador, la puntuación de la ficha), tras una raya marcada. */

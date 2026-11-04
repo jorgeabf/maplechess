@@ -11,13 +11,28 @@ interface Props {
 	fideId?: number | null
 	title?: string | null
 	elo?: number | null
+	/**
+	 * Eres tú (cookie yo; ver lib/tu-torneo.ts): «(tú)» para el lector de
+	 * pantalla, dentro del enlace, que así lo dice también en la lista de
+	 * enlaces. A la vista, la fila la marca su tabla (.tu).
+	 */
+	you?: boolean
 }
 
-const { name, fideId, title, elo } = Astro.props
+const { name, fideId, title, elo, you = false } = Astro.props
 ---
 
 <span class="player">
 	{title && <span class="tag">{title}</span>}{title && ' '}
-	{fideId ? <a href={`/jugadores/${fideId}`}>{name}</a> : <span>{name}</span>}{elo && ' '}
+	{
+		fideId ? (
+			<a href={`/jugadores/${fideId}`}>
+				{name}
+				{you && <span class="visually-hidden"> (tú)</span>}
+			</a>
+		) : (
+			<span>{name}</span>
+		)
+	}{elo && ' '}
 	{elo && <span class="elo muted num">{elo}</span>}
 </span>
