@@ -20,9 +20,12 @@ interface Props {
 	 * de varios torneos en la misma tabla.
 	 */
 	boardIds?: boolean
+	/** Tú (cookie yo), en la página del torneo: tu mesa va marcada (.tu). */
+	me?: number | null
 }
 
-const { groups, boardIds = false } = Astro.props
+const { groups, boardIds = false, me = null } = Astro.props
+const isMe = (id: number | null) => me !== null && id === me
 ---
 
 <div class="table-wrap pairings">
@@ -51,14 +54,17 @@ const { groups, boardIds = false } = Astro.props
 						</tr>
 					)}
 					{pairings.map((pairing) => (
-						<tr id={boardIds ? `mesa-${pairing.board}` : undefined}>
+						<tr
+							id={boardIds ? `mesa-${pairing.board}` : undefined}
+							class:list={{ tu: isMe(pairing.white.fideId) || isMe(pairing.black.fideId) }}
+						>
 							<td class="end num">{pairing.board}</td>
 							{(['white', 'black'] as const).map((color) => {
 								const player = pairing[color]
 								return (
 									<>
 										<td>
-											<PlayerName name={player.name} title={player.title} fideId={player.fideId} />
+											<PlayerName name={player.name} title={player.title} fideId={player.fideId} you={isMe(player.fideId)} />
 											{player.fideId && player.hasDossier === 1 && (
 												<>
 													{' '}
@@ -97,24 +103,7 @@ const { groups, boardIds = false } = Astro.props
 		font-weight: normal;
 	}
 
-	/*
-	 * La mesa a la que lleva el enlace (#mesa-12), con el fondo de lo actual
-	 * y una raya del acento a la izquierda: el fondo solo apenas se distingue
-	 * del de la tabla. Por celdas, que valen en la tabla y en la rejilla del
-	 * móvil. Queda a un cuarto de la pantalla y no pegada arriba, para ver
-	 * también las mesas de antes.
-	 */
-	tr:target {
-		scroll-margin-top: 25svh;
-	}
-
-	tr:target > * {
-		background: var(--accent-soft);
-	}
-
-	tr:target > :first-child {
-		box-shadow: inset var(--mark-width) 0 var(--accent);
-	}
+	/* La mesa a la que lleva el enlace (#mesa-12) y la tuya se marcan en global.css (.data-table, «Lo tuyo»). */
 
 	/*
 	 * El ELO de cada jugador, en su columna y alineado a la derecha: así se ve

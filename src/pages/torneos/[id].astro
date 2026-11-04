@@ -13,7 +13,7 @@ import { championshipsOf } from '../../lib/campeonatos'
 import { pointsTiebreaks, tiebreakLabel } from '../../lib/chess/tiebreaks'
 import { TIME_CLASS_LABEL, timeClassOf } from '../../lib/chess/timecontrol'
 import { madridDate } from '../../lib/dates'
-import { getTournamentGames } from '../../lib/db/games'
+import { countPlayerTournamentGames, getTournamentGames } from '../../lib/db/games'
 import { getUpcomingRound } from '../../lib/db/pairings'
 import { getTournamentStandings, standingsHeading } from '../../lib/db/standings'
 import {
@@ -28,6 +28,7 @@ import { formatCount, formatNumber, formatPoints, formatRange, formatRoundTime }
 import { CC_BY, CC_BY_SA } from '../../lib/licenses'
 import { ME_COOKIE, resolveMe } from '../../lib/me'
 import { dossierHref, pageParam, positiveInt, roundParam, withParams } from '../../lib/params'
+import { myPlace } from '../../lib/tu-torneo'
 import { sourceName, sourceUrl } from '../../lib/urls'
 
 const id = positiveInt(Astro.params.id)
@@ -73,7 +74,8 @@ const roundHref = (option: string) => `${withParams(Astro.url, { ronda: option, 
 // Las del torneo, sea cual sea la ronda elegida.
 const gamesTotal = rounds.reduce((sum, r) => sum + r.games, 0)
 const timeClass = timeClassOf(tournament.timeControl)
-// Sin cookie yo, la próxima ronda explica cómo recibir el aviso de las tuyas.
+// Con la cookie yo, lo tuyo va marcado (ver «Tú», más abajo); sin ella, la
+// próxima ronda explica cómo recibir el aviso de las tuyas.
 const me = resolveMe(null, Astro.cookies.get(ME_COOKIE)?.value).fideId
 // Las plantillas de un torneo por equipos, por equipo. Los jugadores sin
 // equipo (los puede traer una retransmisión de lichess) van al final.
@@ -146,6 +148,22 @@ const teamRating = new Map(isTeam && standings ? standings.rows.map((s) => [s.na
 const matches = isTeam ? gameMatches(games.rows, participants) : null
 
 /*
+ * Tú (cookie yo; lib/tu-torneo.ts): tu fila, tu equipo, tu mesa y tus
+ * partidas van marcados (.tu, global.css), y arriba una línea lleva a cada
+ * cosa. Una clasificación de 66 jugadores ocupa 4 pantallas en el móvil. Tus
+ * partidas se cuentan sólo si juegas en el torneo: es la única lectura más.
+ */
+const place = myPlace(me, { isTeam, numbered: !fromLichess }, standings?.rows ?? null, participants, upcoming?.pairings ?? [])
+const myGames = me !== null && place?.member && gamesTotal > 0 ? await countPlayerTournamentGames(env.DB, id, me) : 0
+const isMe = (fideId: number | null) => me !== null && fideId === me
+const isMyTeam = (team: string | null) => place?.team != null && team === place.team
+const mine = [
+	place?.board != null && { href: `#mesa-${place.board}`, label: `Tu mesa: ${place.board}` },
+	place?.target && place.label && { href: '#tu', label: place.label },
+	myGames > 0 && { href: `/jugadores/${me}?torneo=${id}#partidas`, label: `Mis partidas (${formatNumber(myGames)})`, rel: 'nofollow' }
+].filter((item): item is { href: string; label: string; rel?: string } => !!item)
+
+/*
  * Orden de las secciones: primero lo que resume el torneo, y las partidas
  * después. La próxima ronda, si la hay; la clasificación o, sin ella, los
  * participantes; las partidas, y las plantillas de un torneo por equipos al
@@ -204,6 +222,20 @@ const indexItems = sections.flatMap((s) => {
 			{tournament.timeControl && (timeClass ? ` (${tournament.timeControl})` : ` · ${tournament.timeControl}`)}
 		</p>
 		{summary && <p class="page-meta">{summary}</p>}
+		{
+			mine.length > 0 && (
+				<p class="page-meta">
+					{mine.map((item, i) => (
+						<>
+							{i > 0 && ' · '}
+							<a href={item.href} rel={item.rel}>
+								{item.label}
+							</a>
+						</>
+					))}
+				</p>
+			)
+		}
 		<p class="page-actions">
 			{
 				tournament.gamesCount > 0 && (
@@ -245,7 +277,7 @@ const indexItems = sections.flatMap((s) => {
 							Publicados en {tournament.source}. «Preparar» abre el dossier del jugador con el color que lleva.
 							{!me && ' ¿Juegas? Pulsa tu nombre y, en tu ficha, «Soy yo»: la portada te avisará de cada ronda.'}
 						</p>
-						<Emparejamientos groups={[{ pairings: upcoming.pairings }]} boardIds />
+						<Emparejamientos groups={[{ pairings: upcoming.pairings }]} boardIds me={me} />
 					</section>
 				)}
 
@@ -275,40 +307,46 @@ const indexItems = sections.flatMap((s) => {
 									</tr>
 								</thead>
 								<tbody>
-									{standings.rows.map((s) => (
-										<tr>
-											<td class="end num">{s.pos}</td>
-											<td class="name">
-												{isTeam || !s.name ? (
-													s.name
-												) : (
+									{standings.rows.map((s) => {
+										const yours = isTeam ? isMyTeam(s.name) : isMe(s.fideId)
+										return (
+											<tr class:list={{ tu: yours }} id={yours && place?.target === 'clasificacion' ? 'tu' : undefined}>
+												<td class="end num">{s.pos}</td>
+												<td class="name">
+													{isTeam || !s.name ? (
+														<>
+															{s.name}
+															{yours && <span class="visually-hidden"> (tu equipo)</span>}
+														</>
+													) : (
+														<>
+															<PlayerName name={s.name} title={s.title} fideId={s.fideId} you={yours} />
+															{s.fideId && s.hasDossier === 1 && (
+																<span class="prepare">
+																	{' '}
+																	·{' '}
+																	<a href={dossierHref(s.fideId)} rel="nofollow">
+																		preparar
+																	</a>
+																</span>
+															)}
+														</>
+													)}
+												</td>
+												<td class="end num">{formatPoints(s.points)}</td>
+												{tiebreakColumns.map(({ i }) => (
+													<td class="end num">{s.tiebreaks[i] === null ? '' : formatNumber(s.tiebreaks[i])}</td>
+												))}
+												<td class="end num">{s.rating}</td>
+												{!isTeam && (
 													<>
-														<PlayerName name={s.name} title={s.title} fideId={s.fideId} />
-														{s.fideId && s.hasDossier === 1 && (
-															<span class="prepare">
-																{' '}
-																·{' '}
-																<a href={dossierHref(s.fideId)} rel="nofollow">
-																	preparar
-																</a>
-															</span>
-														)}
+														<td>{s.fed}</td>
+														<td class="end num">{s.startRank}</td>
 													</>
 												)}
-											</td>
-											<td class="end num">{formatPoints(s.points)}</td>
-											{tiebreakColumns.map(({ i }) => (
-												<td class="end num">{s.tiebreaks[i] === null ? '' : formatNumber(s.tiebreaks[i])}</td>
-											))}
-											<td class="end num">{s.rating}</td>
-											{!isTeam && (
-												<>
-													<td>{s.fed}</td>
-													<td class="end num">{s.startRank}</td>
-												</>
-											)}
-										</tr>
-									))}
+											</tr>
+										)
+									})}
 								</tbody>
 							</table>
 						</div>
@@ -335,11 +373,11 @@ const indexItems = sections.flatMap((s) => {
 									</thead>
 									<tbody>
 										{participants.map((p) => (
-											<tr>
+											<tr class:list={{ tu: isMe(p.fideId) }} id={isMe(p.fideId) && place?.target === 'participantes' ? 'tu' : undefined}>
 												{/* Apilada en una pantalla muy estrecha: cada cifra lleva su rótulo, sólo si la hay. */}
 												<td class="end num"><span class="cell-label" aria-hidden="true">Nº </span>{p.startRank}</td>
 												<td class="name">
-													<PlayerName name={p.name} title={p.title} fideId={p.fideId} />
+													<PlayerName name={p.name} title={p.title} fideId={p.fideId} you={isMe(p.fideId)} />
 													{p.fideId && p.hasDossier === 1 && (
 														<span class="prepare">
 															{' '}
@@ -415,7 +453,7 @@ const indexItems = sections.flatMap((s) => {
 						)}
 						{games.total > 0 ? (
 							<>
-								<GamesTable games={games.rows} hideTournament match={matches?.size ? (g) => matches.get(g.id) : undefined} />
+								<GamesTable games={games.rows} hideTournament match={matches?.size ? (g) => matches.get(g.id) : undefined} me={me} />
 								<Pagination page={games.page} pages={games.pages} total={games.total} noun={['partida', 'partidas']} anchor="partidas" />
 							</>
 						) : (
@@ -442,7 +480,11 @@ const indexItems = sections.flatMap((s) => {
 								{teams.map(([team, members]) => {
 									const rating = teamRating.get(team)
 									return (
-										<details class="team">
+										<details
+											class="team"
+											open={isMyTeam(team)}
+											id={isMyTeam(team) && place?.target === 'plantilla' ? 'tu' : undefined}
+										>
 											<summary>
 												<span class="team-name">{team ?? 'Sin equipo'}</span>
 												<span class="team-meta">
@@ -463,10 +505,10 @@ const indexItems = sections.flatMap((s) => {
 													</thead>
 													<tbody>
 														{members.map((p) => (
-															<tr>
+															<tr class:list={{ tu: isMe(p.fideId) }}>
 																<td class="end num"><span class="cell-label" aria-hidden="true">Tablero </span>{p.startRank}</td>
 																<td class="name">
-																	<PlayerName name={p.name} title={p.title} fideId={p.fideId} />
+																	<PlayerName name={p.name} title={p.title} fideId={p.fideId} you={isMe(p.fideId)} />
 																	{p.fideId && p.hasDossier === 1 && (
 																		<span class="prepare">
 																			{' '}
@@ -604,6 +646,15 @@ const indexItems = sections.flatMap((s) => {
 			display: inline;
 			color: var(--text-muted);
 		}
+
+		/* Tu fila (.tu, en global.css): la raya, en la fila, porque aquí la primera celda va en la segunda línea. */
+		.participants tr.tu {
+			box-shadow: inset var(--mark-width) 0 var(--accent);
+		}
+
+		.participants tr.tu > :first-child {
+			box-shadow: none;
+		}
 	}
 
 	/*
@@ -628,6 +679,11 @@ const indexItems = sections.flatMap((s) => {
 
 	.team + .team {
 		border-top: 1px solid var(--border);
+	}
+
+	/* La de tu equipo, abierta, cuando «Tu equipo» lleva a ella (sin clasificación): como la fila enlazada. */
+	.team:target {
+		scroll-margin-top: 25svh;
 	}
 
 	.team > summary {

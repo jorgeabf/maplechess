@@ -17,9 +17,15 @@ interface Props {
 	 * en la columna del torneo: va con hideTournament.
 	 */
 	match?: (game: GameListRow) => readonly [string, string] | undefined
+	/**
+	 * Tú (cookie yo), en la página del torneo: tus partidas van marcadas (.tu).
+	 * En la ficha no: en la tuya lo serían todas.
+	 */
+	me?: number | null
 }
 
-const { games, fideId, hideTournament = false, ply, match } = Astro.props
+const { games, fideId, hideTournament = false, ply, match, me = null } = Astro.props
+const isMe = (id: number | null) => me !== null && id === me
 
 /** Color del jugador de `fideId` en la partida. */
 function colorOf(game: GameListRow): 'white' | 'black' | undefined {
@@ -59,10 +65,10 @@ const linkTo = (id: number | null) => (fideId && id === fideId ? null : id)
 				games.map((g) => {
 					const teams = match?.(g)
 					return (
-						<tr>
+						<tr class:list={{ tu: isMe(g.whiteFideId) || isMe(g.blackFideId) }}>
 							<td class="date num">{formatDate(g.date)}</td>
 							<td class="white">
-								<PlayerName name={g.whiteName} fideId={linkTo(g.whiteFideId)} elo={g.whiteElo} />
+								<PlayerName name={g.whiteName} fideId={linkTo(g.whiteFideId)} elo={g.whiteElo} you={isMe(g.whiteFideId)} />
 							</td>
 							<td class="outcome center">
 								<a class:list={['result', outcomeClass(g)]} href={gameHref(g.id, colorOf(g), ply?.(g))}>
@@ -71,7 +77,7 @@ const linkTo = (id: number | null) => (fideId && id === fideId ? null : id)
 								</a>
 							</td>
 							<td class="black">
-								<PlayerName name={g.blackName} fideId={linkTo(g.blackFideId)} elo={g.blackElo} />
+								<PlayerName name={g.blackName} fideId={linkTo(g.blackFideId)} elo={g.blackElo} you={isMe(g.blackFideId)} />
 							</td>
 							<td class="opening wrap">
 								{g.eco && <span class="eco">{g.eco}</span>} {g.opening}
@@ -201,6 +207,18 @@ const linkTo = (id: number | null) => (fideId && id === fideId ? null : id)
 
 		.games tbody tr:last-child {
 			border-bottom: 0;
+		}
+
+		/*
+		 * Tus partidas (.tu, en global.css): la raya, en la fila, porque aquí
+		 * la primera celda (la fecha) va abajo, en la última línea.
+		 */
+		.games tr.tu {
+			box-shadow: inset var(--mark-width) 0 var(--accent);
+		}
+
+		.games tr.tu > :first-child {
+			box-shadow: none;
 		}
 
 		/* Sin el mínimo de .wrap, que es para la tabla que se desplaza. */

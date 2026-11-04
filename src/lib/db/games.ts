@@ -269,6 +269,21 @@ export async function getTournamentGames(
 	return { rounds, games: toPage(rows.results as GameListRow[], total, page) }
 }
 
+/**
+ * Cuántas partidas tiene un jugador en un torneo: «Mis partidas (4)» de la
+ * página del torneo, sólo si juegas en él. Va por el índice único del torneo,
+ * el que ya recorre getTournamentGames, más la fila de cada partida: el coste
+ * lo acota el tamaño del torneo. Por los índices de cada color serían todas
+ * las partidas del jugador, de toda su carrera.
+ */
+export const PLAYER_TOURNAMENT_GAMES_SQL =
+	'SELECT count(*) AS n FROM games WHERE tournament_id = ?1 AND (white_fide_id = ?2 OR black_fide_id = ?2)'
+
+export async function countPlayerTournamentGames(db: D1Database, tournamentId: number, fideId: number): Promise<number> {
+	const row = await db.prepare(PLAYER_TOURNAMENT_GAMES_SQL).bind(tournamentId, fideId).first<{ n: number }>()
+	return row?.n ?? 0
+}
+
 /** Máximo de partidas por descarga PGN de un jugador, un torneo o una lista. */
 const PGN_EXPORT_LIMIT = 5000
 
