@@ -50,6 +50,21 @@ describe('givenName', () => {
 		expect(givenName('Ficticio,')).toBeNull()
 		expect(givenName('Inventado, 1990')).toBeNull()
 	})
+
+	it('null si no se lee como un nombre: otra coma, cifras o sólo iniciales', () => {
+		expect(givenName('Irreal, Ana, Maria')).toBeNull()
+		expect(givenName('Ficticio Ejemplez, Jose L. 4')).toBeNull()
+		expect(givenName('Ejemplo Prueba, Luis(2)')).toBeNull()
+		expect(givenName('Inventado, J.')).toBeNull()
+		expect(givenName('Inventado, J')).toBeNull()
+		expect(givenName('Inventado, J.M.')).toBeNull()
+	})
+
+	it('con una inicial y un nombre, sin espacio tras la coma o con uno duro, sí', () => {
+		expect(givenName('Inventado, M. Carmen')).toBe('M. Carmen')
+		expect(givenName('Inventado,Ana')).toBe('Ana')
+		expect(givenName('Inventado, Ana')).toBe('Ana')
+	})
 })
 
 describe('withoutHomonymYear', () => {

@@ -8,12 +8,14 @@ import { getTotals, latestTournamentsWithGames } from '../lib/db/tournaments'
 import { formatCount, formatGames, formatRange, givenName } from '../lib/format'
 import { ME_COOKIE, resolveMe } from '../lib/me'
 
-// Si has dicho quién eres (cookie yo): el saludo con tu nombre de pila en
-// lugar de la pregunta, que en una línea sólo cabe así (hasta 19 caracteres,
-// el p99,9 de la lista española, a 360 px); el enlace a tu ficha y, si tienes
-// una ronda emparejada, tu próximo rival. Sin ella, la presentación no sale:
-// ya sabes para qué es la web. Si no, cómo decir quién eres («Soy yo» en tu
-// ficha). Tu nombre, de la ficha: una fila por la clave.
+// Con la cookie yo, el saludo con tu nombre de pila en lugar de la pregunta,
+// que en una línea sólo cabe así (hasta 19 caracteres, el p99,9 de la lista
+// española, a 360 px). Debajo, tu próxima ronda si ya está emparejada; la
+// presentación, sólo sin ronda ni saludo: si te saluda, ya sabes para qué es
+// la web. Tu nombre, de tu ficha (getPlayer: de la lista FIDE por la clave o,
+// si no estás en ella, de tu último torneo). Si ese FIDE ID no tiene ficha
+// (retirado o inexistente), como sin la cookie: sin «Mi ficha», que daría un
+// 404, y con la nota de cómo decir quién eres.
 const me = resolveMe(null, Astro.cookies.get(ME_COOKIE)?.value).fideId
 const [totals, latest, upcoming, player] = await Promise.all([
 	getTotals(env.DB),
@@ -66,10 +68,10 @@ const available = [
 		{/* Torneos, todos: los que se juegan esta semana casi nunca tienen partidas todavía. */}
 		<p class="links">
 			<a href="/partidas">Buscar partidas</a> · <a href="/torneos">Buscar torneos</a>
-			{me && <> · <a href={`/jugadores/${me}`}>Mi ficha</a></>}
+			{player && <> · <a href={`/jugadores/${player.fideId}`}>Mi ficha</a></>}
 		</p>
 		{
-			!me && (
+			!player && (
 				<p class="note">¿Juegas torneos? Búscate y pulsa «Soy yo» en tu ficha: aquí verás tu próxima partida.</p>
 			)
 		}
