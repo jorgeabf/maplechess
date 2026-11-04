@@ -30,7 +30,7 @@ La historia, las medidas, los casos concretos y el detalle de cada página que s
 
 #### `GAMES_REPROCESS`
 
-- `GAMES_REPROCESS` (`src/ingest/reprocess.ts`) recalcula desde el PGN guardado y el ritmo del torneo las columnas derivadas (`opening_moves`, `time_class` y `clocks`, con `derivedColumns()` de `src/ingest/games.ts`, la misma función que usa la ingesta) y, del torneo, cuántas de sus partidas son de lichess (`lichess_games`, ver «Licencia CC BY-SA 4.0»). Además aplica a lo guardado la regla de los nombres de los menores (ver «Menores»): en las partidas (columnas y cabeceras `White`/`Black` del PGN, como texto), los participantes y los emparejamientos, y borra los torneos sensibles y los de menores (ver «Torneos sensibles» y «Torneos de menores»). Y deja en la columna Fed. de los participantes sólo los códigos de federación (ver «Menores»). Y vuelve a decidir dónde se juega cada torneo (ver «Buscar torneos por sitio»). Se lanza a mano tras una migración que añade una de esas columnas o cambia cómo se calcula, o si cambia esa regla.
+- `GAMES_REPROCESS` (`src/ingest/reprocess.ts`) recalcula desde el PGN guardado y el ritmo del torneo las columnas derivadas (`opening_moves`, `time_class` y `clocks`, con `derivedColumns()` de `src/ingest/games.ts`, la misma función que usa la ingesta) y, del torneo, cuántas de sus partidas son de lichess (`lichess_games`, ver «Licencia CC BY-SA 4.0»). Además aplica a lo guardado la regla de los nombres de los menores (ver «Menores»): en las partidas (columnas y cabeceras `White`/`Black` del PGN, como texto), los participantes y los emparejamientos, y borra los torneos sensibles y los de menores (ver «Torneos sensibles» y «Torneos de menores»). Y quita los FIDE ID inverosímiles de los participantes, las partidas (columnas y cabeceras del PGN) y los emparejamientos, antes de la columna Fed. (ver «FIDE ID inverosímiles»). Y deja en la columna Fed. de los participantes sólo los códigos de federación (ver «Menores»). Y vuelve a decidir dónde se juega cada torneo (ver «Buscar torneos por sitio»). Se lanza a mano tras una migración que añade una de esas columnas o cambia cómo se calcula, o si cambia esa regla.
 
 ### Ajedrez
 
@@ -856,6 +856,16 @@ La historia, las medidas, los casos concretos y el detalle de cada página que s
 ### ELO inverosímiles
 
 - **ELO inverosímiles:** info64 publica a veces otra cosa en la columna FIDE (de 1 a 20 en torneos de menores, 118, 4296). Se guardan como NULL y se quitan del PGN (`plausibleRating`).
+
+### FIDE ID inverosímiles
+
+- **Medido en producción el 4-nov-2026:** 13.545 participaciones con un FIDE ID por debajo de 100.000, con 3.573 números distintos, en 239 torneos de info64 (142 de Málaga, casi todos andaluces y desde 2022), sin ningún FIDE ID de verdad en el torneo. Es el número de una federación territorial: cada uno, un solo nombre en decenas de torneos. 2.082 de esos nombres están tal cual en la lista española, con su FIDE ID real.
+  - Además, el «1» de relleno de un organizador para 38 participantes del torneo 889 y uno del 7582: `/jugadores/1` juntaba a 39 personas.
+  - Y 182 partidas con uno de esos números en la cabecera del PGN. En los emparejamientos, ninguno.
+- **Por qué 100.000:** ninguno de los 9 números menores probados (del 1 al 99.999) tiene perfil en ratings.fide.com; el 100013 (Argentina) sí, y la lista española empieza en el 100234.
+- **Qué hacían:** una ficha indexable por número, con un enlace a un perfil de la FIDE que no existe, sin año de nacimiento (contaba como adulto: con dossier y repertorio) y sin los torneos en la ficha real de quien la tiene.
+- **Qué queda:** esos jugadores, sin FIDE ID, como cualquiera que no lo tiene. Cruzarlos por el nombre con la lista española, como el archivo de Cantabria (`FideMatcher`), es una mejora aparte: con un único candidato y un año compatible, y medido antes en local.
+- **Los repetidos que no son de relleno se quedan:** la misma persona en dos equipos, el que da una simultánea y las variantes del nombre («Bruce, David J» y «Bruce, David James»).
 
 ### Ritmo
 

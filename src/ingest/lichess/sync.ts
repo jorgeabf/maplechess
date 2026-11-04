@@ -21,7 +21,7 @@
 import { WorkflowEntrypoint, type WorkflowEvent, type WorkflowStep } from 'cloudflare:workers'
 import { normalizeName } from '../../lib/chess/names'
 import { parseGames, type ParsedGame } from '../../lib/chess/pgn'
-import { plausibleRating } from '../../lib/chess/rating'
+import { plausibleFideId, plausibleRating } from '../../lib/chess/rating'
 import { TIME_CLASS_LABEL } from '../../lib/chess/timecontrol'
 import { addDays, isoDate, validDate } from '../../lib/dates'
 import { saveHealth } from '../../lib/salud'
@@ -423,7 +423,14 @@ async function checkPlayers(db: D1Database, candidate: BroadcastCandidate): Prom
 	// Sin jugadores todavía (aún no ha empezado): se mira otro día.
 	if (listed.length === 0 && !candidate.finished) return { verdict: 'later', players: null, spanish: null }
 	// Sólo lo que se usa: la lista trae también puntos, desempates…
-	const players = listed.map(({ name, fideId, fed, rating, title, team }) => ({ name, fideId, fed, rating, title, team }))
+	const players = listed.map(({ name, fideId, fed, rating, title, team }) => ({
+		name,
+		fideId: plausibleFideId(fideId) ?? undefined,
+		fed,
+		rating,
+		title,
+		team
+	}))
 	const ids = players.map((p) => p.fideId).filter((id): id is number => typeof id === 'number')
 	const spanish = [
 		...new Set([
@@ -662,7 +669,7 @@ export function broadcastParticipants(
 		const headers = game.game.headers
 		for (const color of ['White', 'Black'] as const) {
 			const name = color === 'White' ? game.white : game.black
-			const fideId = Number.parseInt(headers.get(`${color}FideId`) ?? '', 10) || null
+			const fideId = plausibleFideId(Number.parseInt(headers.get(`${color}FideId`) ?? '', 10))
 			const listed = fideId ? byFideId.get(fideId) : undefined
 			const key = fideId ? `#${fideId}` : normalizeName(name)
 			if (!name || byKey.has(key)) continue

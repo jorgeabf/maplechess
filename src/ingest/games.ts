@@ -4,7 +4,7 @@
 // en cabeceras.
 import { matchName, normalizeName, type NameCandidate } from '../lib/chess/names'
 import { writeGame, type ParsedGame } from '../lib/chess/pgn'
-import { plausibleRating } from '../lib/chess/rating'
+import { plausibleFideId, plausibleRating } from '../lib/chess/rating'
 import { timeClassOf, type TimeClass } from '../lib/chess/timecontrol'
 import { madridYear } from '../lib/dates'
 import { publicName } from './nombres'
@@ -187,13 +187,18 @@ export function buildGameRows(
 		const black = matchName(game.black, candidates)
 		const whiteName = publicName(white?.name ?? game.white, year)
 		const blackName = publicName(black?.name ?? game.black, year)
-		const whiteFideId = headerInt(game, 'WhiteFideId') ?? white?.fideId ?? null
-		const blackFideId = headerInt(game, 'BlackFideId') ?? black?.fideId ?? null
-		// El de los participantes ya viene filtrado (info64/parse.ts).
+		// El FIDE ID y el ELO de los participantes ya vienen filtrados (info64/parse.ts).
+		const whiteFideId = plausibleFideId(headerInt(game, 'WhiteFideId')) ?? white?.fideId ?? null
+		const blackFideId = plausibleFideId(headerInt(game, 'BlackFideId')) ?? black?.fideId ?? null
 		const whiteElo = plausibleRating(headerInt(game, 'WhiteElo')) ?? white?.rating ?? null
 		const blackElo = plausibleRating(headerInt(game, 'BlackElo')) ?? black?.rating ?? null
-		// Un ELO inverosímil de la fuente tampoco se queda en el PGN.
-		const remove = [...(whiteElo === null ? ['WhiteElo'] : []), ...(blackElo === null ? ['BlackElo'] : [])]
+		// Un FIDE ID o un ELO inverosímil de la fuente tampoco se queda en el PGN.
+		const remove = Object.entries({
+			WhiteFideId: whiteFideId,
+			BlackFideId: blackFideId,
+			WhiteElo: whiteElo,
+			BlackElo: blackElo
+		}).flatMap(([tag, value]) => (value === null ? [tag] : []))
 		const eco = game.opening?.eco ?? headerText(game, 'ECO')
 		const opening = game.opening?.name ?? headerText(game, 'Opening')
 		const date = game.date ?? tournament.startDate

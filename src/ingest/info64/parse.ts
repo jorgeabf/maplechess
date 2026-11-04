@@ -3,7 +3,7 @@
 // info64 no tiene API: se leen sus páginas HTML con HTMLRewriter (el parser en
 // streaming del runtime de Workers). Se piden siempre en inglés (sin ?hl=),
 // así que los textos fijos ("from", "There are no games.") son estables.
-import { plausibleRating } from '../../lib/chess/rating'
+import { plausibleFideId, plausibleRating } from '../../lib/chess/rating'
 import { validDate } from '../../lib/dates'
 import type { RelatedTournament } from '../../lib/db/tournaments'
 
@@ -27,6 +27,7 @@ export interface TournamentPlayer {
 	name: string
 	fed: string | null
 	rating: number | null
+	/** Sólo si es verosímil (plausibleFideId): algunos torneos traen en la columna otro número. */
 	fideId: number | null
 }
 
@@ -205,7 +206,7 @@ function toPlayers(rows: PlayerCells[], team: string | null): TournamentPlayer[]
 				name: clean(row.name),
 				fed: clean(row.fed) || null,
 				rating: plausibleRating(toInt(clean(row.rating))),
-				fideId: toInt(clean(row.fideId))
+				fideId: plausibleFideId(toInt(clean(row.fideId)))
 			}))
 			// Las filas de un ranking de equipos no tienen celdas de jugador.
 			.filter((p) => p.name && p.startRank > 0)
