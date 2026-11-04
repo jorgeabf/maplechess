@@ -14,8 +14,9 @@
 // (columnas y cabeceras del PGN), de los participantes y de los emparejamientos,
 // y anonimiza a los retirados (tabla retiradas). Oculta el sexo y el año de
 // quien lo ha pedido (tabla ocultaciones), también el del nombre. Y borra los
-// torneos sensibles (tabla torneos_sensibles) y los de menores (menores.ts),
-// que no se guardan. Vuelve a decidir dónde se juega cada torneo (lugares.ts).
+// torneos sensibles (tabla torneos_sensibles), los de menores (menores.ts) y
+// los que repiten las partidas de otro (repetidos.ts), que no se guardan.
+// Vuelve a decidir dónde se juega cada torneo (lugares.ts).
 // Quita los FIDE ID inverosímiles (plausibleFideId, rating.ts): de los
 // participantes, de las partidas (columnas y cabeceras del PGN) y de los
 // emparejamientos. Y vacía la columna Fed. de los torneos en que no es la de
@@ -27,6 +28,7 @@
 //   wrangler workflows trigger games-reprocess '{"ocultaciones":true}' (sólo el sexo y el año ocultos)
 //   wrangler workflows trigger games-reprocess '{"sensibles":true}'    (sólo los torneos sensibles)
 //   wrangler workflows trigger games-reprocess '{"menores":true}'      (sólo los torneos de menores)
+//   wrangler workflows trigger games-reprocess '{"repetidos":true}'    (sólo los torneos repetidos)
 //   wrangler workflows trigger games-reprocess '{"lugares":true}'      (sólo dónde se juegan los torneos)
 //   wrangler workflows trigger games-reprocess '{"federaciones":true}' (sólo la columna Fed.)
 //   wrangler workflows trigger games-reprocess '{"fideIds":true}'      (sólo los FIDE ID inverosímiles)
@@ -62,6 +64,7 @@ import {
 	loadPairingNames,
 	loadPairingPlayers,
 	loadRetired,
+	loadTournamentIds,
 	loadTournamentPlaces,
 	proposeSensitive,
 	refreshTotals,
@@ -80,6 +83,7 @@ import {
 	type BroadcastKey,
 	type StoredGame
 } from './repo'
+import { LISTED_COPIES } from './repetidos'
 import { looksSensitive } from './sensibles'
 
 export interface GamesReprocessParams {
@@ -96,6 +100,8 @@ export interface GamesReprocessParams {
 	sensibles?: boolean
 	/** Sólo los torneos de menores (applyMinorsTournaments), sin recorrer las partidas: si cambia la regla. */
 	menores?: boolean
+	/** Sólo los torneos que repiten las partidas de otro (applyListedCopies), sin recorrer las partidas: si cambia la lista. */
+	repetidos?: boolean
 	/** Sólo dónde se juegan los torneos (applyPlaces), sin recorrer las partidas: tras la migración o si cambian los datos. */
 	lugares?: boolean
 	/** Sólo la columna Fed. de los participantes (clearNonFederations), sin recorrer las partidas: si cambia la regla. */
@@ -126,8 +132,9 @@ export interface ReprocessedBatch {
 
 export class GamesReprocessWorkflow extends WorkflowEntrypoint<Env, GamesReprocessParams> {
 	async run(event: WorkflowEvent<GamesReprocessParams>, step: WorkflowStep): Promise<void> {
-		const { retiradas, ocultaciones, sensibles, menores, lugares, federaciones, fideIds } = event.payload
-		const all = !retiradas && !ocultaciones && !sensibles && !menores && !lugares && !federaciones && !fideIds
+		const { retiradas, ocultaciones, sensibles, menores, repetidos, lugares, federaciones, fideIds } = event.payload
+		const all =
+			!retiradas && !ocultaciones && !sensibles && !menores && !repetidos && !lugares && !federaciones && !fideIds
 		// Lo primero: las partidas de los torneos borrados ya no se recorren.
 		if (all || sensibles) {
 			// Puede preguntar a lichess de qué torneo es una ronda: con sus reintentos.
@@ -137,6 +144,10 @@ export class GamesReprocessWorkflow extends WorkflowEntrypoint<Env, GamesReproce
 		if (all || menores) {
 			const minors = await step.do('torneos de menores', () => applyMinorsTournaments(this.env.DB))
 			console.log(`[reprocess] torneos de menores: ${JSON.stringify(minors)}`)
+		}
+		if (all || repetidos) {
+			const copies = await step.do('torneos repetidos', () => applyListedCopies(this.env.DB))
+			console.log(`[reprocess] torneos repetidos: ${JSON.stringify(copies)}`)
 		}
 		if (all || lugares) {
 			const places = await step.do('lugares de los torneos', () => applyPlaces(this.env.DB))
@@ -494,6 +505,18 @@ export async function applyMinorsTournaments(db: D1Database): Promise<{ deleted:
 	const ids = results
 		.filter((t) => isListedMinors(t.source, t.key) || isMinorsTournament(t.name, t.startDate))
 		.map((t) => t.id)
+	await deleteTournaments(db, ids)
+	if (ids.length > 0) await refreshTotals(db)
+	return { deleted: ids.length }
+}
+
+/**
+ * Borra los torneos de info64 que repiten las partidas de otro (repetidos.ts),
+ * que la ingesta ya no lee, con todo lo suyo. Los busca por su clave natural,
+ * sin recorrer los torneos. Repetirlo no cambia nada. Devuelve cuántos ha borrado.
+ */
+export async function applyListedCopies(db: D1Database): Promise<{ deleted: number }> {
+	const ids = Object.values(await loadTournamentIds(db, 'info64', [...LISTED_COPIES]))
 	await deleteTournaments(db, ids)
 	if (ids.length > 0) await refreshTotals(db)
 	return { deleted: ids.length }

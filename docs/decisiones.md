@@ -30,7 +30,7 @@ La historia, las medidas, los casos concretos y el detalle de cada página que s
 
 #### `GAMES_REPROCESS`
 
-- `GAMES_REPROCESS` (`src/ingest/reprocess.ts`) recalcula desde el PGN guardado y el ritmo del torneo las columnas derivadas (`opening_moves`, `time_class` y `clocks`, con `derivedColumns()` de `src/ingest/games.ts`, la misma función que usa la ingesta) y, del torneo, cuántas de sus partidas son de lichess (`lichess_games`, ver «Licencia CC BY-SA 4.0»). Además aplica a lo guardado la regla de los nombres de los menores (ver «Menores»): en las partidas (columnas y cabeceras `White`/`Black` del PGN, como texto), los participantes y los emparejamientos, y borra los torneos sensibles y los de menores (ver «Torneos sensibles» y «Torneos de menores»). Y quita los FIDE ID inverosímiles de los participantes, las partidas (columnas y cabeceras del PGN) y los emparejamientos, antes de la columna Fed. (ver «FIDE ID inverosímiles»). Y deja en la columna Fed. de los participantes sólo los códigos de federación (ver «Menores»). Y vuelve a decidir dónde se juega cada torneo (ver «Buscar torneos por sitio»). Se lanza a mano tras una migración que añade una de esas columnas o cambia cómo se calcula, o si cambia esa regla.
+- `GAMES_REPROCESS` (`src/ingest/reprocess.ts`) recalcula desde el PGN guardado y el ritmo del torneo las columnas derivadas (`opening_moves`, `time_class` y `clocks`, con `derivedColumns()` de `src/ingest/games.ts`, la misma función que usa la ingesta) y, del torneo, cuántas de sus partidas son de lichess (`lichess_games`, ver «Licencia CC BY-SA 4.0»). Además aplica a lo guardado la regla de los nombres de los menores (ver «Menores»): en las partidas (columnas y cabeceras `White`/`Black` del PGN, como texto), los participantes y los emparejamientos, y borra los torneos sensibles, los de menores y los repetidos (ver «Torneos sensibles», «Torneos de menores» y «Torneos repetidos»). Y quita los FIDE ID inverosímiles de los participantes, las partidas (columnas y cabeceras del PGN) y los emparejamientos, antes de la columna Fed. (ver «FIDE ID inverosímiles»). Y deja en la columna Fed. de los participantes sólo los códigos de federación (ver «Menores»). Y vuelve a decidir dónde se juega cada torneo (ver «Buscar torneos por sitio»). Se lanza a mano tras una migración que añade una de esas columnas o cambia cómo se calcula, o si cambia esa regla.
 
 ### Ajedrez
 
@@ -155,6 +155,18 @@ La historia, las medidas, los casos concretos y el detalle de cada página que s
     - Los grupos «Especial» de los torneos de jóvenes de Navarra (de 12 a 16 años; seis torneos) se quedan, como un Sub 16 (decidido por Jorge el 25-oct-2026). El Cto. de Navarra absoluto por equipos «Especial» es la división.
   - El reprocesado (`{"menores":true}`, `applyMinorsTournaments`) borra los guardados con todo lo suyo en cascada, de 100 en 100 (`deleteTournaments`). Se lanza tras desplegar y si cambia la regla.
   - El mismo hueco que con los sensibles: la retransmisión de lichess de un torneo de info64 de menores se guardaría como torneo propio si su nombre no lo dice.
+
+#### Torneos repetidos
+
+- **Torneos repetidos** (`repetidos.ts`): los de info64 que repiten las partidas de otro torneo. **No se guardan**, por una lista a mano de slugs (`isListedCopy`; decidido por Jorge el 4-nov-2026). Cada partida contaba tantas veces como copias en el dossier y el repertorio, y Google veía páginas duplicadas (las 28 «Duplicada: Google ha elegido una versión canónica diferente» de Search Console).
+  - **Por qué pasa:** sus partidas salen de una retransmisión de lichess que enlazan varios torneos de info64, y cada uno guarda las de sus participantes (ver «Las enlazadas desde info64»). `uniqueGames` sólo junta copias dentro de un torneo.
+  - **Medido el 4-nov-2026 en producción** (blancas, negras, fecha, jugadas y resultado iguales en torneos distintos, con 10 jugadas o más; unas 230.000 filas leídas): 752 partidas en más de un torneo, 1.716 copias y 964 de más, un 0,8 %.
+    - El Granada Chess Open 2026, dado de alta dos veces (349): se queda `granada-chess-open-2026`, el slug sin «-1».
+    - Las tres «Variacion Elo FIDE Std» del Campeonato de Asturias Individual 2024, el cálculo del ELO por tramos de rondas, cada una con sus 87 partidas (83). Se queda el campeonato, aunque sólo ellas tienen clasificación: es la de cada tramo, no la del torneo.
+    - Unas 300 de un torneo general y sus grupos: el Open San Miguel (de 2020 a 2025), el Trofeo Princesa de Asturias (2024 y 2026) y el Open Promoción Heuristic 2024. **Se quedan:** la página de cada grupo enseña sus partidas. Quitar las copias del dossier y el repertorio pediría consultas caras, y no compensa.
+    - Una decena de errores sueltos (Mislata, Altiplano Granadino, European Senior): se quedan.
+  - **Una regla no vale:** no distingue la copia del grupo, y lo guardado dependería del orden de lectura.
+  - El reprocesado (`{"repetidos":true}`, `applyListedCopies`) borra los de la lista en cascada. Uno nuevo, con su PR y el reprocesado tras desplegar. La retransmisión sigue en el torneo que se queda, así que la pasada de lichess no la guarda como propia.
 
 ### `src/lib/chess/`
 
