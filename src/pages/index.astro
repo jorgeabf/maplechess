@@ -3,19 +3,27 @@ import { env } from 'cloudflare:workers'
 import ProximasPartidas from '../components/ProximasPartidas.astro'
 import Base from '../layouts/Base.astro'
 import { getUpcomingGames } from '../lib/db/pairings'
+import { getPlayer } from '../lib/db/players'
 import { getTotals, latestTournamentsWithGames } from '../lib/db/tournaments'
-import { formatCount, formatGames, formatRange } from '../lib/format'
+import { formatCount, formatGames, formatRange, givenName } from '../lib/format'
 import { ME_COOKIE, resolveMe } from '../lib/me'
 
-// Si has dicho quién eres (cookie yo), el enlace a tu ficha y, si tienes una
-// ronda emparejada, tu próximo rival en lugar de la presentación; si no, cómo
-// decirlo («Soy yo» en tu ficha).
+// Con la cookie yo, el saludo con tu nombre de pila en lugar de la pregunta,
+// que en una línea sólo cabe así (hasta 19 caracteres, el p99,9 de la lista
+// española, a 360 px). Debajo, tu próxima ronda si ya está emparejada; la
+// presentación, sólo sin ronda ni saludo: si te saluda, ya sabes para qué es
+// la web. Tu nombre, de tu ficha (getPlayer: de la lista FIDE por la clave o,
+// si no estás en ella, de tu último torneo). Si ese FIDE ID no tiene ficha
+// (retirado o inexistente), como sin la cookie: sin «Mi ficha», que daría un
+// 404, y con la nota de cómo decir quién eres.
 const me = resolveMe(null, Astro.cookies.get(ME_COOKIE)?.value).fideId
-const [totals, latest, upcoming] = await Promise.all([
+const [totals, latest, upcoming, player] = await Promise.all([
 	getTotals(env.DB),
 	latestTournamentsWithGames(env.DB, 8),
-	me ? getUpcomingGames(env.DB, me) : []
+	me ? getUpcomingGames(env.DB, me) : [],
+	me ? getPlayer(env.DB, me) : null
 ])
+const given = player && givenName(player.name)
 // Lo que hay, en una línea: en el móvil, tres tarjetas ocupaban más que la entrada.
 const available = [
 	formatCount(totals.tournaments, 'torneo', 'torneos'),
@@ -29,15 +37,17 @@ const available = [
 	description="¿Ya sabes contra quién juegas? Mira qué aperturas juega tu rival, cómo le van y si se apura con el reloj. Gratis y sin registro."
 >
 	<section class="hero">
-		<h1>¿Contra quién juegas?</h1>
+		<h1>{given ? `Hola, ${given}` : '¿Contra quién juegas?'}</h1>
 		{
 			upcoming.length > 0 ? (
 				<ProximasPartidas games={upcoming} you hideHeading />
 			) : (
-				<p class="muted">
-					Antes de la ronda, mira qué aperturas juega tu rival, cómo le van y si suele apurarse con el reloj. Gratis y
-					sin registro.
-				</p>
+				!given && (
+					<p class="muted">
+						Antes de la ronda, mira qué aperturas juega tu rival, cómo le van y si suele apurarse con el reloj. Gratis y
+						sin registro.
+					</p>
+				)
 			)
 		}
 		<form action="/jugadores" method="get" role="search" class="search">
@@ -58,10 +68,10 @@ const available = [
 		{/* Torneos, todos: los que se juegan esta semana casi nunca tienen partidas todavía. */}
 		<p class="links">
 			<a href="/partidas">Buscar partidas</a> · <a href="/torneos">Buscar torneos</a>
-			{me && <> · <a href={`/jugadores/${me}`}>Mi ficha</a></>}
+			{player && <> · <a href={`/jugadores/${player.fideId}`}>Mi ficha</a></>}
 		</p>
 		{
-			!me && (
+			!player && (
 				<p class="note">¿Juegas torneos? Búscate y pulsa «Soy yo» en tu ficha: aquí verás tu próxima partida.</p>
 			)
 		}

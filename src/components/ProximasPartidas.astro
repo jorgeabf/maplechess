@@ -18,7 +18,10 @@ interface Props {
 	you?: boolean
 	/** Dueño de la ficha: sin `you`, el enlace prepara contra él, si tiene dossier. */
 	owner?: { fideId: number; name: string; hasDossier: boolean }
-	/** Título sólo para lectores de pantalla: en la portada ya pregunta el h1. */
+	/**
+	 * Título sólo para lectores de pantalla: en la portada, bajo el h1 (la
+	 * pregunta o tu saludo), la tarjeta se entiende sola («Juegas con…»).
+	 */
 	hideHeading?: boolean
 	class?: string
 }
