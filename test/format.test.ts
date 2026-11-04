@@ -9,6 +9,7 @@ import {
 	formatPlace,
 	formatRange,
 	formatResults,
+	givenName,
 	homonymYear,
 	withoutHomonymYear
 } from '../src/lib/format'
@@ -30,6 +31,24 @@ describe('displayName', () => {
 
 	it('otras cifras no son un año', () => {
 		expect(displayName('Ficticio Ejemplez, Jose L. 4')).toBe('Jose L. 4 Ficticio Ejemplez')
+	})
+})
+
+describe('givenName', () => {
+	it('el nombre de pila, el de después de la coma', () => {
+		expect(givenName('Pruebez Ensayo, Tomas')).toBe('Tomas')
+		expect(givenName('Irreal, Maria del Carmen')).toBe('Maria del Carmen')
+	})
+
+	it('sin el año de los homónimos FIDE', () => {
+		expect(givenName('Ejemplez Ejemplez, Jose Manuel 1971')).toBe('Jose Manuel')
+		expect(givenName('Supuesto Supuesto, Ruben 1978 I')).toBe('Ruben')
+	})
+
+	it('sin coma, o sin nada tras ella, null', () => {
+		expect(givenName('Inventado')).toBeNull()
+		expect(givenName('Ficticio,')).toBeNull()
+		expect(givenName('Inventado, 1990')).toBeNull()
 	})
 })
 

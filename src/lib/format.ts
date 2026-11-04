@@ -143,6 +143,18 @@ export function displayName(name: string): string {
 	return given ? `${given} ${surname}` : surname
 }
 
+/**
+ * El nombre de pila de "Apellidos, Nombre", sin el año de los homónimos: el
+ * saludo de la portada («Hola, Ana»). Null si no lleva coma o no queda nada.
+ */
+export function givenName(name: string): string | null {
+	const comma = name.indexOf(',')
+	if (comma === -1) return null
+	const given = name.slice(comma + 1).trim()
+	const homonym = HOMONYM.exec(given)
+	return (homonym ? homonym[1] : given) || null
+}
+
 /** Año de los homónimos («Supuesto Supuesto, Ruben 1978 I» → 1978), o null si el nombre no lo lleva. */
 export function homonymYear(name: string): number | null {
 	const comma = name.indexOf(',')
