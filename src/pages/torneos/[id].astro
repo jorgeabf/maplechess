@@ -153,10 +153,19 @@ const matches = isTeam ? gameMatches(games.rows, participants) : null
  * cosa. Una clasificación de 66 jugadores ocupa 4 pantallas en el móvil. Tus
  * partidas se cuentan sólo si juegas en el torneo: es la única lectura más.
  */
-const place = myPlace(me, { isTeam, numbered: !fromLichess }, standings?.rows ?? null, participants, upcoming?.pairings ?? [])
+const place = myPlace(
+	me,
+	{ isTeam, numbered: !fromLichess && !fromFca },
+	standings?.rows ?? null,
+	participants,
+	upcoming?.pairings ?? []
+)
 const myGames = me !== null && place?.member && gamesTotal > 0 ? await countPlayerTournamentGames(env.DB, id, me) : 0
 const isMe = (fideId: number | null) => me !== null && fideId === me
 const isMyTeam = (team: string | null) => place?.team != null && team === place.team
+// Tu fila de la clasificación o de los participantes: una sola, la que lleva id="tu".
+const isMyRow = (target: 'clasificacion' | 'participantes', startRank: number) =>
+	place?.target === target && place.startRank === startRank
 const mine = [
 	place?.board != null && { href: `#mesa-${place.board}`, label: `Tu mesa: ${place.board}` },
 	place?.target && place.label && { href: '#tu', label: place.label },
@@ -308,9 +317,9 @@ const indexItems = sections.flatMap((s) => {
 								</thead>
 								<tbody>
 									{standings.rows.map((s) => {
-										const yours = isTeam ? isMyTeam(s.name) : isMe(s.fideId)
+										const yours = isMyRow('clasificacion', s.startRank)
 										return (
-											<tr class:list={{ tu: yours }} id={yours && place?.target === 'clasificacion' ? 'tu' : undefined}>
+											<tr class:list={{ tu: yours }} id={yours ? 'tu' : undefined}>
 												<td class="end num">{s.pos}</td>
 												<td class="name">
 													{isTeam || !s.name ? (
@@ -373,11 +382,11 @@ const indexItems = sections.flatMap((s) => {
 									</thead>
 									<tbody>
 										{participants.map((p) => (
-											<tr class:list={{ tu: isMe(p.fideId) }} id={isMe(p.fideId) && place?.target === 'participantes' ? 'tu' : undefined}>
+											<tr class:list={{ tu: isMyRow('participantes', p.startRank) }} id={isMyRow('participantes', p.startRank) ? 'tu' : undefined}>
 												{/* Apilada en una pantalla muy estrecha: cada cifra lleva su rótulo, sólo si la hay. */}
 												<td class="end num"><span class="cell-label" aria-hidden="true">Nº </span>{p.startRank}</td>
 												<td class="name">
-													<PlayerName name={p.name} title={p.title} fideId={p.fideId} you={isMe(p.fideId)} />
+													<PlayerName name={p.name} title={p.title} fideId={p.fideId} you={isMyRow('participantes', p.startRank)} />
 													{p.fideId && p.hasDossier === 1 && (
 														<span class="prepare">
 															{' '}

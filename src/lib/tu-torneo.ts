@@ -7,6 +7,7 @@ import { formatPlace } from './format'
 
 interface StandingLike {
 	pos: number
+	startRank: number
 	/** El jugador o, en un torneo por equipos, el equipo. */
 	name: string | null
 	fideId: number | null
@@ -31,6 +32,12 @@ export interface MyPlace {
 	team: string | null
 	/** Dónde está la fila a la que lleva `label` (la que lleva id="tu"). */
 	target: 'clasificacion' | 'participantes' | 'plantilla' | null
+	/**
+	 * El número inicial de esa fila, en la clasificación o en los
+	 * participantes: sólo ella se marca. Dos equipos pueden llamarse igual, y
+	 * se queda el de mejor puesto, como en la ficha.
+	 */
+	startRank: number | null
 	/** «Tu puesto: 20.º de 66», «Tu número inicial: 23 de 80», «Tu equipo: Danubio, 3.º de 10». */
 	label: string | null
 	/** Tu mesa en la próxima ronda, si ya está emparejada. */
@@ -39,9 +46,11 @@ export interface MyPlace {
 
 /**
  * Dónde estás en el torneo, o null si no juegas en él. `numbered`: el número
- * inicial es el del torneo; en los propios de lichess van numerados por ELO
- * y no se dice. En uno individual con clasificación no se leen los
- * participantes: cada fila de la clasificación es uno de ellos.
+ * inicial es el del torneo. Los propios de lichess y los del archivo de la FCA
+ * van numerados por ELO (en la FCA, casi siempre sin él: por el nombre), y
+ * no se dice. En uno individual con clasificación no se leen los
+ * participantes: cada fila de la clasificación es uno de ellos. Las filas
+ * van por puesto, así que `find` da la mejor.
  */
 export function myPlace(
 	me: number | null,
@@ -52,7 +61,7 @@ export function myPlace(
 ): MyPlace | null {
 	if (me === null) return null
 	const board = pairings.find((p) => p.white.fideId === me || p.black.fideId === me)?.board ?? null
-	const none: MyPlace = { member: false, team: null, target: null, label: null, board }
+	const none: MyPlace = { member: false, team: null, target: null, startRank: null, label: null, board }
 
 	if (tournament.isTeam) {
 		const participant = participants.find((p) => p.fideId === me)
@@ -62,13 +71,26 @@ export function myPlace(
 		if (team === null) return { ...none, member: true }
 		const row = standings?.find((s) => s.name === team)
 		return row && standings
-			? { member: true, team, target: 'clasificacion', label: `Tu equipo: ${team}, ${formatPlace(row.pos)} de ${standings.length}`, board }
-			: { member: true, team, target: 'plantilla', label: `Tu equipo: ${team}`, board }
+			? {
+					...none,
+					member: true,
+					team,
+					target: 'clasificacion',
+					startRank: row.startRank,
+					label: `Tu equipo: ${team}, ${formatPlace(row.pos)} de ${standings.length}`
+				}
+			: { ...none, member: true, team, target: 'plantilla', label: `Tu equipo: ${team}` }
 	}
 
 	const standing = standings?.find((s) => s.fideId === me)
 	if (standing && standings) {
-		return { ...none, member: true, target: 'clasificacion', label: `Tu puesto: ${formatPlace(standing.pos)} de ${standings.length}` }
+		return {
+			...none,
+			member: true,
+			target: 'clasificacion',
+			startRank: standing.startRank,
+			label: `Tu puesto: ${formatPlace(standing.pos)} de ${standings.length}`
+		}
 	}
 	const participant = participants.find((p) => p.fideId === me)
 	if (participant) {
@@ -76,6 +98,7 @@ export function myPlace(
 			...none,
 			member: true,
 			target: 'participantes',
+			startRank: participant.startRank,
 			label: tournament.numbered ? `Tu número inicial: ${participant.startRank} de ${participants.length}` : null
 		}
 	}

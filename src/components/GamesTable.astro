@@ -211,7 +211,8 @@ const linkTo = (id: number | null) => (fideId && id === fideId ? null : id)
 
 		/*
 		 * Tus partidas (.tu, en global.css): la raya, en la fila, porque aquí
-		 * la primera celda (la fecha) va abajo, en la última línea.
+		 * la primera celda (la fecha) va abajo, en la última línea. A todo el
+		 * ancho, con subgrid, igual (más abajo).
 		 */
 		.games tr.tu {
 			box-shadow: inset var(--mark-width) 0 var(--accent);
@@ -350,6 +351,15 @@ const linkTo = (id: number | null) => (fideId && id === fideId ? null : id)
 			.games tr {
 				align-items: center;
 				border-bottom: 1px solid var(--border);
+			}
+
+			/* Tus partidas: la raya, en la fila; en la primera celda, centrada, se quedaba corta. */
+			.games tr.tu {
+				box-shadow: inset var(--mark-width) 0 var(--accent);
+			}
+
+			.games tr.tu > :first-child {
+				box-shadow: none;
 			}
 
 			.games thead tr {

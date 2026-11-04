@@ -33,6 +33,6 @@ const { name, fideId, title, elo, you = false } = Astro.props
 		) : (
 			<span>{name}</span>
 		)
-	}{elo &&' '}
+	}{elo && ' '}
 	{elo && <span class="elo muted num">{elo}</span>}
 </span>
