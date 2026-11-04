@@ -5,6 +5,7 @@
 // Cada parámetro puede ocupar hasta 2 MB: los lotes se cortan por tamaño.
 import { normalizeName } from '../lib/chess/names'
 import { setPgnTags } from '../lib/chess/pgn'
+import { MIN_FIDE_ID, plausibleFideId } from '../lib/chess/rating'
 import { madridYear } from '../lib/dates'
 import type { RelatedTournament } from '../lib/db/tournaments'
 import { withoutHomonymYear } from '../lib/format'
@@ -494,6 +495,21 @@ export function withoutHiddenYears<T extends GamePlayers>(game: T, hidden: Hidde
 	if (whiteName !== game.whiteName) result = { ...result, whiteName, pgn: setPgnTags(result.pgn, { White: whiteName }) }
 	const blackName = withoutHiddenYear(hidden, game.blackFideId, game.blackName)
 	if (blackName !== game.blackName) result = { ...result, blackName, pgn: setPgnTags(result.pgn, { Black: blackName }) }
+	return result
+}
+
+/**
+ * La partida sin los FIDE ID inverosímiles (plausibleFideId), en la columna y
+ * en la cabecera del PGN; la misma si no tiene ninguno.
+ */
+export function withPlausibleFideIds<T extends GamePlayers>(game: T): T {
+	let result = game
+	if (game.whiteFideId !== null && plausibleFideId(game.whiteFideId) === null) {
+		result = { ...result, whiteFideId: null, pgn: setPgnTags(result.pgn, { WhiteFideId: null }) }
+	}
+	if (game.blackFideId !== null && plausibleFideId(game.blackFideId) === null) {
+		result = { ...result, blackFideId: null, pgn: setPgnTags(result.pgn, { BlackFideId: null }) }
+	}
 	return result
 }
 
@@ -1087,6 +1103,30 @@ export async function clearNonFederations(db: D1Database): Promise<number> {
 			.bind(federations)
 	])
 	return communities.meta.changes + others.meta.changes
+}
+
+// --- FIDE ID inverosímiles: lo ya guardado (lo aplica reprocess.ts) ---
+
+/**
+ * Quita de los participantes guardados los FIDE ID inverosímiles, como el
+ * parser al leer (plausibleFideId). Va por el índice participations_fide_id.
+ * Devuelve cuántos cambian.
+ */
+export async function clearImplausibleParticipantIds(db: D1Database): Promise<number> {
+	const { meta } = await db.prepare('UPDATE participations SET fide_id = NULL WHERE fide_id < ?1').bind(MIN_FIDE_ID).run()
+	return meta.changes
+}
+
+/** Partidas con algún FIDE ID inverosímil, por los índices games_white y games_black. */
+export async function loadImplausibleIdGames(db: D1Database): Promise<StoredGamePlayers[]> {
+	const { results } = await db
+		.prepare(
+			`SELECT ${GAME_PLAYERS} FROM games WHERE white_fide_id < ?1
+			UNION SELECT ${GAME_PLAYERS} FROM games WHERE black_fide_id < ?1`
+		)
+		.bind(MIN_FIDE_ID)
+		.all<StoredGamePlayers>()
+	return results
 }
 
 /** Si el jugador de la fila de json_each ha pedido ocultar `campo` (tabla ocultaciones). */

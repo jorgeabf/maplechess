@@ -16,8 +16,10 @@
 // quien lo ha pedido (tabla ocultaciones), también el del nombre. Y borra los
 // torneos sensibles (tabla torneos_sensibles) y los de menores (menores.ts),
 // que no se guardan. Vuelve a decidir dónde se juega cada torneo (lugares.ts).
-// Y vacía la columna Fed. de los torneos en que no es la de federaciones
-// (federaciones.ts).
+// Quita los FIDE ID inverosímiles (plausibleFideId, rating.ts): de los
+// participantes, de las partidas (columnas y cabeceras del PGN) y de los
+// emparejamientos. Y vacía la columna Fed. de los torneos en que no es la de
+// federaciones (federaciones.ts).
 //
 //   POST /api/admin/sync  {"workflow":"reprocess"}
 //   wrangler workflows trigger games-reprocess '{}'
@@ -27,9 +29,11 @@
 //   wrangler workflows trigger games-reprocess '{"menores":true}'      (sólo los torneos de menores)
 //   wrangler workflows trigger games-reprocess '{"lugares":true}'      (sólo dónde se juegan los torneos)
 //   wrangler workflows trigger games-reprocess '{"federaciones":true}' (sólo la columna Fed.)
+//   wrangler workflows trigger games-reprocess '{"fideIds":true}'      (sólo los FIDE ID inverosímiles)
 import { WorkflowEntrypoint, type WorkflowEvent, type WorkflowStep } from 'cloudflare:workers'
 import { normalizeName } from '../lib/chess/names'
 import { parseGames } from '../lib/chess/pgn'
+import { plausibleFideId } from '../lib/chess/rating'
 import { timeClassOf } from '../lib/chess/timecontrol'
 import { madridYear } from '../lib/dates'
 import { withoutHomonymYear } from '../lib/format'
@@ -42,6 +46,7 @@ import { isRetired, nameKey, publicName, publicPgnNames, RETIRED_NAME, withoutHi
 import {
 	anonymizeRetiredParticipations,
 	applyHiddenFields,
+	clearImplausibleParticipantIds,
 	clearNonFederations,
 	deleteExcludedTournaments,
 	deleteRetiredPlayers,
@@ -53,6 +58,7 @@ import {
 	loadHiddenYearPlayers,
 	loadHiddenYears,
 	loadHomonymParticipations,
+	loadImplausibleIdGames,
 	loadPairingNames,
 	loadPairingPlayers,
 	loadRetired,
@@ -70,6 +76,7 @@ import {
 	updateTournamentPlaces,
 	withoutHiddenYears,
 	withoutRetired,
+	withPlausibleFideIds,
 	type BroadcastKey,
 	type StoredGame
 } from './repo'
@@ -93,6 +100,8 @@ export interface GamesReprocessParams {
 	lugares?: boolean
 	/** Sólo la columna Fed. de los participantes (clearNonFederations), sin recorrer las partidas: si cambia la regla. */
 	federaciones?: boolean
+	/** Sólo los FIDE ID inverosímiles (applyFideIds), sin recorrer todas las partidas: si cambia la regla. */
+	fideIds?: boolean
 }
 
 /** Partidas por paso: unos 2 MB de PGN y unas décimas de segundo de CPU. */
@@ -117,8 +126,8 @@ export interface ReprocessedBatch {
 
 export class GamesReprocessWorkflow extends WorkflowEntrypoint<Env, GamesReprocessParams> {
 	async run(event: WorkflowEvent<GamesReprocessParams>, step: WorkflowStep): Promise<void> {
-		const { retiradas, ocultaciones, sensibles, menores, lugares, federaciones } = event.payload
-		const all = !retiradas && !ocultaciones && !sensibles && !menores && !lugares && !federaciones
+		const { retiradas, ocultaciones, sensibles, menores, lugares, federaciones, fideIds } = event.payload
+		const all = !retiradas && !ocultaciones && !sensibles && !menores && !lugares && !federaciones && !fideIds
 		// Lo primero: las partidas de los torneos borrados ya no se recorren.
 		if (all || sensibles) {
 			// Puede preguntar a lichess de qué torneo es una ronda: con sus reintentos.
@@ -132,6 +141,11 @@ export class GamesReprocessWorkflow extends WorkflowEntrypoint<Env, GamesReproce
 		if (all || lugares) {
 			const places = await step.do('lugares de los torneos', () => applyPlaces(this.env.DB))
 			console.log(`[reprocess] lugares de los torneos: ${JSON.stringify(places)}`)
+		}
+		// Antes de la columna Fed.: sin FIDE ID, federationColumn decide de otra manera.
+		if (all || fideIds) {
+			const ids = await step.do('FIDE ID inverosímiles', () => applyFideIds(this.env.DB))
+			console.log(`[reprocess] FIDE ID inverosímiles: ${JSON.stringify(ids)}`)
 		}
 		if (all || federaciones) {
 			const cleared = await step.do('columna Fed.', () => clearNonFederations(this.env.DB))
@@ -352,6 +366,35 @@ export async function applyHidden(db: D1Database): Promise<HiddenCleanup> {
 		games: games.length,
 		pairings: pairings.length
 	}
+}
+
+/** Lo que applyFideIds ha cambiado. */
+export interface FideIdCleanup {
+	participations: number
+	games: number
+	pairings: number
+}
+
+/**
+ * Quita de lo guardado los FIDE ID inverosímiles (plausibleFideId), como la
+ * ingesta al leer: de los participantes, de las partidas (columna y cabecera
+ * del PGN) y de los emparejamientos. Sin ellos, la ficha que hacían deja de
+ * existir. Va por los índices de fide_id. Repetirlo no cambia nada.
+ */
+export async function applyFideIds(db: D1Database): Promise<FideIdCleanup> {
+	const participations = await clearImplausibleParticipantIds(db)
+
+	const games = (await loadImplausibleIdGames(db)).map(withPlausibleFideIds)
+	await updateGamePlayers(db, games)
+
+	const pairings = (await loadPairingPlayers(db)).flatMap((p) => {
+		const whiteFideId = plausibleFideId(p.whiteFideId)
+		const blackFideId = plausibleFideId(p.blackFideId)
+		return whiteFideId === p.whiteFideId && blackFideId === p.blackFideId ? [] : [{ ...p, whiteFideId, blackFideId }]
+	})
+	await updatePairingPlayers(db, pairings)
+
+	return { participations, games: games.length, pairings: pairings.length }
 }
 
 /** Lo que applySensitive ha hecho. */
