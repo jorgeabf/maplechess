@@ -743,8 +743,17 @@ La historia, las medidas, los casos concretos y el detalle de cada página que s
 
 ### info64.org
 
-- **info64.org** (FEDA): Django sin API.
+- **info64.org** (FEDA): Django. Se leen sus páginas.
   - PGN en `textarea#pgnText`: `/{slug}/games`.
+
+#### API de info64
+
+Decidido el 5-nov-2026, leído sólo su esquema (https://info64.org/api/3/schema/swagger-ui/), sin llamadas de prueba. Los recuentos, de la D1 remota ese día.
+
+- **No sustituye a las páginas:** su esquema no documenta PGN (de `/games` salen 90.083 partidas), calendario por fechas, retransmisiones de lichess ni grupos. `/api/3/player/{fideratid}`, `/api/3/search` y `/api/3/tournaments` no detallan su respuesta: mirarlo en la prueba. `vega` son los torneos individuales y `orion` los de equipos; según el esquema, la autenticación es opcional.
+- **Se usaría para los encuentros por equipos, si una llamada de prueba, de madrugada, lo confirma:** `/api/3/orion/{orion_slug}/rounds/{number}/` da el marcador y cada tablero, y 566 de los 608 torneos por equipos no tienen partidas.
+- **`last_update`** evitaría releer lo que no cambia. De unos 104 torneos que se revisan cada noche, 56 ya han acabado y suponen unas 169 de unas 434 peticiones. Si cambia al subir un PGN, ahorraría de unas 110 a casi 170, según haya que pedirlo torneo a torneo o baste con la lista. En la web no se notaría, así que se hará sólo si su administración lo prefiere.
+- **Sus campos personales no se guardan,** entre ellos `birthdate`, `sex`, `email`, `captain`, los árbitros, `natrat1id` y el texto libre de `info`. Falta ver si vienen llenos. Una lectura con la API toma sólo los campos permitidos.
 
 #### Calendario
 
@@ -776,7 +785,7 @@ La historia, las medidas, los casos concretos y el detalle de cada página que s
 
 #### Sólo de 00:00 a 06:00 de Madrid
 
-- **Sólo de 00:00 a 06:00 de Madrid** (ver «info64 sólo de madrugada»). También cualquier prueba o análisis que pida páginas a info64 desde fuera de la ingesta.
+- **Sólo de 00:00 a 06:00 de Madrid** (ver «info64 sólo de madrugada»). También cualquier prueba o análisis que pida páginas o llame a la API de info64 desde fuera de la ingesta.
 
 ### Lista FIDE
 

@@ -1,8 +1,9 @@
 // Extracción de datos de las páginas de info64.org.
 //
-// info64 no tiene API: se leen sus páginas HTML con HTMLRewriter (el parser en
-// streaming del runtime de Workers). Se piden siempre en inglés (sin ?hl=),
-// así que los textos fijos ("from", "There are no games.") son estables.
+// Se leen las páginas HTML de info64, no su API (docs/decisiones.md#api-de-info64),
+// con HTMLRewriter (el parser en streaming del runtime de Workers). Se piden siempre
+// en inglés (sin ?hl=), así que los textos fijos ("from", "There are no games.") son
+// estables.
 import { plausibleFideId, plausibleRating } from '../../lib/chess/rating'
 import { validDate } from '../../lib/dates'
 import type { RelatedTournament } from '../../lib/db/tournaments'

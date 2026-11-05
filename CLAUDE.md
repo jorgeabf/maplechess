@@ -223,11 +223,12 @@ curl -X POST localhost:4321/api/admin/sync -H "Authorization: Bearer $TOKEN" \
 
 ## Fuentes de datos
 
-- **info64.org** (FEDA): Django sin API.
+- **info64.org** (FEDA): Django. Se leen sus páginas, no su API pública (`/api/3/`). Detalle: `docs/decisiones.md#api-de-info64`.
+  - **Autorización por escrito** (noviembre de 2026): de la administración de info64, con copia a la FEDA, para extraer sus datos y publicarlos en nuestras páginas, en PGN y en una API pública, en las condiciones que se le contaron: la franja y el ritmo, el robot identificado, la atribución, sin torneos de menores ni sensibles, lo que no se publica de los posibles menores y la retirada. No cubre el RGPD. Para cambiar una, avisar antes a la FEDA y a info64.
   - Calendario: `/events.json?start=&end=` (cada entrada, una ronda con su hora). Ranking inicial con FIDE ID: `/{slug}`. Plantillas: `/team/{slug}/listing`. PGN en `textarea#pgnText`: `/{slug}/games`. Rondas: `/{slug}/{n}`, con `#pairing-table` y los jugadores por su número inicial.
   - Grupo de torneos: `#tournament-selection-nav`, con el orden y el rótulo del organizador; el propio lleva `class="active"`. Los enlaces son relativos, como nuestra `source_key`.
   - Clasificación: `/{slug}/standings`. El título dice tras qué ronda va («Standings after the round 5»); sin resultados, y por equipos, sólo «Standings». Cada desempate, con su código de Vega, que cambia según el torneo. Las columnas van por la cabecera, porque las clases se repiten.
-  - **Como máximo 1 petición/s** (`step.sleep` entre pasos) y **sólo de 00:00 a 06:00 de Madrid** (ver «info64 sólo de madrugada»), también las pruebas y los análisis.
+  - **Como máximo 1 petición/s** (`step.sleep` entre pasos) y **sólo de 00:00 a 06:00 de Madrid** (ver «info64 sólo de madrugada»), también las pruebas, los análisis y la API, mientras su administración no diga otra cosa.
   - Las páginas se piden en inglés (`Accept-Language: en`), porque los parsers buscan textos fijos.
 - **Lista FIDE** (`players_list.zip`, unos 45 MB): en streaming con fflate, porque el Worker tiene 128 MB de memoria. Se filtra ESP.
   - **Inactivo por ritmo:** la combinada sólo trae la marca del estándar (`inactive`). La de rápido y la de relámpago salen de sus listas (`rapid_rating_list.zip`, 11 MB, y `blitz_rating_list.zip`, 8 MB), leídas en el mismo paso con `FLAGS_LIST` (`rapid_inactive`, `blitz_inactive`; NULL sin ELO de ese ritmo). Si una trae menos del 90 % de los que tienen ese ELO en la combinada, la importación falla.
