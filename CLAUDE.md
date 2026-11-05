@@ -63,7 +63,7 @@ Este archivo lleva las reglas, dónde está cada cosa, los comandos y las trampa
   - **Las búsquedas:** en `/jugadores`, de 4 a 10 cifras son un FIDE ID (`fideIdQuery`, `hasProfile`): 303 a la ficha o «Ningún jugador con el FIDE ID …». Un solo resultado lleva a la ficha sólo con el nombre completo, en la página 1 y sin filtros. Sin jugadores, enlaces a partidas y torneos con su cifra (`countGamesByName`, `countTournamentsByName`). «Quitar filtros», junto al botón si hay filtros además del nombre (`.form-row > a`). Con 0 resultados, ni recuento ni paginación; en la última página con tope, `refine` de `Pagination`. En el móvil, `/partidas` y `/torneos` pliegan el formulario tras buscar (`FiltrosPlegables` con `label="Búsqueda"`). El título lleva lo buscado; los campos de nombre, `autocorrect="off"`, `spellcheck="false"` y `minlength="2"`.
   - **Menores:** puede serlo quien es sub-18 por año natural (`mayBeMinor`); sin año o sin FIDE ID, cuenta como adulto. Detalle: `docs/decisiones.md#menores`.
     - **Su ficha** (`minor` de `getPlayer`) no se indexa ni va al sitemap, y su próxima partida no sale en ella salvo en la suya (`isOwn`). Sí en el torneo, en «Se juegan pronto» y, con su cookie, en la portada.
-    - **Sin dossier ni repertorio, ni sus PGN**, ni con su cookie `yo`, que cualquiera consigue con «Soy yo»: `jugadores/[fideId]/no-disponible.astro` (404, `noindex`; el PGN, `MINOR_UNAVAILABLE`), hasta que lo vea un abogado. Los enlaces a ellos, sólo con `hasDossier` (`hasDossierSql`). «Tú contra…» sí cruza sus partidas si «tú» eres él. El ranking sub-18 se queda.
+    - **Sin dossier ni repertorio, ni sus PGN**, ni con su cookie `yo`, que no prueba quién eres: `jugadores/[fideId]/no-disponible.astro` (404, `noindex`; el PGN, `MINOR_UNAVAILABLE`), hasta que lo vea un abogado. Los enlaces a ellos, sólo con `hasDossier` (`hasDossierSql`). «Tú contra…» sí cruza sus partidas si «tú» eres él. El ranking sub-18 se queda.
     - **Su año de nacimiento** no sale en ninguna página (lo quitan las consultas de `players.ts`), ni el de quien lo ha ocultado.
     - **La columna Fed.** (`federaciones.ts`): sólo códigos de la FIDE (los 207 y FID); lo demás se vacía. MAD, AND y CAN se vacían en quien está en la lista española y, sin FIDE ID, si la columna trae algo que no es un código (`federationColumn`). Al escribir, `replaceParticipations`; lo guardado, `{"federaciones":true}` (`clearNonFederations`).
     - **Del nombre de los homónimos** («Apellido Inventado, Nombre 2011»), `publicName` (`src/ingest/nombres.ts`), en todo nombre que se guarda, también en `White`/`Black` del PGN. Los adultos lo conservan.
@@ -87,6 +87,7 @@ Este archivo lleva las reglas, dónde está cada cosa, los comandos y las trampa
   - **Por POST, no en la URL:** que el FIDE ID o el nombre no queden en registros, historial ni enlaces. «Soy yo» y «No soy yo» son botones `.link`; `?yo=` no hace nada.
   - Guardada o borrada, 303 por GET (en el dossier, con `#tu`), salvo en el dossier con un ID que no existe, el del rival o un nombre (`redirectsAfterForm`). Astro rechaza los POST de otros sitios (`security.checkOrigin`).
   - Con un nombre (`meName`), «Tú contra…» lista los 8 primeros que casan (`findPlayersByName`). Sin parámetro de vuelta desde la ficha: sería una redirección abierta.
+  - **No prueba quién eres:** cualquiera la consigue con «Soy yo» (ver «Menores»).
 - `src/lib/charts.ts`: escalas y trazados de los gráficos SVG del servidor (evaluación, ELO).
 - `src/layouts/Base.astro`: cabecera, pie y `<title>` (`siteName` detrás del título; la portada lo pone delante).
   - **Cabecera:** el visor (`100svh - 20rem`) y el explorador del repertorio (`23rem`) le reservan el alto: si crece, revisarlos. La pestaña de la sección lleva `aria-current="page"` y `"true"` en lo que cuelga de ella. Si no caben, se desplazan y se abren en la activa (`scroll-initial-target: nearest`, `scroll-padding-inline-start`).
@@ -156,7 +157,7 @@ Este archivo lleva las reglas, dónde está cada cosa, los comandos y las trampa
   - Tres papeles para el color. **Marca** (`--maple`, `--walnut`, `--brand`): logo, favicón y tablero, nunca interacción. **Acento** (`--accent`): enlaces, botones, foco, lo actual y la última jugada. **Significado:** resultados y ritmos, siempre con texto o leyenda al lado.
   - Contraste: 4,5:1 para texto y 3:1 para bordes de campos y partes de gráficos (WCAG 2.2 AA), en claro y en oscuro, también los placeholders.
   - **Barras de desplazamiento:** `scrollbar-color` en `:root` (`--border-strong`) y `thin` dentro de `body`. Nada de `::-webkit-scrollbar`.
-  - **Enlaces:** subrayado fino al 40 % de su color, entero al pasar o enfocar. En un texto no se quita (WCAG 1.4.1); sí en lo que se ve de otra forma, con fondo o en negrita: el resultado de `GamesTable`, las líneas y las jugadas del explorador, `Segmented`, botones y pestañas.
+  - **Enlaces:** subrayado fino al 40 % de su color, entero al pasar o enfocar. En un texto no se quita (WCAG 1.4.1); sí en lo que se ve de otra forma, con fondo, borde o en negrita: el resultado de `GamesTable`, las líneas y las jugadas del explorador, `Segmented`, botones, pestañas y la marca.
   - **Botón principal** (`.button`): uno por vista; descargar, copiar y navegar, `.button.secondary`. Todos a `--text-s`, salvo el del buscador de la portada. Inactivo: `aria-disabled="true"`, nunca `disabled`.
   - **Etiquetas** (`.tag`): neutras, nunca con el acento.
   - **Cabecera de página** (`.page-head`): `.back`, h1, `.page-meta` y `.page-actions`.
@@ -206,7 +207,7 @@ curl -X POST localhost:4321/api/admin/sync -H "Authorization: Bearer $TOKEN" \
 - **`main` es lo desplegado y está protegido:** sólo entra por PR, con la CI en verde (`.github/workflows/ci.yml`: lint, `astro check` más `tsc` del cliente, y tests) y la revisión de la otra persona, cuando haya dos personas colaborando; hasta entonces, fusiona Jorge.
   - Las acciones de la CI van fijadas por SHA, con la etiqueta en un comentario. Las sube Dependabot (`.github/dependabot.yml`), con 7 días de espera, y sus PR pasan por la CI y la revisión.
 - **Ramas cortas desde `main` actualizado:** `feature/…` o `fix/…`. El PR explica qué cambia y cómo se ha probado; si toca páginas, también en `pnpm dev`. Antes de abrirlo: `pnpm test`, `pnpm lint` y `pnpm check`.
-- **Sin prettier:** el estilo va a mano (tabulaciones, comillas simples, sin punto y coma, líneas de unas 120 columnas) y `pnpm lint` es la única comprobación. Nunca `prettier --write`: reformatea archivos enteros.
+- **Sin prettier:** el estilo va a mano (tabulaciones, comillas simples, sin punto y coma, líneas de unas 120 columnas): `pnpm lint` no lo mira. Nunca `prettier --write`: reformatea archivos enteros.
 - **Producción sólo la opera quien despliega (Jorge), con su guía privada (ver «Producción»):**
   - `pnpm run deploy`;
   - `pnpm db:migrate:remote`;
@@ -218,7 +219,7 @@ curl -X POST localhost:4321/api/admin/sync -H "Authorization: Bearer $TOKEN" \
   - Una migración aplicada en producción no se edita: se corrige con otra nueva.
   - El PR que añade columnas derivadas dice que hay que lanzar el reprocesado tras desplegar.
 - **Secretos, nunca en el repositorio:** `.dev.vars` y `.admin-token.prod` están en `.gitignore`. Un secreto nuevo se declara en `secrets.required` de `wrangler.jsonc`; si no, `wrangler types` sólo lo saca de `.dev.vars` y la CI no lo tiene en `Env`.
-- **Este archivo, corto:** las reglas, dónde está cada cosa, los comandos y las trampas, una vez cada una. El porqué, las medidas, los casos y el detalle van en `docs/decisiones.md`, bajo el mismo título.
+- **Este archivo, corto:** las reglas, dónde está cada cosa, los comandos y las trampas, una vez cada una. El porqué, las medidas, los casos y el detalle van en `docs/decisiones.md`, bajo el mismo título si hay más detalle.
 
 ## Fuentes de datos
 
@@ -244,7 +245,7 @@ curl -X POST localhost:4321/api/admin/sync -H "Authorization: Bearer $TOKEN" \
   - Volcados mensuales de las oficiales: `database.lichess.org/broadcast/lichess_db_broadcast_YYYY-MM.pgn.zst` (de pzstd, con marcos saltables), que lee `scripts/lichess-rondas.mjs`.
 - **Archivo de la Federación Cántabra de Ajedrez (FCA)** (`src/ingest/fca/`, `FCA_IMPORT`): PGN estáticos de https://www.fcajedrez.es/partidas/, que sólo se importan a mano.
   - `source = 'fca'`, un torneo por cabecera Event (`source_key`: el archivo y el evento); al nombre, la temporada y «(Cantabria)» si le faltan (`tournamentName`); la Liga, por equipos.
-  - **Menores:** no se piden los archivos de Sub 12 y Sub 14, y se saltan los torneos de menores por el nombre (`isMinorsTournament`).
+  - **Menores en el archivo de Cantabria:** no se piden los archivos de Sub 12 y Sub 14, y se saltan los torneos de menores por el nombre (`isMinorsTournament`).
   - **Licencia CC BY 4.0** (`CC_BY`): la cabecera `Source` da el aviso en el PGN (`fcaUrl`, `licensedPgn`) y el crédito de la partida; también la citan el pie, `/acerca` y el aviso legal; `/privacidad` cita el archivo.
   - **Sin FIDE ID** (`FideMatcher`, `fca/jugadores.ts`): el nombre del archivo tiene que ser el principio del de la lista española, con un único candidato y un año que le deje haber jugado (`MIN_AGE`). Lee la lista entera una vez por archivo.
 - **chess-results: NO se usa.** Sus términos prohíben copiar y republicar sus datos. Queda pendiente de que Swiss-Manager dé permiso.
@@ -261,7 +262,7 @@ curl -X POST localhost:4321/api/admin/sync -H "Authorization: Bearer $TOKEN" \
   - `replaceParticipations` no vacía una lista guardada. `replaceStandings` no guarda una clasificación sin puntos ni, en un torneo individual, una con algún número inicial que no esté entre los participantes. `replacePairings` sin filas sólo quita las de otras rondas. `upsertTournament` no pisa con nulos la ciudad, las fechas ni el ritmo.
   - Un PGN con menos partidas leídas que cabeceras `[Event` no se guarda: una llave sin cerrar en un comentario se traga el resto del texto, y chessops no lanza.
   - Una página sin título (`PageFormatError`) o un 404 fallan el paso a la primera (`failFast`, con `NonRetryableError`), en vez de gastar cinco reintentos por torneo.
-  - Si ninguna retransmisión de lichess enlazada responde, se conservan las partidas guardadas y sólo se marca el torneo como revisado (`markGamesChecked`).
+  - Si ninguna retransmisión de lichess enlazada responde, se conservan las partidas guardadas y sólo se marca el torneo como revisado (`markGamesChecked`), sin aviso.
   - Un torneo propio de lichess que se relee sin españoles o sin partidas suyas se conserva. Sólo se borra si pasa a estar en info64 o si todas sus partidas ya están en otro torneo.
   - Las fechas imposibles de las fuentes (mes 13, año 9999) se guardan como NULL (`validDate` en `src/lib/dates.ts`).
 - **Partidas repetidas en info64:** a veces publica el PGN entero dos veces, o la misma partida con y sin relojes o resultado, o cortada. `uniqueGames()` junta las copias con la misma ronda y jugadores cuando la línea de una es el principio de la de la otra: se queda la de más jugadas y, si no tiene resultado, toma el de la otra. Una sin terminar (`*`) con otras jugadas, junto a una terminada de los mismos jugadores en la misma ronda, se descarta. `seq > 0` queda para partidas distintas con la misma ronda.tablero (encuentros por equipos, desempates).
@@ -287,9 +288,9 @@ curl -X POST localhost:4321/api/admin/sync -H "Authorization: Bearer $TOKEN" \
 https://maplechess.es, en un Worker de Cloudflare (Workers Paid), con la D1 en la UE.
 
 - **Desplegar:** `pnpm run deploy` (`scripts/desplegar.mjs`) sólo despliega `origin/main`, con el árbol limpio y fuera de la media hora que sigue a cada cron. Copia el motor, apunta el marcador de Time Travel de D1, construye, despliega y pasa `scripts/humo.mjs`.
-- Las migraciones añaden (tablas, columnas, índices); si rehacen una tabla, como la 0013 y la 0017, el Worker anterior tiene que seguir funcionando: así, volver atrás el Worker no obliga a restaurar D1.
+- Las migraciones sólo añaden (tablas, columnas, índices) o rehacen una tabla con su nombre y las columnas que lee el Worker anterior, como la 0013 y la 0017: así, volver atrás el Worker no obliga a restaurar D1.
 - **Vigilancia de la ingesta** (`src/lib/salud.ts`):
-  - Al terminar, cada pasada programada guarda en `sync_state` la clave `salud.<pasada>` (`info64`, `emparejamientos`, `lichess` y `fide`) con `{fin, ok, fallos, avisos}` (`saveHealth`). Una pasada a mano con `keys`, `chain`, `tours` o `rounds`, no, para no tapar que falle la programada. Sí la escriben, lanzadas a mano, `pairings: "only"` sin `keys`, lichess con `since` o `force` y la FIDE con `force`: una de ellas puede taparlo.
+  - Al terminar, cada pasada programada guarda en `sync_state` la clave `salud.<pasada>` (`info64`, `emparejamientos`, `lichess` y `fide`) con `{fin, ok, fallos, avisos}` (`saveHealth`). Una pasada a mano con `keys`, `chain`, `tours` o `rounds`, no, para no tapar que falle la programada. Sí la escriben las lanzadas a mano sin ellos: `pairings` (`emparejamientos` y, con `'also'`, `info64`), lichess sin `tours` ni `rounds` y la FIDE siempre, y una de ellas puede taparlo.
   - `GET /api/estado` es público y sin caché. Da 503 si alguna pasada está caducada (26 h; la FIDE, 35 días) o con más del 20 % de torneos fallidos, o si queda algún torneo sensible por revisar o alguna rectificación sin aplicar. Si no, 200. Sólo dice el estado, sin recuentos ni fechas.
   - `.github/workflows/vigilancia.yml` lo pide a las 07:30 y a las 23:30 UTC, y a mano con «Run workflow».
 - **Guía de operación:** el dominio, el despliegue paso a paso, volver atrás, las credenciales, las sincronizaciones y cargas en producción, la retirada de datos y qué hacer ante un abuso. Es privada, en un repositorio aparte: quien opera la tiene en `~/.claude/maplechess-operacion/OPERACION.md`, y en otro equipo no existe.

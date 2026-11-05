@@ -3,9 +3,9 @@
 // Cada fila corrige, o deja vacío mientras se comprueba, un dato de una persona
 // en un torneo: su FIDE ID, su nombre, su título o su ELO en todo el torneo o
 // en una ronda; el resultado de su partida de una ronda, o que esa partida no
-// se guarde. Se aplica al escribir (repo.ts), después de quitar el año de los
-// menores y antes de la retirada, así que las siguientes lecturas de la fuente
-// la respetan.
+// se guarde. Se aplica al escribir (repo.ts), antes de la retirada, así que las
+// siguientes lecturas de la fuente la respetan. A un nombre corregido también se
+// le quita el año de los menores.
 //
 // A la persona se la busca tal como la lee la ingesta de la fuente, antes de
 // rectificar: así una fila que le cambia el FIDE ID no impide que casen las
