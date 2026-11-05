@@ -1,5 +1,5 @@
 // Jugadores del archivo de la FCA: sus PGN no traen FIDE ID, y muchos nombres
-// van cortos («Mora, Jesus») o al revés («Nombre Apellidos», los de 2021). Se
+// van cortos («Irreal, Supuesto») o al revés («Nombre Apellidos», los de 2021). Se
 // cruzan por el nombre con la lista FIDE española, sólo cuando casa con un
 // único jugador y su año de nacimiento le deja jugar esas partidas (decidido
 // con Jorge el 24-oct-2026). Un cruce equivocado pondría las partidas de una
@@ -37,9 +37,9 @@ const startsWith = (part: string[], full: string[]): boolean =>
 
 /**
  * Busca jugadores de la lista FIDE por un nombre del archivo. Casa si sus
- * apellidos empiezan por los del archivo y sus nombres de pila también: «Mora,
- * Jesus» casa con «Mora Gutiérrez, Jesús María». Sin coma, prueba todas las
- * formas de partir el nombre en nombre de pila y apellidos.
+ * apellidos empiezan por los del archivo y sus nombres de pila también:
+ * «Irreal, Supuesto» casa con «Irreal Lejano, Supuesto Ramón». Sin coma, prueba
+ * todas las formas de partir el nombre en nombre de pila y apellidos.
  */
 export class FideMatcher {
 	/** Por el primer apellido, para no recorrer la lista con cada nombre. */

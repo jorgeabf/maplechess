@@ -55,7 +55,7 @@ export interface FcaTournament {
 	games: ParsedGame[]
 }
 
-/** Sin los espacios repetidos de la fuente («Pedro  Corral Saiz»). */
+/** Sin los espacios repetidos de la fuente («Supuesto  Irreal Lejano»). */
 export const clean = (text: string): string => text.replace(/\s+/g, ' ').trim()
 
 const hasName = (name: string): boolean => name !== '' && name !== '?'

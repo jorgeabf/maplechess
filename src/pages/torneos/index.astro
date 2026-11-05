@@ -32,7 +32,7 @@ const searchSummary = [
 ].filter((part): part is string => Boolean(part))
 ---
 
-<Base title={filters.q ? `Torneos: ${filters.q}` : 'Torneos'} section="torneos">
+<Base title={filters.q ? `Torneos: ${filters.q}` : 'Torneos'} section="torneos" noindex={Boolean(filters.q) || filtered}>
 	<h1>Torneos</h1>
 	<div class="when">
 		<Segmented navigation label="Torneos" options={tabs} current={filters.upcoming ? 'proximos' : ''} href={tabHref} />

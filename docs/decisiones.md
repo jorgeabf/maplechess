@@ -825,9 +825,9 @@ La historia, las medidas, los casos concretos y el detalle de cada página que s
   - el nombre lleva la temporada si no trae año y «(Cantabria)» si no la nombra (`tournamentName`), para la búsqueda por sitio;
   - la Liga, por equipos.
 
-#### Menores
+#### Menores en el archivo de Cantabria
 
-- **Menores:** los archivos de Sub 12 y Sub 14 no se piden, y de los demás se saltan los torneos de menores por el nombre (`isMinorsTournament`). Quedan 2.683 partidas en 46 torneos. Dos de 2021 vienen sin fecha y no salen en el listado de `/torneos`.
+- **Menores en el archivo de Cantabria:** los archivos de Sub 12 y Sub 14 no se piden, y de los demás se saltan los torneos de menores por el nombre (`isMinorsTournament`). Quedan 2.683 partidas en 46 torneos. Dos de 2021 vienen sin fecha y no salen en el listado de `/torneos`.
 
 #### Licencia CC BY 4.0
 
