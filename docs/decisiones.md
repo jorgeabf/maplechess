@@ -308,7 +308,7 @@ La historia, las medidas, los casos concretos y el detalle de cada página que s
 ### `src/lib/me.ts`
 
 - `src/lib/me.ts`: «tú» en el dossier: el FIDE ID propio llega en el campo `yo` de un formulario POST (desde el dossier o con «Soy yo» en tu ficha, `readMeField`) y se recuerda en la cookie funcional `yo` (un año, `HttpOnly`); `yo` vacío la borra. Con ella, tu ficha, tu dossier y tu repertorio te hablan a ti (`isOwn`: «Mi dossier», «Tus líneas principales»), y el panel de la lupa enlaza a tu ficha. La portada te saluda por tu nombre (ver `src/pages/`), y en la página de un torneo, lo tuyo va marcado (ver «Página del torneo», «Tú»). Es la única cookie (ver `/privacidad`).
-  - Guardada o borrada, la ficha y el dossier vuelven a sí mismos por GET (303), con el ancla del formulario (#tu). El dossier no lo hace con un ID que no existe o es el del rival, ni con un nombre: responde al POST diciendo por qué o con la lista (`redirectsAfterForm`). Esa respuesta no entra en bfcache (un POST no puede) y, al volver a ella con Atrás, el navegador pide reenviar el formulario.
+  - Guardada o borrada, la ficha y el dossier vuelven a sí mismos por GET (303); el dossier, con el ancla del formulario (#tu). El dossier no lo hace con un ID que no existe o es el del rival, ni con un nombre: responde al POST diciendo por qué o con la lista (`redirectsAfterForm`). Esa respuesta no entra en bfcache (un POST no puede) y, al volver a ella con Atrás, el navegador pide reenviar el formulario.
   - Astro rechaza con un 403 los POST de formularios de otros sitios (`security.checkOrigin`, activo por defecto).
   - En el dossier, `yo` puede traer tu nombre en vez del ID (`meName`). La tarjeta «Tú contra…» lista los 8 primeros que casan (`findPlayersByName` en `db/players.ts`, sin el rival), en un formulario donde cada nombre es un botón que envía su ID. No hay parámetro de vuelta desde la ficha: sería una redirección abierta.
 
@@ -658,7 +658,7 @@ La historia, las medidas, los casos concretos y el detalle de cada página que s
 
 #### Enlaces
 
-- **Enlaces:** subrayado fino y tenue (el 40 % de su color), entero al pasar o enfocar. No se quita en ninguna parte: el acento frente al texto da 1,9:1 en claro y 1,5:1 en oscuro, y el color solo no basta (WCAG 1.4.1). En un titular (los nombres del h1 de la partida) el enlace va en el color del texto, con el mismo subrayado, y en el acento al pasar por encima: en acento, era lo que más pesaba de la página.
+- **Enlaces:** subrayado fino y tenue (el 40 % de su color), entero al pasar o enfocar. En un texto no se quita: el acento frente al texto da 1,9:1 en claro y 1,5:1 en oscuro, y el color solo no basta (WCAG 1.4.1). Se quita en lo que se ve de otra forma, con fondo, borde o en negrita: el resultado de `GamesTable`, las líneas y las jugadas del explorador, `Segmented`, botones, pestañas y la marca. En un titular (los nombres del h1 de la partida) el enlace va en el color del texto, con el mismo subrayado, y en el acento al pasar por encima: en acento, era lo que más pesaba de la página.
 
 #### Botón principal
 
@@ -825,21 +825,21 @@ La historia, las medidas, los casos concretos y el detalle de cada página que s
   - el nombre lleva la temporada si no trae año y «(Cantabria)» si no la nombra (`tournamentName`), para la búsqueda por sitio;
   - la Liga, por equipos.
 
-#### Menores
+#### Menores en el archivo de Cantabria
 
-- **Menores:** los archivos de Sub 12 y Sub 14 no se piden, y de los demás se saltan los torneos de menores por el nombre (`isMinorsTournament`). Quedan 2.683 partidas en 46 torneos. Dos de 2021 vienen sin fecha y no salen en el listado de `/torneos`.
+- **Menores en el archivo de Cantabria:** los archivos de Sub 12 y Sub 14 no se piden, y de los demás se saltan los torneos de menores por el nombre (`isMinorsTournament`). Quedan 2.683 partidas en 46 torneos. Dos de 2021 vienen sin fecha y no salen en el listado de `/torneos`.
 
 #### Licencia CC BY 4.0
 
 - **Licencia CC BY 4.0** (`CC_BY`; el aviso legal de la FCA la da para todo lo publicado): citar a la federación, enlazar la licencia y avisar de los cambios.
   - La importación pone el archivo en la cabecera `Source`, que da su aviso en el PGN (`fcaUrl`, `licensedPgn`) y el crédito de la partida.
   - El torneo lo dice por `source`.
-  - También lo citan el pie, `/acerca`, el aviso legal y `/privacidad`.
+  - También lo citan el pie, `/acerca` y el aviso legal; `/privacidad` cita el archivo.
 
 #### Sin FIDE ID
 
 - **Sin FIDE ID** (`FideMatcher`, `fca/jugadores.ts`): cada nombre se cruza con la lista FIDE española.
-  - Los apellidos y el nombre de pila del archivo tienen que ser el principio de los de la lista: «Mora, Jesus» → «Mora Gutiérrez, Jesús María».
+  - Los apellidos y el nombre de pila del archivo tienen que ser el principio de los de la lista: «Irreal, Supuesto» → «Irreal Lejano, Supuesto Ramón».
   - Sin coma (los de 2021, «Nombre Apellidos»), se prueban todas las formas de partirlo.
   - Sólo con un único candidato en toda la lista y un año de nacimiento que le deje haber jugado (`MIN_AGE`); si no, se queda sin FIDE ID.
   - Medido en local: 884 partidas con los dos jugadores enlazados, 1.343 con uno y 456 sin ninguno; 229 jugadores de la lista.
@@ -877,7 +877,7 @@ La historia, las medidas, los casos concretos y el detalle de cada página que s
 - **Por qué 100.000:** ninguno de los 9 números menores probados (del 1 al 99.999) tiene perfil en ratings.fide.com; el 100013 (Argentina) sí, y la lista española empieza en el 100234.
 - **Qué hacían:** una ficha indexable por número, con un enlace a un perfil de la FIDE que no existe, sin año de nacimiento (contaba como adulto: con dossier y repertorio) y sin los torneos en la ficha real de quien la tiene.
 - **Qué queda:** esos jugadores, sin FIDE ID, como cualquiera que no lo tiene. Cruzarlos por el nombre con la lista española, como el archivo de Cantabria (`FideMatcher`), es una mejora aparte: con un único candidato y un año compatible, y medido antes en local.
-- **Los repetidos que no son de relleno se quedan:** la misma persona en dos equipos, el que da una simultánea y las variantes del nombre («Bruce, David J» y «Bruce, David James»).
+- **Los repetidos que no son de relleno se quedan:** la misma persona en dos equipos, el que da una simultánea y las variantes del nombre («Inventado Falso, Otro J» y «Inventado Falso, Otro José»).
 
 ### Ritmo
 
@@ -885,7 +885,7 @@ La historia, las medidas, los casos concretos y el detalle de cada página que s
 
 ### D1 cobra por filas recorridas
 
-- **D1 cobra por filas recorridas:** evita `count(*)` y `ORDER BY` sin índice en páginas con tráfico. Los totales de la portada están en `site_totals` y se recalculan al final de cada sincronización.
+- **D1 cobra por filas recorridas:** evita `count(*)` y `ORDER BY` sin índice en páginas con tráfico. Los totales de la portada están en `site_totals` y se recalculan al final de cada sincronización, salvo en `FCA_IMPORT`.
   - Cuenta las entradas de índice recorridas, no las lecturas de la fila por rowid: medido en producción, 228 partidas por `games_white` son 229 filas, se pidan las columnas que se pidan. Un índice cubriente no abarata nada.
   - Ordenar sin índice vuelve a contar cada fila, aunque haya `LIMIT`, y una función de ventana, otras dos más. Medido el 21-oct-2026 con las 872 partidas de una semana por `games_date`: 872 filas leerlas, 1.731 con `ORDER BY … LIMIT 10` y 3.471 con `ROW_NUMBER() OVER (PARTITION BY tournament_id …)`. Para elegir unas pocas de unos cientos, mejor leerlas sin ordenar y elegir en TS.
   - Sí cuentan la búsqueda de cada fila por su clave primaria (`json_each` → `games`: dos por partida), cada coincidencia que da el FTS y la lista que materializa `x IN (SELECT …)`.
@@ -908,7 +908,7 @@ La historia, las medidas, los casos concretos y el detalle de cada página que s
 
 #### Sitemap
 
-- **Sitemap** (22-oct-2026, en remoto): el índice lee 3 filas (`max(id)` por la clave primaria y `site_totals`). Los trozos de partidas leen una fila por id del rango (48.601, 49.113 y 34.726) y el de torneos, 12.528. Desde que sólo entran los torneos con partidas o al menos dos jugadores (24-oct-2026), el de torneos lee 23.365 por 8.803 torneos: además de su fila, hasta dos entradas de participantes en cada uno de los 7.322 sin partidas. Los de jugadores leen las filas que salta `OFFSET` más una por ficha que entra: 69.829 y 119.968. Un `EXISTS` que no encuentra nada no suma. Sin los posibles menores (23-oct-2026) leen menos, porque con su año, que está en la misma fila, ya no se buscan sus torneos ni sus partidas: en local, con 98.000 jugadores sembrados, de 80.000 a 72.500 y de 126.800 a 119.600. El recorrido completo son unas 335.000 filas: leído a diario, el 0,04 % de lo incluido al mes. `max` y `min` en la misma consulta recorren la tabla: van por separado.
+- **Sitemap** (22-oct-2026, en remoto): el índice lee 3 filas (`max(id)` por la clave primaria y `site_totals`). Los trozos de partidas leen una fila por id del rango (48.601, 49.113 y 34.726) y el de torneos, 12.528. Desde que sólo entran los torneos con partidas o al menos dos jugadores (24-oct-2026), el de torneos lee 23.365 por 8.803 torneos: además de su fila, hasta dos entradas de participantes en cada uno de los 7.322 sin partidas. Los de jugadores leen las filas que salta `OFFSET` más una por ficha que entra: 69.829 y 119.968. Un `EXISTS` que no encuentra nada no suma. Sin los posibles menores (23-oct-2026) leen menos, porque con su año, que está en la misma fila, ya no se buscan sus torneos ni sus partidas: en local, con 98.000 jugadores sembrados, de 80.000 a 72.500 y de 126.800 a 119.600. El recorrido completo son unas 335.000 filas: leído a diario, el 0,04 % de lo incluido al mes. Sólo se pide `max(id)`: con `min` en la misma consulta, recorrería la tabla.
 
 #### Límite de ritmo
 
@@ -921,12 +921,12 @@ La historia, las medidas, los casos concretos y el detalle de cada página que s
 
 ## Producción
 
-- Las migraciones sólo añaden (tablas, columnas, índices): así el Worker anterior funciona con el esquema nuevo, y volver atrás el Worker no obliga a restaurar D1. La 0017 rehace además el FTS de torneos, porque un FTS5 no admite columnas nuevas. Como conserva el nombre y la columna `name`, el Worker anterior sigue funcionando.
+- Las migraciones sólo añaden (tablas, columnas, índices) o rehacen una tabla con su nombre y las columnas que lee el Worker anterior: así, volver atrás el Worker no obliga a restaurar D1. La 0013 rehace `retiradas`, porque SQLite no cambia la clave primaria de una tabla. La 0017 rehace el FTS de torneos, porque un FTS5 no admite columnas nuevas; como conserva el nombre y la columna `name`, el Worker anterior sigue funcionando.
 
 ### Vigilancia de la ingesta
 
 - **Vigilancia de la ingesta** (`src/lib/salud.ts`):
-  - Al terminar, cada pasada guarda en `sync_state` la clave `salud.<pasada>` (`info64`, `emparejamientos`, `lichess` y `fide`) con un JSON `{fin, ok, fallos, avisos}`: torneos bien, torneos fallidos y avisos de las guardas. Se escribe con `saveHealth`. Las escriben sólo las pasadas programadas: la diaria de info64 (también `emparejamientos`), las de emparejamientos, la diaria de lichess y la FIDE (también sin cambios en la lista, y con un fallo si la importación falla). Una pasada a mano (`keys`, `chain`, `tours`, `rounds`) no, para no tapar que falle la programada.
+  - Al terminar, cada pasada guarda en `sync_state` la clave `salud.<pasada>` (`info64`, `emparejamientos`, `lichess` y `fide`) con un JSON `{fin, ok, fallos, avisos}`: torneos bien, torneos fallidos y avisos de las guardas. Se escribe con `saveHealth`. La escriben la diaria de info64 (también `emparejamientos`), las de emparejamientos, la diaria de lichess y la FIDE (también sin cambios en la lista, y con un fallo si la importación falla). Una pasada a mano con `keys`, `chain`, `tours` o `rounds`, no, para no tapar que falle la programada. Sí la escriben las lanzadas a mano sin ellos, con la misma forma que las programadas, y una de ellas puede taparlo.
   - `GET /api/estado` es público y sin caché. Da 503 si alguna pasada está caducada (más de 26 h la diaria de info64, sus emparejamientos y la de lichess, y 35 días la FIDE) o con más del 20 % de torneos fallidos, y también si queda algún torneo sensible por revisar (`"sensibles":"por revisar"`, ver «Torneos sensibles») o alguna rectificación sin aplicar (`"rectificaciones":"por revisar"`, ver «Rectificación y limitación»). Si no, 200. Sólo dice el estado de cada pasada y de las revisiones, sin recuentos ni fechas. Una pasada que aún no ha escrito su clave sale «sin datos», con 200.
 
 ### Guía de operación
