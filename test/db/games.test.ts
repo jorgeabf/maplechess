@@ -177,7 +177,13 @@ describe('countGamesByName', () => {
 describe('filtro ECO', () => {
 	it('da las partidas cuyo ECO empieza por el código, de 1, 2 o 3 caracteres', async () => {
 		const { results } = await db.prepare('SELECT DISTINCT eco FROM games WHERE eco IS NOT NULL').all<{ eco: string }>()
-		const prefixes = new Set(results.flatMap(({ eco }) => [eco.slice(0, 1), eco.slice(0, 2), eco]))
+		// Un ECO por letra, con sus prefijos de 1, 2 y 3 caracteres. Con todos los del fixture
+		// (91, unas 364 consultas), el test pasaba en la CI del límite de 5 s de vitest.
+		const byLetter = new Map(results.map(({ eco }) => [eco[0], eco]))
+		const prefixes = new Set([...byLetter.values()].flatMap((eco) => [eco.slice(0, 1), eco.slice(0, 2), eco]))
+		// A04 tiene detrás A05: buscar un código no trae el siguiente.
+		expect(results.map(({ eco }) => eco)).toEqual(expect.arrayContaining(['A04', 'A05']))
+		prefixes.add('A04')
 		expect(prefixes.size).toBeGreaterThan(3)
 		for (const prefix of prefixes) {
 			const expected = await db
