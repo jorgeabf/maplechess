@@ -36,9 +36,12 @@ const black = {
 // lichess, como en el PGN que se descarga: también la de info64 que viene de
 // lichess. En info64 cada partida tiene su página /{torneo}/{ronda}/{tablero}.
 // Las del archivo de la FCA, igual, por su cabecera Source (fcaUrl); se enlaza
-// la página del archivo. Sólo se enlaza si es de una fuente (sourceUrl).
+// la página del archivo. Las de SICHESS, por la fuente de las partidas del torneo;
+// se enlaza su visor. Sólo se enlaza si es de una fuente (sourceUrl).
 const fromLichess = lichessUrl(game.pgn)
 const fromFca = fcaUrl(game.pgn) !== null
+const fromSichess = game.gamesSource === 'sichess'
+const sichessHref = fromSichess ? sourceUrl(game.gamesSourceUrl) : null
 const lichessHref = sourceUrl(fromLichess)
 const sourceHref = sourceUrl(
 	game.tournamentSource === 'info64' ? `${game.tournamentUrl}/${game.round}/${game.board}` : game.tournamentUrl
@@ -186,8 +189,19 @@ const back = await backLink()
 							publicada en {sourceHref ? <a href={sourceHref}>info64</a> : 'info64'} (FEDA)
 						</>
 					)}
+					{fromSichess && (
+						<>
+							{' '}
+							publicada en {sichessHref ? <a href={sichessHref}>SICHESS</a> : 'SICHESS'} (FEDA)
+						</>
+					)}
 					, con licencia <a href={CC_BY_SA} rel="license noopener">CC BY-SA 4.0</a>. Aquí se han completado sus
 					cabeceras (nombres, FIDE ID, ELO y apertura).
+				</>
+			) : fromSichess ? (
+				<>
+					Partida de la {sichessHref ? <a href={sichessHref}>retransmisión en SICHESS</a> : 'retransmisión en SICHESS'} (FEDA).
+					Aquí se han completado sus cabeceras (nombres, FIDE ID, ELO y apertura).
 				</>
 			) : fromFca ? (
 				<>

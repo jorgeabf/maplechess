@@ -46,6 +46,15 @@ export function parseGames(pgnText: string): ParsedGame[] {
 	return parsePgn(separateGames(pgnText)).map(readGame)
 }
 
+/**
+ * Cabeceras Event del texto. Una llave sin cerrar en un comentario se traga el
+ * resto y chessops no lanza: con menos partidas leídas que cabeceras, el PGN no
+ * se ha leído entero.
+ */
+export function eventHeaders(pgnText: string): number {
+	return pgnText.match(/\[Event\s+"/g)?.length ?? 0
+}
+
 const HEADER_LINE = /^\s*\[[A-Za-z0-9][A-Za-z0-9_+#=:-]*\s+"/
 const HEADER_AFTER_RESULT = /(1-0|0-1|1\/2-1\/2|\*)[ \t]*(?=\[[A-Za-z0-9][A-Za-z0-9_+#=:-]*\s+")/g
 

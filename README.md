@@ -125,12 +125,13 @@ flowchart LR
     fide["Lista FIDE"]
     lichess["Retransmisiones<br/>de lichess"]
     fca["Archivo de la<br/>Federación Cántabra"]
+    sichess["SICHESS<br/>(FEDA)"]
   end
 
   subgraph cloudflare["Un Worker de Cloudflare"]
     cron(["Cron Triggers"])
     admin(["/api/admin/sync"])
-    workflows["Workflows<br/>INFO64_SYNC · LICHESS_SYNC<br/>FIDE_SYNC · GAMES_REPROCESS<br/>FCA_IMPORT"]
+    workflows["Workflows<br/>INFO64_SYNC · LICHESS_SYNC<br/>FIDE_SYNC · GAMES_REPROCESS<br/>FCA_IMPORT · SICHESS_IMPORT"]
     d1[("D1<br/>SQLite + FTS5")]
     astro["Astro SSR<br/>páginas y PGN"]
   end
@@ -141,6 +142,7 @@ flowchart LR
   fide --> workflows
   lichess --> workflows
   fca --> workflows
+  sichess --> workflows
   cron --> workflows
   admin --> workflows
   workflows --> d1
@@ -161,10 +163,11 @@ flowchart LR
 | [Lista FIDE](https://ratings.fide.com/download_lists.phtml) | Jugadores de la federación española: título, ELO estándar, rápido y blitz, sexo, año de nacimiento (no se muestra el de los menores ni el de quien pide ocultarlo) y si está activo. También el ELO estándar de la lista anterior, para ver quién sube | El día 3 de cada mes |
 | [Retransmisiones de lichess](https://lichess.org/broadcast) (CC BY-SA 4.0) | Partidas de los torneos que info64 enlaza a una retransmisión y no publica en PGN, y de las retransmisiones oficiales con jugadores españoles, en España y en el extranjero | Con info64 y cada día a las 06:30 UTC |
 | [Archivo de la Federación Cántabra](https://www.fcajedrez.es/partidas/) (CC BY 4.0) | Partidas de la Liga Regional y de los campeonatos regionales de Cantabria de 2007 a 2010, de 2012 y de 2021, sin las categorías hasta Sub 14. No traen FIDE ID: cada jugador se cruza por el nombre con la lista FIDE, sólo si casa con uno solo y su año de nacimiento le deja haber jugado | A mano (`{"workflow":"fca"}`): el archivo no cambia |
+| [SICHESS](https://sichess.com/web/feda/) (FEDA) | Partidas de 14 Campeonatos de España de adultos de 2023 a 2025 de los que info64 no publica partidas, cruzadas con los participantes de info64 | Una vez, a mano (`{"workflow":"sichess"}`): en 2026 no aporta nada |
 | [INE](https://www.ine.es/daco/daco42/codmun/26codmun.xlsx) e [IGN](https://api-features.ign.es/collections/nuc) (CC BY 4.0) | Municipios y núcleos de población, para saber en qué provincia se juega cada torneo | A mano, cada año, cuando el INE publica la relación (`node scripts/lugares.mjs --descargar <año>` y el reprocesado `{"lugares":true}`) |
 | [lichess-org/chess-openings](https://github.com/lichess-org/chess-openings) | Códigos ECO y nombres de las aperturas (CC0) | A mano (`pnpm openings`) |
 
-La ingesta es educada con las fuentes: como mucho una petición por segundo a info64 y, a lichess, una cada vez, con pausa entre una y otra y con un token de sólo lectura, como pide su API. Siempre con un User-Agent que la identifica.
+La ingesta es educada con las fuentes: como mucho una petición por segundo a info64 y a SICHESS y, a lichess, una cada vez, con pausa entre una y otra y con un token de sólo lectura, como pide su API. Siempre con un User-Agent que la identifica.
 
 **No se guardan** los torneos de hasta Sub 14 ni los escolares, que dirían la edad o el colegio de quien juega, ni los que revelan un dato de salud: los de ajedrecistas ciegos o sordos, con discapacidad física o de ajedrez inclusivo. La [política de privacidad](https://maplechess.es/privacidad#salud) lo explica.
 

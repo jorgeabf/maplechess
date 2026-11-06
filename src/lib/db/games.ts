@@ -431,8 +431,10 @@ export interface GameDetail extends GameListRow {
 	pgn: string
 	tournamentUrl: string
 	tournamentSource: string
-	/** Fuente de las partidas del torneo ('info64', 'lichess'). */
+	/** Fuente de las partidas del torneo ('info64', 'lichess', 'sichess'). */
 	gamesSource: string | null
+	/** Página de esa fuente si no es la del torneo: la retransmisión. */
+	gamesSourceUrl: string | null
 	/** Medias jugadas; sin ninguna, la página no se indexa ni entra en el sitemap. */
 	plyCount: number
 	/** Ritmo (lib/chess/timecontrol.ts); null si ni el torneo ni el PGN lo dicen. */
@@ -443,7 +445,7 @@ export async function getGame(db: D1Database, id: number): Promise<GameDetail | 
 	return db
 		.prepare(
 			`SELECT ${LIST_COLUMNS}, g.pgn, g.ply_count AS plyCount, g.time_class AS timeClass, t.url AS tournamentUrl,
-				t.source AS tournamentSource, t.games_source AS gamesSource
+				t.source AS tournamentSource, t.games_source AS gamesSource, t.games_source_url AS gamesSourceUrl
 			FROM games g JOIN tournaments t ON t.id = g.tournament_id WHERE g.id = ?1`
 		)
 		.bind(id)

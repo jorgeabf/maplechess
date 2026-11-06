@@ -1,5 +1,5 @@
-// URL de las fuentes (info64, lichess y la Federación Cántabra) que se enlazan
-// desde el torneo y la partida, y URL canónica de las páginas.
+// URL de las fuentes (info64, lichess, la Federación Cántabra y SICHESS) que se
+// enlazan desde el torneo y la partida, y URL canónica de las páginas.
 
 /**
  * URL canónica de una página: la ruta sobre el dominio (`site` en
@@ -16,8 +16,11 @@ export function canonicalHref(pathname: string, site: URL): string {
 /** Web de la Federación Cántabra de Ajedrez, de cuyo archivo salen los torneos con source 'fca' (ingest/fca). */
 export const FCA_SITE = 'https://www.fcajedrez.es/'
 
+/** Donde la FEDA retransmite sus campeonatos: las partidas con games_source 'sichess' (ingest/sichess). */
+export const SICHESS_SITE = 'https://sichess.com/'
+
 /** Sitios de las fuentes, siempre por https. */
-const SOURCES = ['https://info64.org/', 'https://lichess.org/', FCA_SITE]
+const SOURCES = ['https://info64.org/', 'https://lichess.org/', FCA_SITE, SICHESS_SITE]
 
 /** Cómo se nombra la fuente en los textos («Ver en …»): la de la FCA, por su web. */
 export function sourceName(source: string): string {

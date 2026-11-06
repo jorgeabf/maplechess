@@ -24,7 +24,8 @@ describe('sourceUrl', () => {
 			'https://info64.org/ce-individual-absoluto-2025/3/12',
 			'https://lichess.org/broadcast/campeonato/ronda-1/zK5CoVvF',
 			'https://lichess.org/@evil.com',
-			'https://www.fcajedrez.es/partidas/index.html?pgn=/assets/partidas/2008/liga_2008.pgn'
+			'https://www.fcajedrez.es/partidas/index.html?pgn=/assets/partidas/2008/liga_2008.pgn',
+			'https://sichess.com/feda/absoluto2023/'
 		])
 			expect(sourceUrl(url), url).toBe(url)
 	})
@@ -43,6 +44,8 @@ describe('sourceUrl', () => {
 			'https://info64.org',
 			'https://www.fcajedrez.es.evil.com/x',
 			'http://www.fcajedrez.es/partidas/',
+			'https://sichess.com.evil.com/x',
+			'http://sichess.com/feda/',
 			''
 		])
 			expect(sourceUrl(url), url).toBeNull()
