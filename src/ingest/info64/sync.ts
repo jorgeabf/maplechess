@@ -6,7 +6,7 @@
 // 1 petición/s: el servidor de info64 es modesto.
 import { WorkflowEntrypoint, type WorkflowEvent, type WorkflowStep, type WorkflowStepConfig } from 'cloudflare:workers'
 import { NonRetryableError } from 'cloudflare:workflows'
-import { parseGames, type ParsedGame } from '../../lib/chess/pgn'
+import { eventHeaders, parseGames, type ParsedGame } from '../../lib/chess/pgn'
 import { addDays, endOfMonth, isoDate, madridDateTime, validDate } from '../../lib/dates'
 import { saveHealth, type HealthCounts } from '../../lib/salud'
 import { buildGameRows, type Participant } from '../games'
@@ -625,11 +625,6 @@ async function storeGames(
 }
 
 const NO_GAMES: GamesSummary = { games: 0, identified: 0, illegal: 0, source: null }
-
-/** Cabeceras Event del texto: una por partida en los PGN de info64. */
-function eventHeaders(pgn: string): number {
-	return pgn.match(/\[Event\s+"/g)?.length ?? 0
-}
 
 async function syncGames(db: D1Database, tournament: SyncedTournament, replace: boolean): Promise<GamesSummary> {
 	const pgn = await parseGamesPage(await fetchText(`${INFO64_URL}/${tournament.key}/games`))

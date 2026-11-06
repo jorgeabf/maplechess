@@ -79,6 +79,12 @@
 			"name": "fca-import",
 			"binding": "FCA_IMPORT",
 			"class_name": "FcaImportWorkflow"
+		},
+		{
+			// Partidas de SICHESS de torneos de info64 que no las publican; sólo a mano.
+			"name": "sichess-import",
+			"binding": "SICHESS_IMPORT",
+			"class_name": "SichessImportWorkflow"
 		}
 	],
 	"triggers": {

@@ -111,11 +111,11 @@ const championship = championshipsOf(tournament.source, tournament.sourceKey)[0]
 // Las páginas del torneo y de su retransmisión, sólo si son de una fuente.
 const tournamentUrl = sourceUrl(tournament.url)
 const broadcastUrl = sourceUrl(tournament.gamesSourceUrl)
-// Partidas de lichess que publica info64: las que el organizador sube tal como
-// salen de su retransmisión (el CE Absoluto 2025), todas o sólo algunas. Las
-// cuenta la ingesta al guardarlas (lichess_games), así que aquí no se leen los PGN.
+// Partidas de lichess que publica info64 o SICHESS: las que suben tal como salen
+// de su retransmisión (el CE Absoluto 2025), todas o sólo algunas. Las cuenta la
+// ingesta al guardarlas (lichess_games), así que aquí no se leen los PGN.
 const lichessShare =
-	tournament.gamesSource === 'info64' && tournament.lichessGames > 0
+	(tournament.gamesSource === 'info64' || tournament.gamesSource === 'sichess') && tournament.lichessGames > 0
 		? tournament.lichessGames === tournament.gamesCount
 			? 'Sus partidas son'
 			: `${formatNumber(tournament.lichessGames)} de sus ${formatNumber(tournament.gamesCount)} partidas ${tournament.lichessGames === 1 ? 'es' : 'son'}`
@@ -435,6 +435,23 @@ const indexItems = sections.flatMap((s) => {
 								)}
 								, que suele cubrir sólo las mesas con tablero electrónico. Licencia{' '}
 								<a href={CC_BY_SA} rel="license noopener">CC BY-SA 4.0</a>.
+							</p>
+						) : tournament.gamesSource === 'sichess' ? (
+							<p class="muted">
+								{tournament.source} no publica las partidas de este torneo; vienen de su{' '}
+								{broadcastUrl ? (
+									<a href={broadcastUrl} rel="noopener">retransmisión en SICHESS</a>
+								) : (
+									'retransmisión en SICHESS'
+								)}{' '}
+								(FEDA), que suele cubrir sólo las mesas con tablero electrónico.
+								{lichessShare && (
+									<>
+										{' '}
+										{lichessShare} de una retransmisión de lichess, con licencia{' '}
+										<a href={CC_BY_SA} rel="license noopener">CC BY-SA 4.0</a>.
+									</>
+								)}
 							</p>
 						) : fromFca ? (
 							<p class="muted">

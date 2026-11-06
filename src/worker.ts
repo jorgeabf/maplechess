@@ -8,6 +8,7 @@ export { FideSyncWorkflow } from './ingest/fide/sync'
 export { Info64SyncWorkflow } from './ingest/info64/sync'
 export { LichessSyncWorkflow } from './ingest/lichess/sync'
 export { GamesReprocessWorkflow } from './ingest/reprocess'
+export { SichessImportWorkflow } from './ingest/sichess/sync'
 
 export default {
 	fetch: handle,

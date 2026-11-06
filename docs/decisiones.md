@@ -6,7 +6,7 @@ La historia, las medidas, los casos concretos y el detalle de cada página que s
 
 ### Workflows
 
-- **Workflows** para la ingesta: `INFO64_SYNC` (`src/ingest/info64/sync.ts`), `LICHESS_SYNC` (`src/ingest/lichess/sync.ts`), `FIDE_SYNC` (`src/ingest/fide/sync.ts`) y `FCA_IMPORT` (`src/ingest/fca/sync.ts`, sólo a mano: ver «Fuentes de datos»). Crons en `wrangler.jsonc` y `src/ingest/schedule.ts`: las expresiones tienen que coincidir.
+- **Workflows** para la ingesta: `INFO64_SYNC` (`src/ingest/info64/sync.ts`), `LICHESS_SYNC` (`src/ingest/lichess/sync.ts`), `FIDE_SYNC` (`src/ingest/fide/sync.ts`), `FCA_IMPORT` (`src/ingest/fca/sync.ts`) y `SICHESS_IMPORT` (`src/ingest/sichess/sync.ts`), estos dos sólo a mano (ver «Fuentes de datos»). Crons en `wrangler.jsonc` y `src/ingest/schedule.ts`: las expresiones tienen que coincidir.
   - Clasificación (tabla `standings`, migración 0011): `INFO64_SYNC` lee `/{slug}/standings` de cada torneo tras sus participantes, en su paso. Una pasada de sólo emparejamientos (`'only'`) la relee en los torneos ya empezados con ronda próxima, para prepararla con la de la ronda anterior; la diaria no, porque ya la ha leído en la ventana. Si falla o una guarda no la deja guardar, es un aviso, y las partidas se leen igual. Los torneos propios de lichess no tienen: su API sólo cuenta las partidas retransmitidas y no aplica los desempates del torneo.
     - En los individuales no se guarda el jugador: la página lo toma de `participations` por su número inicial (`start_rank`), ya sin el año de los menores y con los retirados anonimizados. En los de equipos, el nombre y el ELO medio de cada equipo.
     - Título (`standingsHeading` en `src/lib/db/standings.ts`): «Clasificación final» si va tras la última ronda; si no, «Clasificación tras la ronda X». Los de equipos no dicen la ronda: final si ya ha pasado la fecha de fin y, mientras dura, «Clasificación». La regla de «final» es `standingsOver`, que usa también la ficha del jugador (`standingProgress`).
@@ -494,7 +494,7 @@ La historia, las medidas, los casos concretos y el detalle de cada página que s
 ### `src/middleware.ts`
 
 - `src/middleware.ts`: `Cache-Control: private, max-age=0, must-revalidate` por defecto (`private`: las páginas cambian con la cookie `yo`). Una ruta sólo fija la suya si admite caché (las descargas PGN, `/api/emparejamientos`, `/api/clasificaciones` y `/api/elo`). Además, `X-Content-Type-Options: nosniff`, `X-Frame-Options: SAMEORIGIN` y HSTS de un año en todas las respuestas, y el límite de ritmo (ver «D1 cobra por filas recorridas»). Sin `Referrer-Policy`: «← Volver» depende del valor por defecto.
-  - Las URL de las fuentes que se enlazan pasan por `sourceUrl` (`src/lib/urls.ts`): sólo `https://info64.org/`, `https://lichess.org/` y `https://www.fcajedrez.es/` (`FCA_SITE`). En los textos, la fuente se nombra con `sourceName` («Ver en fcajedrez.es»).
+  - Las URL de las fuentes que se enlazan pasan por `sourceUrl` (`src/lib/urls.ts`): sólo `https://info64.org/`, `https://lichess.org/`, `https://www.fcajedrez.es/` (`FCA_SITE`) y `https://sichess.com/` (`SICHESS_SITE`). En los textos, la fuente se nombra con `sourceName` («Ver en fcajedrez.es»).
 
 #### Redirección al dominio
 
@@ -853,6 +853,39 @@ Decidido el 5-nov-2026, leído sólo su esquema (https://info64.org/api/3/schema
   - Sólo con un único candidato en toda la lista y un año de nacimiento que le deje haber jugado (`MIN_AGE`); si no, se queda sin FIDE ID.
   - Medido en local: 884 partidas con los dos jugadores enlazados, 1.343 con uno y 456 sin ninguno; 229 jugadores de la lista.
 
+### SICHESS
+
+- **SICHESS** (`src/ingest/sichess/`, `SICHESS_IMPORT`; decidido con Jorge el 6-nov-2026): https://sichess.com/web/feda/, donde la FEDA retransmite sus campeonatos de 2023 a 2026. La FEDA no puso inconveniente en noviembre de 2026, a la pregunta de la carta del 3-nov (incluir esas partidas, por ejemplo con sus PGN), sin más condiciones: se mantienen las de info64 (identificado, de madrugada, una petición por segundo, atribución, sin menores ni sensibles).
+
+#### Qué aporta
+
+- **Medido el 6-nov-2026** (unas 1.000 peticiones; 116.437 partidas en la D1): 14 torneos que no tenían ninguna, con 2.719 partidas con jugadas y participantes: 1.346 de estándar y 1.373 de rápido y relámpago.
+  - **2023:** Absoluto 429, Rápido 378, Aficionados 90, 90 y 89, División de Honor 168, Rápido por equipos 282.
+  - **2024:** Rápido 178, Relámpago 88, Primera 168, Rápido por equipos 223, Veteranos +65 144.
+  - **2025:** Primera 168, Rápido por equipos 224.
+- **Por eso es una carga única:** en 2026 todo llega ya por info64 o lichess, y lo que coincide no aporta nada. Una pasada periódica sería otra cosa que vigilar a cambio de nada.
+- **Lo que no se carga:** 154 partidas más en 6 torneos que ya tienen (Absoluto 2025 +75, Primera 2023 +47, Iberoamericano 2024 +21, Absoluto 2024 +8, Veteranos +50 2025 +2, Segunda 2023 +1). Habría que fundirlas o sustituir lo guardado; no compensa. Tampoco los de jóvenes ni las selecciones autonómicas (sus posibles menores no tienen dossier ni repertorio) ni el Inclusivo (ver «Torneos sensibles»). El Relámpago 2023 no está en SICHESS.
+- **Calidad:** no traen FIDE ID hasta finales de 2024, pero 1.193 de 1.195 jugadores cruzan con los participantes y sólo 3 partidas no quedan con los dos FIDE ID. Un 2,4 % tiene alguna jugada ilegal, que la ingesta corta. Rápido y Relámpago traen sólo las mesas con tablero electrónico.
+
+#### Cómo se guarda
+
+- **Sólo añade partidas:** el torneo sigue siendo `source = 'info64'`, con sus participantes y su clasificación; las partidas van con `games_source = 'sichess'` y el visor en `games_source_url` y en la cabecera `Source`.
+- **La fecha es la de la ronda** (`withRoundDays`): la más repetida entre sus partidas, con `UTCDate` si la traen. Con la cabecera `Date` saldrían 168 partidas de las 2.719 hasta 6 días antes: en la Primera de 2025 dice el primer día en todas (144 mal; `UTCDate` acierta salvo en una por ronda) y en la de 2024 cuatro por ronda se quedan en el primer día (24). En los otros 12 torneos no cambia ninguna.
+- **Lo que ya tiene partidas de otra fuente no se toca** (`loadTarget`). Después de la carga:
+  - Si una relectura de info64 trae al menos la mitad, propias o de una retransmisión que enlace, mandan ellas.
+  - La pasada de lichess no entra: con `games_source` escrito, lo da por duplicado (`decide`).
+  - Una relectura de info64 sin partidas no pasa la guarda de `saveGames` y se conservan estas. Por eso una rectificación de una de estas partidas se aplica relanzando esta carga con `keys`: con la relectura de info64 se quedaría sin aplicar y `/api/estado` daría la alarma.
+- **Un torneo con un «Jugador retirado» no se lee, ni uno sin participantes** (`loadTarget`). Los participantes guardados ya están saneados y estos PGN casi nunca traen FIDE ID: al retirado no se le reconocería en sus partidas, que saldrían con su nombre. Un nombre mal escrito tampoco cruzaría por nombre, y por eso no basta con `isRetired`. Medido el 6-nov-2026: de una retirada que hay en total, ninguna en estos 14 torneos, y tampoco rectificaciones ni años ocultos; así que no quita ninguna partida y sólo protege una recarga posterior. Una retirada posterior a la carga la aplica el reprocesado, como en las demás.
+- **Lanzada a otra hora, espera a la madrugada** (`msUntilInfo64Hours`): se puede lanzar al desplegar. El resumen y los torneos que han fallado quedan en la salida de la instancia.
+- **La lista va a mano** (`SICHESS_TOURNAMENTS`), por `source_key`, con las rutas escritas: la configuración del visor va ofuscada en 2023–2024, y el Worker no la evalúa.
+- **Un torneo entero o nada:** cada torneo es un paso. Con un archivo que falle, falla el paso y no se guarda a medias; un PGN con menos partidas leídas que cabeceras `[Event` tampoco se guarda. Puede traer más: en los de equipos, alguna partida viene sin `[Event`, así que un recuento por esa cabecera se queda corto.
+- **Una partida suelta sin cabeceras** en la Primera de 2024 cae con el filtro de `gamesOfTournament` (con jugadas y algún participante), como las vacías del Rápido por equipos 2023 (294 de 576).
+
+#### Atribución
+
+- **Sin licencia que citar:** es un permiso, no una licencia. El torneo y la partida dicen de dónde salen por `games_source`, con enlace al visor, y también el pie, `/acerca` y `/privacidad`; el aviso legal no, como info64.
+- **Las exportadas de lichess** (la Primera de 2025) llevan además su CC BY-SA por sus cabeceras (`lichessUrl`), también en el PGN.
+
 ## Trampas conocidas
 
 ### Botones dentro de un texto
@@ -894,7 +927,7 @@ Decidido el 5-nov-2026, leído sólo su esquema (https://info64.org/api/3/schema
 
 ### D1 cobra por filas recorridas
 
-- **D1 cobra por filas recorridas:** evita `count(*)` y `ORDER BY` sin índice en páginas con tráfico. Los totales de la portada están en `site_totals` y se recalculan al final de cada sincronización, salvo en `FCA_IMPORT`.
+- **D1 cobra por filas recorridas:** evita `count(*)` y `ORDER BY` sin índice en páginas con tráfico. Los totales de la portada están en `site_totals` y se recalculan al final de cada sincronización, salvo en `FCA_IMPORT` y `SICHESS_IMPORT`.
   - Cuenta las entradas de índice recorridas, no las lecturas de la fila por rowid: medido en producción, 228 partidas por `games_white` son 229 filas, se pidan las columnas que se pidan. Un índice cubriente no abarata nada.
   - Ordenar sin índice vuelve a contar cada fila, aunque haya `LIMIT`, y una función de ventana, otras dos más. Medido el 21-oct-2026 con las 872 partidas de una semana por `games_date`: 872 filas leerlas, 1.731 con `ORDER BY … LIMIT 10` y 3.471 con `ROW_NUMBER() OVER (PARTITION BY tournament_id …)`. Para elegir unas pocas de unos cientos, mejor leerlas sin ordenar y elegir en TS.
   - Sí cuentan la búsqueda de cada fila por su clave primaria (`json_each` → `games`: dos por partida), cada coincidencia que da el FTS y la lista que materializa `x IN (SELECT …)`.
