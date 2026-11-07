@@ -251,15 +251,17 @@ export const juntasCollar = (y, s, alto, salida) => [doble(arco(y + alto, s - 1.
 
 /**
  * La SVG de una pieza, igual de silueta en los dos colores. `pieza.macizas`, formas
- * siempre de tinta (la cruz del rey); `pieza.partes`, las formas con el relleno de
- * su color y contorno de tinta; `pieza.lineas`, trazos abiertos (las juntas), cada
+ * siempre de tinta (la cruz del rey); `pieza.luz`, lo que las rellena en las blancas,
+ * sin trazo; `pieza.partes`, las formas con el relleno de su color y contorno de
+ * tinta; `pieza.lineas`, trazos abiertos (las juntas), cada
  * uno con su versión para cada color (`{ w, b }`), del color contrario al relleno;
  * `pieza.marcas`, formas rellenas de ese mismo color (`{ w, b }`: un ojo, la crin).
  */
 export function svgPieza(pieza, color) {
 	const [relleno, linea] = color === 'w' ? [COLORES.claro, COLORES.tinta] : [COLORES.tinta, COLORES.claro]
 	const macizas = (pieza.macizas ?? []).map((d) => `<path fill="${COLORES.tinta}" d="${d}"/>`).join('')
-	const partes = macizas + pieza.partes.map((d) => `<path d="${d}"/>`).join('')
+	const luz = pieza.luz && color === 'w' ? `<path fill="${COLORES.claro}" stroke="none" d="${pieza.luz}"/>` : ''
+	const partes = macizas + luz + pieza.partes.map((d) => `<path d="${d}"/>`).join('')
 	const d = pieza.lineas
 		.map((l) => l[color])
 		.filter(Boolean)
