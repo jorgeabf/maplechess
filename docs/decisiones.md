@@ -769,6 +769,13 @@ La historia, las medidas, los casos concretos y el detalle de cada página que s
 - **`main` es lo desplegado y está protegido:** sólo entra por PR, con la CI en verde (`.github/workflows/ci.yml`: lint, `astro check` más `tsc` del cliente, y tests) y la revisión de la otra persona.
   - Las acciones de la CI van fijadas por SHA, con la etiqueta en un comentario, porque una etiqueta se puede mover. Las actualiza Dependabot (`.github/dependabot.yml`): cada semana, con 7 días de espera desde que sale una versión, y sus PR pasan por la CI y la revisión como los demás.
 
+### Versión de Node
+
+- **La versión de Node va en `engines` de `package.json`** (`^24`, decidido por Jorge el 7-nov-2026), y la CI la lee de ahí (`node-version-file`). En producción corre workerd: Node sólo afecta al build, los tests y los scripts.
+  - **Sin `.node-version` ni `.nvmrc`:** en el equipo de Jorge, con ellos, `cd` falla en Bash y corta las cadenas con `&&`, y cada orden de la consola PowerShell de Claude tiene que ir con `fnm exec`.
+  - **`^24`, no `>=24`:** fnm elige la versión instalada más alta que cumpla el rango. Con `>=24`, una Node 26 instalada para otro proyecto se usaría aquí sin que la CI la hubiera probado.
+  - **Lo que hace cada herramienta** (medido el 7-nov-2026): pnpm sólo avisa si la versión no cumple (`Unsupported engine`) y sigue. La terminal de Jorge (`fnm env --use-on-cd`) pasa al entrar en la carpeta a la 24.x más alta que tenga instalada, entonces la 24.22.2, con su `pnpm`. Bash (`FNM_RESOLVE_ENGINES=false`) y las consolas de Claude se quedan en la de por defecto, la 24.14.1. Es el mismo major, así que comparten `node_modules`.
+
 ## Fuentes de datos
 
 ### info64.org

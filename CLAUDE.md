@@ -208,6 +208,7 @@ curl -X POST localhost:4321/api/admin/sync -H "Authorization: Bearer $TOKEN" \
   - Las acciones de la CI van fijadas por SHA, con la etiqueta en un comentario. Las sube Dependabot (`.github/dependabot.yml`), con 7 días de espera, y sus PR pasan por la CI y la revisión.
 - **Ramas cortas desde `main` actualizado:** `feature/…` o `fix/…`. El PR explica qué cambia y cómo se ha probado; si toca páginas, también en `pnpm dev`. Antes de abrirlo: `pnpm test`, `pnpm lint` y `pnpm check`.
 - **Sin prettier:** el estilo va a mano (tabulaciones, comillas simples, sin punto y coma, líneas de unas 120 columnas): `pnpm lint` no lo mira. Nunca `prettier --write`: reformatea archivos enteros.
+- **La versión de Node,** en `engines` de `package.json`, de donde la lee la CI. Sin `.node-version` ni `.nvmrc`: en el equipo de quien opera, `cd` fallaría en Bash. Detalle: `docs/decisiones.md#versión-de-node`.
 - **Producción sólo la opera quien despliega (Jorge), con su guía privada (ver «Producción»):**
   - `pnpm run deploy`;
   - `pnpm db:migrate:remote`;
