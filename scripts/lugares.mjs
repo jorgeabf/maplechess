@@ -29,6 +29,22 @@ const MIN_HABITANTES = 100
 /** Países con otros nombres que los de Intl.DisplayNames, como los escriben las retransmisiones. */
 const OTROS_PAISES = ['England', 'Scotland', 'Wales', 'Northern Ireland', 'USA', 'UK', 'UAE', 'Czech Republic', 'Holland']
 
+/**
+ * Nombres de siempre que el INE no da, como los escriben los organizadores, por
+ * el código del municipio. A mano: buscar el municipio con el que empieza la
+ * ciudad se equivoca («Aldea de los Ríos» no es L'Aldea, ni «Valle de Aranguren», El Valle).
+ */
+const OTROS_NOMBRES = new Map([
+	['03011', 'Alfaz del Pi'],
+	['06121', 'Santa Marta de los Barros'],
+	['09023', 'Arcos de la Llana'],
+	['09321', 'Roa de Duero'],
+	['10114', 'Majadas de Tiétar'],
+	['11042', 'Zahara de la Sierra'],
+	['33037', 'Mieres del Camino'],
+	['36008', 'Cangas do Morrazo']
+])
+
 /** España, Canarias y Ceuta y Melilla no son el extranjero. */
 const NO_EXTRANJERO = new Set(['ES', 'IC', 'EA'])
 
@@ -43,9 +59,19 @@ if (i !== -1) {
 build()
 
 function build() {
-	const municipalities = readTsv('municipios.tsv').map(([code, name]) => ({ code, name }))
+	const municipalities = readTsv('municipios.tsv').map(([code, name]) => ({
+		code,
+		name: OTROS_NOMBRES.has(code) ? `${name}/${OTROS_NOMBRES.get(code)}` : name
+	}))
 	const known = new Set(municipalities.map((m) => m.code))
-	const nuclei = readTsv('nucleos.tsv').map(([code, name, people]) => ({ code, name, people: Number(people) }))
+	for (const code of OTROS_NOMBRES.keys()) {
+		if (!known.has(code)) throw new Error(`[lugares] OTROS_NOMBRES: el municipio ${code} no existe`)
+	}
+	const nuclei = readTsv('nucleos.tsv').map(([code, name, people]) => ({
+		code,
+		name: code.startsWith('33') ? withoutDottedLetters(name) : name,
+		people: Number(people)
+	}))
 	const population = new Map()
 	for (const n of nuclei) population.set(n.code, (population.get(n.code) ?? 0) + n.people)
 	const forms = new Map(municipalities.map((m) => [m.code, new Set(nameForms(m.name).map((f) => f.toLowerCase()))]))
@@ -60,6 +86,15 @@ function build() {
 	console.log(
 		`[lugares] ${data.municipios.length} municipios, ${data.nucleos.length} núcleos, ${data.paises.length} nombres de país → ${outFile}`
 	)
+}
+
+/**
+ * En Asturias, el IGN escribe con un punto las letras con punto debajo, que
+ * partirían el nombre en dos palabras: «L.luarca» es Luarca; «Vil.lanueva»,
+ * Villanueva; «H.ueyu», Hueyu. En Mallorca, el punto es la ele geminada: se queda.
+ */
+function withoutDottedLetters(name) {
+	return name.replace(/(^|[\s/])L\.l/g, '$1L').replace(/l\.l/g, 'll').replace(/([Hh])\./g, '$1')
 }
 
 /** Las formas del nombre de un municipio: cada denominación y, con el artículo pospuesto, delante («Coruña, A»). */

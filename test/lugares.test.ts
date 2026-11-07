@@ -64,6 +64,47 @@ describe('cityPlace', () => {
 		expect(province('Vecindario (Santa Lucia)')).toBe('35')
 	})
 
+	it('aproximado: sin los conectores, como los omiten los organizadores', () => {
+		expect(cityPlace('San Pedro Alcántara')).toEqual({ province: '29', community: '01', approximate: true })
+		expect(province('SAN PEDRO ALCANTÁRA')).toBe('29')
+		expect(province('Villarejo Salvanes')).toBe('28')
+		expect(province('Santiago Compostela')).toBe('15')
+		expect(province('Puerto Sta. Maria')).toBe('11')
+		expect(province('Muros del Nalón')).toBe('33')
+		expect(province('Vilanova i Geltrú')).toBe('08')
+		// Dos trozos aproximados: gana Colònia de Sant Jordi, con diez veces más habitantes que Las Salinas (Valladolid).
+		expect(province('Colonia Sant Jordi/Las Salinas')).toBe('07')
+	})
+
+	it('sin los conectores, sólo si el trozo no casa con nada', () => {
+		// Un núcleo con ese nombre exacto, no «Costa de la Calma» (Mallorca).
+		expect(province('Costa Calma')).toBe('35')
+		// La provincia escrita sigue separándose: no es «Casas de Sevilla», ni aproximado.
+		expect(province('Casas Sevilla')).toBe('41')
+		expect(cityPlace('Rozas Madrid')).toEqual({ province: '28', community: '13', approximate: false })
+	})
+
+	it('los núcleos, sin el punto de las letras asturianas y por cada denominación', () => {
+		expect(cityPlace('Luarca')).toEqual({ province: '33', community: '03', approximate: true })
+		expect(province('Respaldiza')).toBe('01')
+		expect(province('Arespalditza')).toBe('01')
+		expect(province('Donostia San Sebastian')).toBe('20')
+		// En Mallorca, el punto es la ele geminada.
+		expect(province('Es Pil·larí')).toBe('07')
+	})
+
+	it('los nombres de siempre que el INE no da', () => {
+		expect(cityPlace('Alfaz del Pi')).toEqual({ province: '03', community: '10', approximate: false })
+		expect(cityPlace('Mieres del Camino')).toEqual({ province: '33', community: '03', approximate: false })
+		expect(cityPlace('Roa de Duero')).toEqual({ province: '09', community: '07', approximate: false })
+	})
+
+	it('un municipio al principio no basta: lo demás puede ser el sitio', () => {
+		expect(cityPlace('Aldea de los Rios')).toBeNull()
+		expect(cityPlace('Valle de Aranguren')).toBeNull()
+		expect(cityPlace('Andorra la Vella')).toBeNull()
+	})
+
 	it('sólo la provincia, la isla o la comunidad', () => {
 		expect(province('Asturias')).toBe('33')
 		expect(province('Muriedas (Cantabria)')).toBe('39')

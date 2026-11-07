@@ -7,9 +7,10 @@
 // Madrid», «Vva. de los Infantes», «Trevias», «Gran Hotel Bali», «Budva,
 // Montenegro». Se busca por sus trozos en los municipios del INE (con sus
 // nombres cooficiales y el artículo delante o sin él) y, si no, en los núcleos
-// de población del IGN y en los principios de nombre («Vilagarcía» por
-// «Vilagarcía de Arousa»), que son aproximados. Los datos los genera
-// scripts/lugares.mjs (data/lugares/).
+// de población del IGN, en los principios de nombre («Vilagarcía» por
+// «Vilagarcía de Arousa») y en los nombres sin conectores («San Pedro
+// Alcántara»), que son aproximados. Los datos los genera scripts/lugares.mjs
+// (data/lugares/).
 import { stripDiacritics, words } from './chess/names'
 import data from './lugares.json'
 import { COMMUNITY_OF, PLACES, placesInName, type Place } from './toponimos'
@@ -81,7 +82,7 @@ function municipalityInName(name: string): TournamentPlace | null {
 
 interface CityPlace extends TournamentPlace {
 	community: string
-	/** Si sale de un núcleo de población o de un principio de nombre. */
+	/** Si sale de un núcleo de población, de un principio de nombre o de un nombre sin conectores. */
 	approximate: boolean
 }
 
@@ -154,7 +155,7 @@ function abroad(segments: string[], countries: Countries): boolean {
 
 function fromSegments(segments: string[], hinted: Set<string>, regions: Map<string, Region[]>): Found | null {
 	const all = segments.flatMap((s) => {
-		const found = regions.has(s) ? candidates(s, hinted, 1) : candidates(s, hinted)
+		const found = regions.has(s) ? candidates(s, hinted, 1) : (candidates(s, hinted) ?? withoutConnectors(s, hinted))
 		return found ? [{ ...found, region: regions.has(s) }] : []
 	})
 	const others = all.some((f) => !f.region) ? all.filter((f) => !f.region) : all
@@ -238,13 +239,28 @@ interface Found {
  * Los municipios que se llaman `name`, los del mejor nivel, o null. Con
  * provincias en `hinted`, sólo los suyos; con `maxTier`, sin pasar de él.
  */
-function candidates(name: string, hinted: Set<string>, maxTier = 2): Found | null {
-	const matches = [...(tables().names.get(name)?.values() ?? [])].filter(
+function candidates(name: string, hinted: Set<string>, maxTier = 2, table = tables().names): Found | null {
+	const matches = [...(table.get(name)?.values() ?? [])].filter(
 		(m) => m.tier <= maxTier && (hinted.size === 0 || hinted.has(m.municipality.slice(0, 2)))
 	)
 	if (matches.length === 0) return null
 	const tier = Math.min(...matches.map((m) => m.tier))
 	return { tier, matches: matches.filter((m) => m.tier === tier) }
+}
+
+/**
+ * Los municipios que se llaman `name` sin contar los conectores, como los
+ * omiten o cambian los organizadores: «San Pedro Alcántara», «Muros del Nalón».
+ * Sólo para un trozo que no casa con nada: «Costa Calma» no es «Costa de la Calma».
+ */
+function withoutConnectors(name: string, hinted: Set<string>): Found | null {
+	const key = connectorlessKey(name)
+	return key ? candidates(key, hinted, 2, tables().connectorless) : null
+}
+
+function connectorlessKey(name: string): string | null {
+	const kept = words(name).filter((word) => !CONNECTORS.has(word))
+	return kept.length >= 2 ? kept.join(' ') : null
 }
 
 /** Entre homónimos, el que tiene al menos diez veces más habitantes que el siguiente; si no, ninguno. */
@@ -266,7 +282,7 @@ function provincesOf(community: string): string[] {
 	return [...COMMUNITY_OF].filter(([, c]) => c === community).map(([province]) => province)
 }
 
-/** Las palabras que siguen a un principio de nombre («Vilagarcía de Arousa»). */
+/** Las palabras que siguen a un principio de nombre («Vilagarcía de Arousa») y las que se omiten («San Pedro Alcántara»). */
 const CONNECTORS = new Set(['de', 'del', 'la', 'el', 'las', 'los', 'i', 'y', 'do', 'da', 'd'])
 
 /** Artículos que el INE pospone («Coruña, A», «Alfàs del Pi, l'»). */
@@ -281,6 +297,8 @@ interface Countries {
 interface Tables {
 	/** Nombre en palabras → municipio → su mejor coincidencia. */
 	names: Map<string, Map<string, Match>>
+	/** Lo mismo, sin los conectores (`withoutConnectors`). */
+	connectorless: Map<string, Map<string, Match>>
 	regions: Map<string, Region[]>
 	countries: Countries
 }
@@ -291,15 +309,22 @@ let cache: Tables | null = null
 function tables(): Tables {
 	if (cache) return cache
 	const names = new Map<string, Map<string, Match>>()
-	const add = (name: string, match: Match) => {
-		const key = words(name).join(' ')
-		if (!key) return
-		const byMunicipality = names.get(key) ?? new Map<string, Match>()
+	const connectorless = new Map<string, Map<string, Match>>()
+	const addTo = (table: Map<string, Map<string, Match>>, key: string, match: Match) => {
+		const byMunicipality = table.get(key) ?? new Map<string, Match>()
 		const old = byMunicipality.get(match.municipality)
 		if (!old || match.tier < old.tier || (match.tier === old.tier && match.population > old.population)) {
 			byMunicipality.set(match.municipality, match)
 		}
-		names.set(key, byMunicipality)
+		table.set(key, byMunicipality)
+	}
+	const add = (name: string, match: Match) => {
+		const key = words(name).join(' ')
+		if (key) addTo(names, key, match)
+	}
+	const addWithoutConnectors = (form: string, municipality: string, population: number) => {
+		const key = connectorlessKey(form)
+		if (key) addTo(connectorless, key, { municipality, tier: 2, population })
 	}
 	for (const [municipality, name, population] of data.municipios as [string, string, number][]) {
 		for (const part of name.split('/')) {
@@ -309,6 +334,7 @@ function tables(): Tables {
 				: [[part.trim(), 0]]
 			for (const [form, tier] of forms) {
 				add(form, { municipality, tier, population })
+				addWithoutConnectors(form, municipality, population)
 				// Media denominación: «Vitoria» por «Vitoria-Gasteiz».
 				const halves = form.split('-')
 				for (const half of halves.length > 1 ? halves : []) {
@@ -325,7 +351,11 @@ function tables(): Tables {
 		}
 	}
 	for (const [municipality, name, population] of data.nucleos as [string, string, number][]) {
-		add(name, { municipality, tier: 2, population })
+		// Cada denominación y las dos juntas: «Donostia San Sebastián».
+		for (const part of new Set([name, ...name.split('/')])) {
+			add(part, { municipality, tier: 2, population })
+			addWithoutConnectors(part, municipality, population)
+		}
 	}
 
 	const regions = new Map<string, Region[]>()
@@ -346,7 +376,7 @@ function tables(): Tables {
 		const set = names.has(key) || regions.has(key) ? countries.alsoHere : countries.only
 		set.add(key)
 	}
-	cache = { names, regions, countries }
+	cache = { names, connectorless, regions, countries }
 	return cache
 }
 
