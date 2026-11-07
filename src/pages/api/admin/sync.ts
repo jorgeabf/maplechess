@@ -5,6 +5,7 @@
 //   POST /api/admin/sync  {"workflow":"info64","params":{"from":"","to":"","keys":["ce-individual-absoluto-2025"]}}
 //   POST /api/admin/sync  {"workflow":"info64","params":{"from":"","to":"","pairings":"only"}}
 //   POST /api/admin/sync  {"workflow":"info64","params":{"from":"2014-01-01","to":"2014-01-31","standings":"only","chain":{"until":"2026-10-23","months":1}}}
+//   POST /api/admin/sync  {"workflow":"info64","params":{"from":"2024-01-01","to":"2024-01-31","groups":"only","chain":{"until":"2026-11-07","months":1}}}
 //   POST /api/admin/sync  {"workflow":"lichess"}
 //   POST /api/admin/sync  {"workflow":"lichess","params":{"rounds":["jQucOFAV"]}}
 //   POST /api/admin/sync  {"workflow":"fide","params":{"force":true}}
@@ -16,7 +17,7 @@
 //   GET  /api/admin/sync?workflow=info64&id=<instancia>
 import type { APIRoute } from 'astro'
 import { env } from 'cloudflare:workers'
-import { windowInstanceId } from '../../../ingest/info64/sync'
+import { windowInstanceId, windowMode } from '../../../ingest/info64/sync'
 
 const WORKFLOWS = {
 	info64: () => env.INFO64_SYNC,
@@ -57,7 +58,7 @@ export const POST: APIRoute = async ({ request }) => {
 		params.pairings !== 'only' &&
 		typeof params.from === 'string' &&
 		typeof params.to === 'string'
-			? windowInstanceId(params.from, params.to, params.standings === 'only' ? 'only' : undefined)
+			? windowInstanceId(params.from, params.to, windowMode(params))
 			: undefined
 	const instance = await WORKFLOWS[body.workflow]().create({ id, params: params as never })
 	return json({ id: instance.id, status: await instance.status() }, 201)

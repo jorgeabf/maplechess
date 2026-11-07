@@ -460,6 +460,20 @@ describe('applyMinorsTournaments', () => {
 		expect(await applyMinorsTournaments(db)).toEqual({ deleted: 0 })
 	})
 
+	it('borra también el que sólo lo dice el rótulo de su pestaña, y no sus compañeros de grupo', async () => {
+		const related = [
+			{ key: 'torneo-navidad-c', label: 'Sub 12' },
+			{ key: 'torneo-navidad-a', label: 'Absoluto' }
+		]
+		const minors = await store({ ...tournament('torneo-navidad-c', 'Torneo de Navidad Grupo C'), related }, [])
+		const adults = await store({ ...tournament('torneo-navidad-a', 'Torneo de Navidad Grupo A'), related }, [])
+
+		expect(await applyMinorsTournaments(db)).toEqual({ deleted: 1 })
+
+		expect(await count('SELECT count(*) AS n FROM tournaments WHERE id = ?1', minors)).toBe(0)
+		expect(await count('SELECT count(*) AS n FROM tournaments WHERE id = ?1', adults)).toBe(1)
+	})
+
 	it('mira la fecha de cada torneo para los años de nacimiento', async () => {
 		const at = (key: string, name: string, startDate: string | null) =>
 			store({ ...tournament(key, name), startDate, endDate: startDate }, [])

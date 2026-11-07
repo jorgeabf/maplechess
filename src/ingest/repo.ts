@@ -1336,16 +1336,24 @@ export async function loadTournamentsStarting(
 	from: string,
 	to: string,
 	today: string
-): Promise<{ key: string; id: number; type: TournamentType; name: string; startDate: string }[]> {
+): Promise<{ key: string; id: number; type: TournamentType; name: string; startDate: string; hasGroup: number }[]> {
 	const { results } = await db
 		.prepare(
-			`SELECT source_key AS key, id, type, name, start_date AS startDate FROM tournaments
+			`SELECT source_key AS key, id, type, name, start_date AS startDate, related IS NOT NULL AS hasGroup FROM tournaments
 			WHERE start_date BETWEEN ?2 AND ?3 AND start_date <= ?4 AND source = ?1
 			ORDER BY start_date, id`
 		)
 		.bind(source, from, to, today)
-		.all<{ key: string; id: number; type: TournamentType; name: string; startDate: string }>()
+		.all<{ key: string; id: number; type: TournamentType; name: string; startDate: string; hasGroup: number }>()
 	return results
+}
+
+/** Guarda el grupo de un torneo ya guardado, sin tocar nada más. Si no cambia, no se reescribe. */
+export async function saveGroup(db: D1Database, tournamentId: number, group: RelatedTournament[]): Promise<void> {
+	await db
+		.prepare('UPDATE tournaments SET related = ?2 WHERE id = ?1 AND related IS NOT ?2')
+		.bind(tournamentId, JSON.stringify(group))
+		.run()
 }
 
 export interface CheckedTournament {
@@ -1385,6 +1393,21 @@ export async function saveSyncState(db: D1Database, key: string, value: string):
 		)
 		.bind(key, value, new Date().toISOString())
 		.run()
+}
+
+/** sync_state: los torneos cuyo grupo no se ha podido leer, para volver a pedirlos con keys. */
+export const GROUP_FAILURES_KEY = 'grupos_fallidos'
+
+/**
+ * Apunta los torneos cuyo grupo ha fallado y quita los que se han vuelto a pedir.
+ * Una carga son unas 150 ventanas, y un fallo no se distingue en la D1 de un torneo
+ * sin grupo: así no hay que buscarlos en la salida de cada una.
+ */
+export async function saveGroupFailures(db: D1Database, attempted: string[], failed: string[]): Promise<void> {
+	const stored = JSON.parse((await loadSyncState(db, GROUP_FAILURES_KEY)) ?? '[]') as string[]
+	const tried = new Set(attempted)
+	const next = [...stored.filter((key) => !tried.has(key)), ...failed]
+	if (JSON.stringify(next) !== JSON.stringify(stored)) await saveSyncState(db, GROUP_FAILURES_KEY, JSON.stringify(next))
 }
 
 // --- Retransmisiones de lichess (lichess/sync.ts) ---

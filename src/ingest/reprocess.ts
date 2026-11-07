@@ -32,6 +32,7 @@
 //   wrangler workflows trigger games-reprocess '{"lugares":true}'      (sólo dónde se juegan los torneos)
 //   wrangler workflows trigger games-reprocess '{"federaciones":true}' (sólo la columna Fed.)
 //   wrangler workflows trigger games-reprocess '{"fideIds":true}'      (sólo los FIDE ID inverosímiles)
+//   wrangler workflows trigger games-reprocess '{"ensayo":true}'       (sólo lista lo que harían los rótulos, sin tocar nada)
 import { WorkflowEntrypoint, type WorkflowEvent, type WorkflowStep } from 'cloudflare:workers'
 import { normalizeName } from '../lib/chess/names'
 import { parseGames } from '../lib/chess/pgn'
@@ -41,7 +42,9 @@ import { madridYear } from '../lib/dates'
 import { withoutHomonymYear } from '../lib/format'
 import { lichessUrl } from '../lib/licenses'
 import { tournamentPlace } from '../lib/lugares'
+import type { RelatedTournament } from '../lib/db/tournaments'
 import { derivedColumns, type DerivedColumns } from './games'
+import { ownLabel } from './info64/parse'
 import { LICHESS_STEP, parseBroadcastUrl, resolveTourId, type BroadcastRef } from './lichess/api'
 import { isListedMinors, isMinorsTournament } from './menores'
 import { isRetired, nameKey, publicName, publicPgnNames, RETIRED_NAME, withoutHiddenYear } from './nombres'
@@ -84,7 +87,7 @@ import {
 	type StoredGame
 } from './repo'
 import { LISTED_COPIES } from './repetidos'
-import { looksSensitive } from './sensibles'
+import { looksSensitive, sensitiveName } from './sensibles'
 
 export interface GamesReprocessParams {
 	/**
@@ -108,6 +111,8 @@ export interface GamesReprocessParams {
 	federaciones?: boolean
 	/** Sólo los FIDE ID inverosímiles (applyFideIds), sin recorrer todas las partidas: si cambia la regla. */
 	fideIds?: boolean
+	/** Sólo lista en su salida lo que harían los rótulos guardados (rehearseLabels), sin tocar nada: antes de borrar por ellos. */
+	ensayo?: boolean
 }
 
 /** Partidas por paso: unos 2 MB de PGN y unas décimas de segundo de CPU. */
@@ -131,7 +136,8 @@ export interface ReprocessedBatch {
 }
 
 export class GamesReprocessWorkflow extends WorkflowEntrypoint<Env, GamesReprocessParams> {
-	async run(event: WorkflowEvent<GamesReprocessParams>, step: WorkflowStep): Promise<void> {
+	async run(event: WorkflowEvent<GamesReprocessParams>, step: WorkflowStep): Promise<LabelRehearsal | void> {
+		if (event.payload.ensayo) return step.do('ensayo de los rótulos', () => rehearseLabels(this.env.DB))
 		const { retiradas, ocultaciones, sensibles, menores, repetidos, lugares, federaciones, fideIds } = event.payload
 		const all =
 			!retiradas && !ocultaciones && !sensibles && !menores && !repetidos && !lugares && !federaciones && !fideIds
@@ -408,6 +414,63 @@ export async function applyFideIds(db: D1Database): Promise<FideIdCleanup> {
 	return { participations, games: games.length, pairings: pairings.length }
 }
 
+/** El rótulo de la pestaña de un torneo guardado (tournaments.related); vacío sin grupo. */
+function storedLabel(related: string | null, key: string): string {
+	return related ? ownLabel(JSON.parse(related) as RelatedTournament[], key) : ''
+}
+
+/** Un torneo guardado al que sólo el rótulo de su pestaña hace borrar o apuntar. */
+export interface LabelHit {
+	key: string
+	name: string
+	label: string
+}
+
+export interface LabelRehearsal {
+	/** Los que borraría applyMinorsTournaments. */
+	minors: LabelHit[]
+	/** Los que apuntaría applySensitive, si aún no están en torneos_sensibles. */
+	sensitive: LabelHit[]
+}
+
+/**
+ * Los torneos guardados a los que sólo el rótulo de su pestaña hace borrar o
+ * apuntar, sin tocar nada. Las reglas se hicieron para nombres y el borrado va en
+ * cascada, sin una excepción como la de los sensibles: tras cargar grupos, esta
+ * lista se mira antes de lanzar el reprocesado.
+ */
+export async function rehearseLabels(db: D1Database): Promise<LabelRehearsal> {
+	const { results } = await db
+		.prepare(
+			`SELECT t.source, t.source_key AS key, t.name, t.city, t.start_date AS startDate, t.related,
+				s.source_key IS NOT NULL AS reviewed
+			FROM tournaments t LEFT JOIN torneos_sensibles s ON s.source = t.source AND s.source_key = t.source_key
+			WHERE t.related IS NOT NULL`
+		)
+		.all<{
+			source: string
+			key: string
+			name: string
+			city: string | null
+			startDate: string | null
+			related: string
+			reviewed: number
+		}>()
+	const stored = results.map((t) => ({ ...t, label: storedLabel(t.related, t.key) }))
+	const hit = ({ key, name, label }: LabelHit): LabelHit => ({ key, name, label })
+	return {
+		minors: stored
+			.filter(
+				(t) =>
+					isMinorsTournament(t.label, t.startDate) &&
+					!isMinorsTournament(t.name, t.startDate) &&
+					!isListedMinors(t.source, t.key)
+			)
+			.map(hit),
+		sensitive: stored.filter((t) => !t.reviewed && looksSensitive(t.label) && !looksSensitive(t.name, t.city)).map(hit)
+	}
+}
+
 /** Lo que applySensitive ha hecho. */
 export interface SensitiveCleanup {
 	/** Torneos guardados que parecen sensibles y se han apuntado para revisarlos. */
@@ -420,21 +483,24 @@ export interface SensitiveCleanup {
 
 /**
  * Aplica la tabla torneos_sensibles a lo guardado: apunta para revisarlos los
- * torneos que lo parecen (looksSensitive) y aún no están en ella, marca también
+ * torneos que lo parecen (sensitiveName) y aún no están en ella, marca también
  * las retransmisiones de lichess de los marcados y borra éstos, que la ingesta
- * ya no lee. Recorre los nombres y las ciudades de todos los torneos: sólo lo usa
- * el reprocesado. Repetirlo no cambia nada.
+ * ya no lee. Recorre los nombres, las ciudades y los rótulos de todos los
+ * torneos: sólo lo usa el reprocesado. Repetirlo no cambia nada.
  */
 export async function applySensitive(
 	db: D1Database,
 	resolve: (ref: BroadcastRef) => Promise<string | null> = resolveTourId
 ): Promise<SensitiveCleanup> {
 	const { results } = await db
-		.prepare('SELECT source, source_key AS key, name, city FROM tournaments')
-		.all<{ source: string; key: string; name: string; city: string | null }>()
+		.prepare('SELECT source, source_key AS key, name, city, related FROM tournaments')
+		.all<{ source: string; key: string; name: string; city: string | null; related: string | null }>()
 	const proposed = await proposeSensitive(
 		db,
-		results.filter((t) => looksSensitive(t.name, t.city))
+		results.flatMap((t) => {
+			const name = sensitiveName(t.name, t.city, storedLabel(t.related, t.key))
+			return name ? [{ source: t.source, key: t.key, name }] : []
+		})
 	)
 	const broadcasts = await excludeBroadcasts(db, await excludedBroadcasts(db, resolve))
 	const deleted = await deleteExcludedTournaments(db)
@@ -493,17 +559,22 @@ export async function applyPlaces(db: D1Database): Promise<PlacesCleanup> {
 }
 
 /**
- * Borra los torneos de menores guardados (isMinorsTournament, por el nombre, o
- * isListedMinors, por la lista), que la ingesta ya no lee. Recorre los nombres
- * de todos los torneos: sólo lo usa el reprocesado. Repetirlo no cambia nada.
- * Devuelve cuántos ha borrado.
+ * Borra los torneos de menores guardados (isMinorsTournament, por el nombre o
+ * por el rótulo de su pestaña, o isListedMinors, por la lista), que la ingesta ya
+ * no lee. Recorre los nombres y los rótulos de todos los torneos: sólo lo usa el
+ * reprocesado. Repetirlo no cambia nada. Devuelve cuántos ha borrado.
  */
 export async function applyMinorsTournaments(db: D1Database): Promise<{ deleted: number }> {
 	const { results } = await db
-		.prepare('SELECT id, source, source_key AS key, name, start_date AS startDate FROM tournaments')
-		.all<{ id: number; source: string; key: string; name: string; startDate: string | null }>()
+		.prepare('SELECT id, source, source_key AS key, name, start_date AS startDate, related FROM tournaments')
+		.all<{ id: number; source: string; key: string; name: string; startDate: string | null; related: string | null }>()
 	const ids = results
-		.filter((t) => isListedMinors(t.source, t.key) || isMinorsTournament(t.name, t.startDate))
+		.filter(
+			(t) =>
+				isListedMinors(t.source, t.key) ||
+				isMinorsTournament(t.name, t.startDate) ||
+				isMinorsTournament(storedLabel(t.related, t.key), t.startDate)
+		)
 		.map((t) => t.id)
 	await deleteTournaments(db, ids)
 	if (ids.length > 0) await refreshTotals(db)

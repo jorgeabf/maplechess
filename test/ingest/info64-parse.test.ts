@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import {
 	decodeEntities,
+	ownLabel,
+	PageFormatError,
 	parseEvents,
 	parseGamesPage,
+	parseGroupPage,
 	parseRoundPage,
 	parseStandingsPage,
 	parseTeamListing,
@@ -144,6 +147,41 @@ describe('parseTournamentPage', () => {
 			{ key: 'open-inventado-b', label: 'B' },
 			{ key: 'Open-Inventado.C', label: 'C' }
 		])
+	})
+})
+
+describe('parseGroupPage', () => {
+	const nav =
+		'<div id="tournament-selection-nav"><ul class="nav nav-tabs">' +
+		'<li class="active"><a href="/open-inventado-a">A</a></li><li><a href="/team/open-inventado-b/">B</a></li></ul></div>'
+
+	it('lee las pestañas del grupo como la página principal', async () => {
+		expect(await parseGroupPage(tournamentHtml)).toEqual((await parseTournamentPage(tournamentHtml)).related)
+		expect(await parseGroupPage(`${nav}<h1>Open Inventado</h1>`)).toEqual([
+			{ key: 'open-inventado-a', label: 'A' },
+			{ key: 'team/open-inventado-b', label: 'B' }
+		])
+	})
+
+	it('sin pestañas, ningún grupo', async () => {
+		expect(await parseGroupPage('<h1>Open Inventado</h1>')).toEqual([])
+	})
+
+	it('una página sin título tiene otra forma: es un error, no un torneo sin grupo', async () => {
+		await expect(parseGroupPage('<p>Nueva web de info64</p>')).rejects.toBeInstanceOf(PageFormatError)
+		await expect(parseGroupPage(`${nav}<h1> </h1>`)).rejects.toBeInstanceOf(PageFormatError)
+	})
+})
+
+describe('ownLabel', () => {
+	const related = [
+		{ key: 'open-a', label: 'A' },
+		{ key: 'open-b', label: 'Sub 12' }
+	]
+
+	it('da el rótulo del propio torneo, o vacío si no está', () => {
+		expect(ownLabel(related, 'open-b')).toBe('Sub 12')
+		expect(ownLabel(related, 'open-c')).toBe('')
 	})
 })
 

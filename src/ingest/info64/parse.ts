@@ -214,6 +214,44 @@ function toPlayers(rows: PlayerCells[], team: string | null): TournamentPlayer[]
 	)
 }
 
+// Pestañas del grupo, encima del título: un enlace por torneo, también al propio.
+const GROUP_TABS = '#tournament-selection-nav a[href]'
+
+interface GroupTab {
+	href: string
+	label: string
+}
+
+function collectGroupTabs(tabs: GroupTab[]): HTMLRewriterElementContentHandlers {
+	return {
+		element(el) {
+			tabs.push({ href: el.getAttribute('href') ?? '', label: '' })
+		},
+		text(chunk) {
+			const tab = tabs.at(-1)
+			if (tab) tab.label += chunk.text
+		}
+	}
+}
+
+/**
+ * Sólo las pestañas del grupo, de una página cualquiera del torneo. Una página
+ * sin título no es de un torneo: sin este error, otra forma de la página se
+ * confundiría con un torneo sin grupo.
+ */
+export async function parseGroupPage(html: string): Promise<RelatedTournament[]> {
+	const tabs: GroupTab[] = []
+	let title = ''
+	const rewriter = new HTMLRewriter().on(GROUP_TABS, collectGroupTabs(tabs)).on('h1', {
+		text(chunk) {
+			title += chunk.text
+		}
+	})
+	await run(rewriter, html)
+	if (!clean(title)) throw new PageFormatError('info64: la página del torneo no tiene título (h1)')
+	return relatedTournaments(tabs)
+}
+
 /** Página principal del torneo: datos generales y ranking inicial. */
 export async function parseTournamentPage(html: string): Promise<TournamentPage> {
 	let name = ''
@@ -226,19 +264,10 @@ export async function parseTournamentPage(html: string): Promise<TournamentPage>
 	// Texto y destinos de enlace del bloque de información, donde los
 	// organizadores ponen las retransmisiones (como enlace o como texto suelto).
 	let extraInfo = ''
-	// Pestañas del grupo, encima del título: un enlace por torneo, también al propio.
-	const tabs: { href: string; label: string }[] = []
+	const tabs: GroupTab[] = []
 
 	const rewriter = new HTMLRewriter()
-		.on('#tournament-selection-nav a[href]', {
-			element(el) {
-				tabs.push({ href: el.getAttribute('href') ?? '', label: '' })
-			},
-			text(chunk) {
-				const tab = tabs.at(-1)
-				if (tab) tab.label += chunk.text
-			}
-		})
+		.on(GROUP_TABS, collectGroupTabs(tabs))
 		.on('#extra-information', {
 			text(chunk) {
 				// Un espacio entre nodos de texto: si no, "url<br>Texto" quedaría pegado.
@@ -314,7 +343,7 @@ const INFO64_KEY = /^(?:team\/)?[^/?#:\s]+$/
  * dominio, la consulta, el ancla ni las barras de los extremos. Si se perdiera
  * la del propio torneo, relatedGroup no guardaría el grupo.
  */
-function relatedTournaments(tabs: { href: string; label: string }[]): RelatedTournament[] {
+function relatedTournaments(tabs: GroupTab[]): RelatedTournament[] {
 	const byKey = new Map<string, RelatedTournament>()
 	for (const tab of tabs) {
 		const key = decodeEntities(tab.href)
@@ -334,6 +363,14 @@ function relatedTournaments(tabs: { href: string; label: string }[]): RelatedTou
  */
 export function relatedGroup(related: RelatedTournament[], key: string): RelatedTournament[] | null {
 	return related.length >= 2 && related.some((r) => r.key === key) ? related : null
+}
+
+/**
+ * El rótulo de la pestaña del torneo `key` en su grupo; vacío si no está. Lo pone
+ * el organizador y puede decir lo que el título calla («Sub 12»).
+ */
+export function ownLabel(related: RelatedTournament[], key: string): string {
+	return related.find((r) => r.key === key)?.label ?? ''
 }
 
 const LICHESS_BROADCAST = /https?:\/\/(?:www\.)?lichess\.org\/broadcast\/[^\s"'<>]+/g
