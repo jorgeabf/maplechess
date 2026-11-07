@@ -778,6 +778,12 @@
 	 * --border-strong, 3:1 sobre la superficie, como el borde de un campo. Va
 	 * debajo de las celdas, así que una con fondo (la fila de un grupo) la tapa.
 	 * En alto contraste el sistema quita los degradados.
+	 *
+	 * Las sombras van 1 px dentro de la caja, por los cuatro lados. Los bordes
+	 * pueden caer en fracciones de píxel (a 1,5× y, con la ventana de ancho
+	 * impar, a 2× y 3×), y ahí la sombra y la tapa no se ajustan igual a los
+	 * píxeles: asomaba una raya sin cubrir. El menú y las pestañas del grupo
+	 * hacen lo mismo.
 	 */
 	.table-wrap {
 		overflow-x: auto;
@@ -786,8 +792,10 @@
 		background:
 			linear-gradient(to right, var(--surface) var(--space-3), transparent) left / var(--space-6) 100% no-repeat local,
 			linear-gradient(to left, var(--surface) var(--space-3), transparent) right / var(--space-6) 100% no-repeat local,
-			linear-gradient(to right, var(--border-strong), transparent) left / var(--space-3) 100% no-repeat,
-			linear-gradient(to left, var(--border-strong), transparent) right / var(--space-3) 100% no-repeat,
+			linear-gradient(to right, var(--border-strong), transparent)
+				1px center / var(--space-3) calc(100% - 2px) no-repeat,
+			linear-gradient(to left, var(--border-strong), transparent)
+				calc(100% - 1px) center / var(--space-3) calc(100% - 2px) no-repeat,
 			var(--surface);
 	}
 
