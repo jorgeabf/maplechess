@@ -744,7 +744,7 @@ La historia, las medidas, los casos concretos y el detalle de cada página que s
 
 #### Capturas del README
 
-- **Capturas del README** (`docs/capturas/`, 25-oct-2026): de producción, en WebP y en claro y oscuro, que el README elige con `<picture>` y `prefers-color-scheme`. Sólo enseñan GM de élite (la partida 53051, Anton Guijarro contra Gukesh, y el dossier de Anton, 2285525) y nombres de torneos: nunca a otros jugadores ni a posibles menores. El visor, a 1280×800 con el motor encendido; las del móvil, a 390×844. Las ocho pesan unos 480 KB.
+- **Capturas del README** (`docs/capturas/`, 25-oct-2026; rehechas el 7-nov-2026, con las piezas nuevas): de producción, en WebP y en claro y oscuro, que el README elige con `<picture>` y `prefers-color-scheme`. Sólo enseñan GM de élite (la partida 53051, Anton Guijarro contra Gukesh, y el dossier de Anton, 2285525) y nombres de torneos: nunca a otros jugadores ni a posibles menores. El visor, a 1280×800 con el motor encendido; las del móvil, a 390×844. Las ocho pesan unos 440 KB.
 
 ### `main` es lo desplegado y está protegido
 
