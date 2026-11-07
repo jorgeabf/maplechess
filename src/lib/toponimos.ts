@@ -88,7 +88,7 @@ const COMMUNITIES: [string, string, string][] = [
 	['05', 'Canarias, Islas Canarias', 'canario, canaria'],
 	['07', 'Castilla y León, Castilla León', 'castellanoleonés, castellanoleonesa, castellano-leonés, castellano-leonesa'],
 	['08', 'Castilla-La Mancha', 'castellanomanchego, castellanomanchega, castellano-manchego, castellano-manchega'],
-	['09', 'Cataluña, Catalunya', 'catalán, catalana, català'],
+	['09', 'Cataluña, Catalunya, Catalonia', 'catalán, catalana, català'],
 	['10', 'Comunidad Valenciana, Comunitat Valenciana', 'valenciano, valenciana'],
 	['11', 'Extremadura', 'extremeño, extremeña'],
 	['12', 'Galicia', 'gallego, gallega, galego, galega'],

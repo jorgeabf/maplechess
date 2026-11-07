@@ -71,6 +71,7 @@ describe('cityPlace', () => {
 		expect(province('Palma de Mallorca')).toBe('07')
 		expect(cityPlace('Extremadura')).toEqual({ province: null, community: '11', approximate: false })
 		expect(cityPlace('Catalunya, Spain')).toEqual({ province: null, community: '09', approximate: false })
+		expect(cityPlace('Catalonia, Spain')).toEqual({ province: null, community: '09', approximate: false })
 		// Con la comunidad, sus provincias: hay Malpartidas en Cáceres y en Badajoz (y en Salamanca, que no cuenta).
 		expect(cityPlace('Malpartida (Extremadura)')).toEqual({ province: null, community: '11', approximate: false })
 		expect(province('Bejar (Castilla Leon)')).toBe('37')
@@ -86,6 +87,19 @@ describe('cityPlace', () => {
 		expect(province('Montserrat (Valencia)')).toBe('46')
 		expect(province('Montserrat')).toBe('46')
 		expect(province('Granada')).toBe('18')
+	})
+
+	it('una ciudad de fuera escrita sola no dice el sitio; con la tilde o con algo más, sí', () => {
+		// Caerían en Gaià (Barcelona) y en un núcleo de Vélez-Málaga.
+		expect(cityPlace('Gaia')).toBeNull()
+		expect(cityPlace(' LAGOS ')).toBeNull()
+		expect(province('Gaià')).toBe('08')
+		expect(province('Gaia, España')).toBe('08')
+		expect(province('Gaia (Barcelona)')).toBe('08')
+		expect(province('Lagos, Spain')).toBe('29')
+		expect(province('Lagos (Málaga)')).toBe('29')
+		expect(province('Lagos, Vélez-Málaga')).toBe('29')
+		expect(cityPlace('Lagos, Portugal')).toBe('extranjero')
 	})
 
 	it('lo que no se reconoce', () => {
@@ -129,5 +143,64 @@ describe('tournamentPlace', () => {
 
 	it('un torneo del extranjero no tiene sitio, aunque su nombre lo parezca', () => {
 		expect(tournamentPlace('Budva, Montenegro', 'Open de Prueba Asturias')).toEqual({ province: null, community: null })
+		expect(tournamentPlace('Budva, Montenegro', 'Open de Boadilla del Monte')).toEqual({
+			province: null,
+			community: null
+		})
+	})
+
+	it('con una ciudad de fuera escrita sola, sin sitio, salvo que lo diga el nombre', () => {
+		expect(tournamentPlace('Gaia', 'Copa de Prueba 2026')).toEqual({ province: null, community: null })
+		expect(tournamentPlace('Lagos', 'Open de Málaga')).toEqual({ province: '29', community: '01' })
+	})
+
+	describe('un municipio en el nombre, si la ciudad no dice el sitio y el nombre no dice una comunidad', () => {
+		const madrid = { province: '28', community: '13' }
+		const barcelona = { province: '08', community: '09' }
+		const cadiz = { province: '11', community: '01' }
+		const nowhere = { province: null, community: null }
+
+		it('de tres palabras o más, por cualquier forma de su nombre', () => {
+			expect(tournamentPlace('Spain', 'Open de Prueba Barbera del Valles 2026')).toEqual(barcelona)
+			expect(tournamentPlace('Spain', "Blitz de Prueba d'Escacs de Barberà del Vallès")).toEqual(barcelona)
+			expect(tournamentPlace(null, 'Open de Prueba Boadilla del Monte')).toEqual(madrid)
+			expect(tournamentPlace('Sala Inventada', 'Open El Puerto de Santa María')).toEqual(cadiz)
+			// Sin el artículo que el INE pospone.
+			expect(tournamentPlace('Sala Inventada', 'Open Puerto de Santa María')).toEqual(cadiz)
+		})
+
+		it('el más largo: «Aldea del Obispo» es otro, de Salamanca', () => {
+			expect(tournamentPlace(null, 'Open La Aldea del Obispo')).toEqual({ province: '10', community: '11' })
+		})
+
+		it('dos de una provincia, sí; de dos provincias, no se sabe', () => {
+			expect(tournamentPlace(null, 'Copa Boadilla del Monte y Villarejo de Salvanés')).toEqual(madrid)
+			expect(tournamentPlace(null, 'Copa Boadilla del Monte y Puerto del Rosario')).toEqual(nowhere)
+		})
+
+		it('dos comunidades en el nombre no dicen el sitio; el municipio, sí', () => {
+			expect(tournamentPlace(null, 'Encuentro Galicia Asturias en Boadilla del Monte')).toEqual(madrid)
+		})
+
+		it('con menos palabras, no: «San Pedro» Alcántara no es el de Albacete', () => {
+			expect(tournamentPlace('Sala Inventada', 'Open Santa Bárbara 2026')).toEqual(nowhere)
+			expect(tournamentPlace('Sala Inventada', 'Torneo San Pedro Alcántara')).toEqual(nowhere)
+		})
+
+		it('sin los cruces aproximados: un barrio no es un núcleo de otra provincia', () => {
+			expect(tournamentPlace('Sala Inventada', 'Torneo Barrio San José Obrero')).toEqual(nowhere)
+		})
+
+		it('la ciudad y la provincia del nombre mandan sobre él', () => {
+			expect(tournamentPlace('Gijon', 'Memorial Boadilla del Monte')).toEqual({ province: '33', community: '03' })
+			expect(tournamentPlace(null, 'Open de Asturias en Boadilla del Monte')).toEqual({
+				province: '33',
+				community: '03'
+			})
+		})
+
+		it('una ciudad con un cruce aproximado también manda', () => {
+			expect(tournamentPlace('Torrente', 'Open Boadilla del Monte')).toEqual({ province: '22', community: '02' })
+		})
 	})
 })
