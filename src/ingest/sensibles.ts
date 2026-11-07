@@ -1,17 +1,19 @@
-// Torneos cuya participación revela un dato de salud (tabla torneos_sensibles,
-// migración 0012): no se guardan. Se marcan a mano; aquí sólo se reconocen por
-// el nombre los que lo parecen, para apuntarlos y revisarlos (ver CLAUDE.md,
+// Torneos cuya participación revela un dato de salud o un dato penal (tabla
+// torneos_sensibles, migración 0012): no se guardan. Se marcan a mano; aquí sólo
+// se reconocen los que lo parecen, para apuntarlos y revisarlos (ver CLAUDE.md,
 // «Torneos sensibles»).
 import { stripDiacritics } from '../lib/chess/names'
 
 /**
- * Palabras de los nombres de esos torneos, también en inglés (las
+ * Palabras del nombre o la ciudad de esos torneos, también en inglés (las
  * retransmisiones de lichess, los mundiales que se juegan en España), catalán y
  * gallego: quién los organiza (la FEDC de ciegos, la FEDS de sordos, la ICCD,
  * la IPCA…), quién juega (sordos, ciegos…) o qué torneo es (inclusivo o
- * parainclusivo, adaptado). También los que se juegan en una prisión, que revelan un dato
- * penal (art. 10 RGPD). Sobre el nombre sin tildes y en minúsculas. Sólo
- * propone: lo que no lo es («Blitz solidario…») se revisa y se marca con un 0.
+ * parainclusivo, adaptado). También los que se juegan en una prisión, que revelan
+ * un dato penal (art. 10 RGPD), además en euskera; sin sufijos libres en «cárcel»
+ * (Carcelén, Càrcer) ni en «preso» (Prešov), y sin «interno», que es el torneo
+ * interno de un club. Sobre el texto sin tildes y en minúsculas. Sólo propone: lo
+ * que no lo es («Blitz solidario…») se revisa y se marca con un 0.
  */
 const SENSITIVE_WORDS = new RegExp(
 	`\\b(${[
@@ -20,7 +22,9 @@ const SENSITIVE_WORDS = new RegExp(
 		'discapaci\\w*|disab\\w*|diversi[td]a[dt] funcional|(?:para)?inclusi[uv]\\w*|inclusion|adaptad[oa]s?|wheelchair',
 		'paral[iy]mpic\\w*|paralisis|sindrome|down|autis\\w*|asperger|tdah|salud mental|braille|special olympics',
 		'fedc|feds|feddi|feddf|fedpc|iccd|ibca|ipca',
-		'penitenciari\\w*|prision|carcel'
+		'penitenciari\\w*|penitentiar\\w*|prisi?on\\w*|carcel(?:es|ari\\w*)?|carcer(?:e|ari\\w*)',
+		'preso(?:s|ns|ner\\w*|ak|ek\\w*|en\\w*|ndegi\\w*)?|reclus(?:[oa]s?|ion\\w*|ori\\w*)?|espetxe\\w*|kartzel\\w*',
+		'inmates?|jails?|correctional\\w*|incarcerat\\w*|presidios?|penal(?:es)?|privad[oa]s? de (?:la )?libertad'
 	].join('|')})\\b`
 )
 
@@ -34,7 +38,13 @@ const ONCE = /\bONCE\b/
  */
 const BLINDFOLD = /\ba la (ciega|cega)\b/g
 
-/** ¿Parece, por el nombre, un torneo que revela un dato de salud? */
-export function looksSensitive(name: string): boolean {
-	return ONCE.test(name) || SENSITIVE_WORDS.test(stripDiacritics(name).toLowerCase().replace(BLINDFOLD, ''))
+const telling = (text: string) =>
+	ONCE.test(text) || SENSITIVE_WORDS.test(stripDiacritics(text).toLowerCase().replace(BLINDFOLD, ''))
+
+/**
+ * ¿Parece un torneo que revela un dato de salud o penal? Por su nombre o por su
+ * ciudad, donde el organizador puede escribir el local («Centro Penitenciario…»).
+ */
+export function looksSensitive(name: string, city?: string | null): boolean {
+	return telling(name) || (!!city && telling(city))
 }

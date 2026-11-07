@@ -114,6 +114,7 @@ describe('importFile', () => {
 			db.prepare('DELETE FROM participations'),
 			db.prepare('DELETE FROM tournaments'),
 			db.prepare('DELETE FROM players'),
+			db.prepare('DELETE FROM torneos_sensibles'),
 			...FIDE.map((p) =>
 				db
 					.prepare("INSERT INTO players (fide_id, name, birth_year, seen_at) VALUES (?1, ?2, ?3, '2026-10-24')")
@@ -161,6 +162,24 @@ describe('importFile', () => {
 		await importFile(db, FILE, archivoPgn, '2026-10-24T21:00:00.000Z')
 		expect(await gameIds()).toEqual(before)
 		expect(await db.prepare('SELECT count(*) AS n FROM tournaments').first('n')).toBe(3)
+	})
+
+	it('apunta para revisarlo el que parece sensible, también sólo por el sitio', async () => {
+		const pgn = (event: string, site: string) =>
+			`[Event "${event}"]\n[Site "${site}"]\n[Date "2008.01.12"]\n[White "Irreal Lejano, Supuesto"]\n[Black "Inventado Falso, Otro"]\n[Result "1-0"]\n\n1. e4 e5 1-0\n`
+		const text = [
+			pgn('Open Inventado', 'Centro Penitenciario Inventado'),
+			pgn('Torneo para Ciegos', 'Santander'),
+			pgn('Otro Open', 'Santander')
+		].join('')
+		await importFile(db, FILE, text, '2026-10-24T20:00:00.000Z')
+		const { results } = await db
+			.prepare('SELECT source, nombre, excluido FROM torneos_sensibles ORDER BY nombre')
+			.all<Record<string, string | null>>()
+		expect(results).toEqual([
+			{ source: 'fca', nombre: 'Open Inventado 2008/09 (Cantabria)', excluido: null },
+			{ source: 'fca', nombre: 'Torneo para Ciegos 2008/09 (Cantabria)', excluido: null }
+		])
 	})
 })
 

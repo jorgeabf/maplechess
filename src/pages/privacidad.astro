@@ -9,7 +9,7 @@ const sections = [
 	{ id: 'responsable', title: 'Quién es el responsable' },
 	{ id: 'jugadores', title: 'Datos de los jugadores' },
 	{ id: 'menores', title: 'Menores de edad' },
-	{ id: 'salud', title: 'Torneos que revelan un dato de salud' },
+	{ id: 'salud', title: 'Torneos que revelan un dato de salud o penal' },
 	{ id: 'oposicion', title: 'Tu derecho a oponerte' },
 	{ id: 'derechos', title: 'Tus otros derechos' },
 	{ id: 'visitas', title: 'Si visitas la web' },
@@ -25,7 +25,7 @@ const title = Object.fromEntries(sections.map((s) => [s.id, s.title])) as Record
 	<article class="legal">
 		<header class="page-head">
 			<h1>Política de privacidad</h1>
-			<p class="page-meta">Actualizada el 6 de noviembre de 2026</p>
+			<p class="page-meta">Actualizada el 7 de noviembre de 2026</p>
 		</header>
 
 		{/* La capa básica del art. 11 LOPDGDD: con datos que no vienen del interesado, lleva también las categorías y las fuentes. */}
@@ -182,7 +182,10 @@ const title = Object.fromEntries(sections.map((s) => [s.id, s.title])) as Record
 					de quien puede ser menor no se muestra el año de nacimiento ni hay repertorio ni dossier, y su ficha no sale en
 					los buscadores;
 				</li>
-				<li>no se publican los torneos de hasta Sub&nbsp;14, los escolares ni los que dicen algo de la salud de quien juega;</li>
+				<li>
+					no se publican los torneos de hasta Sub&nbsp;14, los escolares ni los que dicen algo de la salud de quien juega o
+					que está en prisión;
+				</li>
 				<li>de nadie salen en los buscadores el repertorio, el dossier ni las descargas en PGN;</li>
 				<li>cualquiera puede pedir que se le retire, o sólo que no se vean su sexo y su año.</li>
 			</ul>
@@ -254,8 +257,12 @@ const title = Object.fromEntries(sections.map((s) => [s.id, s.title])) as Record
 				discapacidad física o de ajedrez inclusivo. Tampoco sus partidas, participantes ni clasificaciones.
 			</p>
 			<p>
-				Se revisan a mano, con un aviso automático de los nuevos que lo parecen por el nombre. Si ves alguno que se ha
-				colado, escribe a <a href={mail}>{CONTACT}</a> y se quitará.
+				Tampoco se publican datos penales (artículo 10 del RGPD): no están los torneos en los que juegan personas internas
+				en una prisión, aunque jueguen también otras, ni sus partidas, participantes o clasificaciones.
+			</p>
+			<p>
+				Se revisan a mano, con un aviso automático de los nuevos que lo parecen por su nombre o por dónde se juegan. Si ves
+				alguno que se ha colado, escribe a <a href={mail}>{CONTACT}</a> y se quitará.
 			</p>
 
 			{/* El art. 21.4 RGPD pide el derecho de oposición explícito, claro y aparte de lo demás: por eso va en su tarjeta. */}

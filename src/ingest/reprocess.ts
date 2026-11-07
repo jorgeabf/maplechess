@@ -420,21 +420,21 @@ export interface SensitiveCleanup {
 
 /**
  * Aplica la tabla torneos_sensibles a lo guardado: apunta para revisarlos los
- * torneos que lo parecen por el nombre (looksSensitive) y aún no están en ella,
- * marca también las retransmisiones de lichess de los marcados y borra éstos,
- * que la ingesta ya no lee. Recorre los nombres de todos los torneos: sólo lo
- * usa el reprocesado. Repetirlo no cambia nada.
+ * torneos que lo parecen (looksSensitive) y aún no están en ella, marca también
+ * las retransmisiones de lichess de los marcados y borra éstos, que la ingesta
+ * ya no lee. Recorre los nombres y las ciudades de todos los torneos: sólo lo usa
+ * el reprocesado. Repetirlo no cambia nada.
  */
 export async function applySensitive(
 	db: D1Database,
 	resolve: (ref: BroadcastRef) => Promise<string | null> = resolveTourId
 ): Promise<SensitiveCleanup> {
 	const { results } = await db
-		.prepare('SELECT source, source_key AS key, name FROM tournaments')
-		.all<{ source: string; key: string; name: string }>()
+		.prepare('SELECT source, source_key AS key, name, city FROM tournaments')
+		.all<{ source: string; key: string; name: string; city: string | null }>()
 	const proposed = await proposeSensitive(
 		db,
-		results.filter((t) => looksSensitive(t.name))
+		results.filter((t) => looksSensitive(t.name, t.city))
 	)
 	const broadcasts = await excludeBroadcasts(db, await excludedBroadcasts(db, resolve))
 	const deleted = await deleteExcludedTournaments(db)

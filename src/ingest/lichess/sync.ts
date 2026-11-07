@@ -620,7 +620,9 @@ async function saveOwnTournament(db: D1Database, input: OwnTournamentInput): Pro
 	})
 	// Si lo parece, se apunta para revisarlo, como en info64. Las que se enlazan
 	// a un torneo de info64 ya las apunta su pasada.
-	if (looksSensitive(tour.name)) await proposeSensitive(db, [{ source: SOURCE, key: tour.id, name: tour.name }])
+	if (looksSensitive(tour.name, context.city)) {
+		await proposeSensitive(db, [{ source: SOURCE, key: tour.id, name: tour.name }])
+	}
 	// Primero las partidas: si la guarda de saveGames conserva las guardadas,
 	// los participantes tampoco cambian.
 	if (!(await saveGames(db, id, rows, now, { name: SOURCE, url: tour.url }))) {

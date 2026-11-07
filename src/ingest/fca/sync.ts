@@ -97,7 +97,7 @@ export async function importFile(db: D1Database, file: FcaFile, pgnText: string,
 			url,
 			syncedAt: now
 		})
-		if (looksSensitive(t.name)) await proposeSensitive(db, [{ source: SOURCE, key: t.key, name: t.name }])
+		if (looksSensitive(t.name, t.city)) await proposeSensitive(db, [{ source: SOURCE, key: t.key, name: t.name }])
 		// Primero las partidas: si la guarda de saveGames conserva las guardadas,
 		// los participantes tampoco cambian.
 		if (!(await saveGames(db, id, rows, now, { name: SOURCE, url }))) {
