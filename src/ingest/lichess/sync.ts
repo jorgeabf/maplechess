@@ -27,7 +27,7 @@ import { addDays, isoDate, validDate } from '../../lib/dates'
 import { saveHealth } from '../../lib/salud'
 import { buildGameRows, type TournamentContext } from '../games'
 import type { TournamentPlayer } from '../info64/parse'
-import { info64Running, INFO64_WAIT, INFO64_WAIT_TRIES } from '../info64/sync'
+import { dailyInstanceId } from '../info64/sync'
 import { publicName } from '../nombres'
 import {
 	deleteLichessTournament,
@@ -123,6 +123,11 @@ export const MIN_OVERLAP_SHARE = 0.5
 /** Días de margen entre las fechas de la retransmisión y las del torneo de info64. */
 const MATCH_MARGIN_DAYS = 3
 
+/** Mientras corre la sincronización diaria de info64 (también pide a lichess), se espera. */
+const INFO64_WAIT = '10 minutes'
+const INFO64_WAIT_TRIES = 6
+const BUSY = new Set(['queued', 'running', 'waiting', 'waitingForPause'])
+
 /** Resultado de leer una retransmisión. null en status: no se decide hasta que tenga jugadores. */
 export interface TourSummary {
 	status: LichessTourStatus | null
@@ -144,7 +149,6 @@ export class LichessSyncWorkflow extends WorkflowEntrypoint<Env, LichessSyncPara
 			return result
 		}
 
-		// Mientras corre la diaria de info64, que también pide a lichess, se espera.
 		for (let i = 0; i < INFO64_WAIT_TRIES; i++) {
 			const busy = await step.do(`info64 en marcha ${i}`, () => info64Running(this.env, today))
 			if (!busy) break
@@ -223,6 +227,16 @@ export class LichessSyncWorkflow extends WorkflowEntrypoint<Env, LichessSyncPara
 			// Sólo la diaria: una relectura a mano no debe tapar que falle (lib/salud.ts).
 			await step.do('salud', () => saveHealth(db, 'lichess', health))
 		}
+	}
+}
+
+async function info64Running(env: Env, today: string): Promise<boolean> {
+	try {
+		const instance = await env.INFO64_SYNC.get(dailyInstanceId(today))
+		return BUSY.has((await instance.status()).status)
+	} catch {
+		// Aún no existe (o ya no se guarda): no está en marcha.
+		return false
 	}
 }
 

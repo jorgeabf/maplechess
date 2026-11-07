@@ -1395,6 +1395,21 @@ export async function saveSyncState(db: D1Database, key: string, value: string):
 		.run()
 }
 
+/** sync_state: los torneos cuyo grupo no se ha podido leer, para volver a pedirlos con keys. */
+export const GROUP_FAILURES_KEY = 'grupos_fallidos'
+
+/**
+ * Apunta los torneos cuyo grupo ha fallado y quita los que se han vuelto a pedir.
+ * Una carga son unas 150 ventanas, y un fallo no se distingue en la D1 de un torneo
+ * sin grupo: así no hay que buscarlos en la salida de cada una.
+ */
+export async function saveGroupFailures(db: D1Database, attempted: string[], failed: string[]): Promise<void> {
+	const stored = JSON.parse((await loadSyncState(db, GROUP_FAILURES_KEY)) ?? '[]') as string[]
+	const tried = new Set(attempted)
+	const next = [...stored.filter((key) => !tried.has(key)), ...failed]
+	if (JSON.stringify(next) !== JSON.stringify(stored)) await saveSyncState(db, GROUP_FAILURES_KEY, JSON.stringify(next))
+}
+
 // --- Retransmisiones de lichess (lichess/sync.ts) ---
 
 export type LichessTourStatus = 'sin_espanoles' | 'duplicado' | 'enlazado' | 'propio'

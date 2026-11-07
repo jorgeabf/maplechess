@@ -28,6 +28,7 @@ import {
 	replaceStandings,
 	saveGames,
 	saveGroup,
+	saveGroupFailures,
 	upsertTournament,
 	type CheckedTournament,
 	type GamesSource
@@ -207,7 +208,8 @@ export function msUntilInfo64Hours(date: Date): number {
 /**
  * Minuto UTC del día desde el que una carga larga puede pedir a info64 sin
  * coincidir con la diaria (CRON_INFO64_DAILY, a las 00:00 UTC), que del 1 al
- * 7-nov-2026 acabó antes de las 00:22 UTC. Si se alarga, lo ve waitAfterDaily.
+ * 7-nov-2026 acabó antes de las 00:22 UTC. Si se retrasa o se alarga, lo ve
+ * waitAfterDaily.
  */
 const AFTER_DAILY_MINUTE = 30
 
@@ -225,18 +227,21 @@ export function msUntilAfterDaily(date: Date): number {
 	return wait * 60_000 - (date.getTime() % 60_000)
 }
 
-/** Mientras corre la diaria de info64 se espera, y se mira cada INFO64_WAIT hasta INFO64_WAIT_TRIES veces. */
-export const INFO64_WAIT = '10 minutes'
-export const INFO64_WAIT_TRIES = 6
-const BUSY = new Set(['queued', 'running', 'waiting', 'waitingForPause'])
+/** Cada cuánto y cuántas veces se mira si la diaria ha acabado. */
+const DAILY_WAIT = '10 minutes'
+const DAILY_WAIT_TRIES = 6
+const FINISHED = new Set(['complete', 'errored', 'terminated'])
 
-/** ¿Está en marcha la diaria de info64 de ese día (UTC, como la lanza el cron)? */
-export async function info64Running(env: Env, today: string): Promise<boolean> {
+/**
+ * ¿Se ve acabada la diaria de ese día (UTC, como la lanza el cron)? Sin instancia
+ * o sin poder leerla no se sabe, y no cuenta como acabada: el cron puede llegar
+ * tarde, y empezaría después, a la vez.
+ */
+async function dailyFinished(env: Env, today: string): Promise<boolean> {
 	try {
 		const instance = await env.INFO64_SYNC.get(dailyInstanceId(today))
-		return BUSY.has((await instance.status()).status)
+		return FINISHED.has((await instance.status()).status)
 	} catch {
-		// Aún no existe (o ya no se guarda): no está en marcha.
 		return false
 	}
 }
@@ -247,7 +252,7 @@ export class Info64SyncWorkflow extends WorkflowEntrypoint<Env, Info64SyncParams
 		const db = this.env.DB
 		let groups: GroupsSummary | undefined
 		if (params.groups === 'only') {
-			await this.waitAfterDaily(step)
+			await this.waitAfterDaily(step, 'ventana')
 			groups = await this.syncStoredGroups(params, step)
 		} else {
 			// Lanzada a mano o encadenada fuera de la franja de info64: la espera.
@@ -296,20 +301,22 @@ export class Info64SyncWorkflow extends WorkflowEntrypoint<Env, Info64SyncParams
 	}
 
 	/**
-	 * Espera a poder pedir sin coincidir con la diaria: a su hora y, si aún sigue
-	 * en marcha, a que acabe. Si no acaba, para la cadena con un error: nunca dos
-	 * instancias pidiendo a info64 (pasarían de 1 petición/s).
+	 * Espera a poder pedir sin coincidir con la diaria: a su hora y a verla acabada.
+	 * Si no se la ve acabada, para la cadena con un error: nunca dos instancias
+	 * pidiendo a info64 (pasarían de 1 petición/s). `at` distingue los nombres de
+	 * los pasos, porque una ventana puede esperar más de una vez.
 	 */
-	private async waitAfterDaily(step: WorkflowStep): Promise<void> {
-		const wait = await step.do('franja tras la diaria', async () => msUntilAfterDaily(new Date()))
-		if (wait > 0) await step.sleep('espera a que pase la diaria', wait)
-		const today = await step.do('día de la diaria', async () => isoDate(new Date()))
-		for (let i = 0; i < INFO64_WAIT_TRIES; i++) {
-			const busy = await step.do(`diaria en marcha ${i}`, () => info64Running(this.env, today))
-			if (!busy) return
-			await step.sleep(`espera a la diaria ${i}`, INFO64_WAIT)
+	private async waitAfterDaily(step: WorkflowStep, at: string): Promise<void> {
+		const wait = await step.do(`franja tras la diaria ${at}`, async () => msUntilAfterDaily(new Date()))
+		if (wait > 0) await step.sleep(`espera a que pase la diaria ${at}`, wait)
+		// Después de dormir: es la diaria de ese día la que hay que ver acabada.
+		const today = await step.do(`día de la diaria ${at}`, async () => isoDate(new Date()))
+		for (let i = 0; i < DAILY_WAIT_TRIES; i++) {
+			const finished = await step.do(`diaria acabada ${at} ${i}`, () => dailyFinished(this.env, today))
+			if (finished) return
+			await step.sleep(`espera a la diaria ${at} ${i}`, DAILY_WAIT)
 		}
-		throw new Error(`info64: la diaria del ${today} sigue en marcha; no se pide el grupo`)
+		throw new Error(`info64: la diaria del ${today} no se ve acabada; no se pide el grupo`)
 	}
 
 	/**
@@ -500,31 +507,40 @@ export class Info64SyncWorkflow extends WorkflowEntrypoint<Env, Info64SyncParams
 
 	/**
 	 * Sólo el grupo (groups: 'only') de los torneos guardados: los de keys o los
-	 * que aún no lo tienen. Si info64 deja de responder, para la cadena: seguir
-	 * pidiendo podría sacarla de la franja.
+	 * que aún no lo tienen. La franja se mira antes de cada torneo: una ventana
+	 * lenta sigue la noche siguiente. Si info64 deja de responder, para la cadena.
+	 * Los que fallan quedan apuntados (saveGroupFailures), también si se para.
 	 */
 	private async syncStoredGroups(params: Info64SyncParams, step: WorkflowStep): Promise<GroupsSummary> {
 		const tournaments = await step.do('torneos guardados', async () =>
 			(await this.storedTournaments(params)).filter((t) => !t.hasGroup)
 		)
 		const summary: GroupsSummary = { tournaments: tournaments.length, groups: 0, missing: 0, failed: [] }
+		const attempted: string[] = []
 		let failures = 0
-		for (const t of tournaments) {
-			try {
-				const size = await step.do(`grupo ${t.key}`, GROUP_STEP, () =>
-					failFast(() => syncGroup(this.env.DB, t.id, t.key))
-				)
-				if (size === null) summary.missing++
-				else if (size > 0) summary.groups++
-				failures = 0
-			} catch (error) {
-				summary.failed.push(t.key)
-				console.warn(`[info64] grupo de ${t.key}: ${String(error)}`)
-				if (++failures === GROUP_MAX_FAILURES) {
-					throw new Error(`info64: ${failures} fallos seguidos al leer el grupo, hasta ${t.key}; se para la cadena`)
+		try {
+			for (const t of tournaments) {
+				const open = await step.do(`franja ${t.key}`, async () => msUntilAfterDaily(new Date()) === 0)
+				if (!open) await this.waitAfterDaily(step, t.key)
+				attempted.push(t.key)
+				try {
+					const size = await step.do(`grupo ${t.key}`, GROUP_STEP, () =>
+						failFast(() => syncGroup(this.env.DB, t.id, t.key))
+					)
+					if (size === null) summary.missing++
+					else if (size > 0) summary.groups++
+					failures = 0
+				} catch (error) {
+					summary.failed.push(t.key)
+					console.warn(`[info64] grupo de ${t.key}: ${String(error)}`)
+					if (++failures === GROUP_MAX_FAILURES) {
+						throw new Error(`info64: ${failures} fallos seguidos al leer el grupo, hasta ${t.key}; se para la cadena`)
+					}
 				}
+				await step.sleep(`pausa grupo ${t.key}`, PAUSE)
 			}
-			await step.sleep(`pausa grupo ${t.key}`, PAUSE)
+		} finally {
+			await step.do('grupos fallidos', () => saveGroupFailures(this.env.DB, attempted, summary.failed))
 		}
 		console.log(`[info64] ${params.from}…${params.to}: grupos ${JSON.stringify(summary)}`)
 		return summary

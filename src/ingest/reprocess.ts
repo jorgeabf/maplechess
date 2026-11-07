@@ -32,6 +32,7 @@
 //   wrangler workflows trigger games-reprocess '{"lugares":true}'      (sólo dónde se juegan los torneos)
 //   wrangler workflows trigger games-reprocess '{"federaciones":true}' (sólo la columna Fed.)
 //   wrangler workflows trigger games-reprocess '{"fideIds":true}'      (sólo los FIDE ID inverosímiles)
+//   wrangler workflows trigger games-reprocess '{"ensayo":true}'       (sólo lista lo que harían los rótulos, sin tocar nada)
 import { WorkflowEntrypoint, type WorkflowEvent, type WorkflowStep } from 'cloudflare:workers'
 import { normalizeName } from '../lib/chess/names'
 import { parseGames } from '../lib/chess/pgn'
@@ -86,7 +87,7 @@ import {
 	type StoredGame
 } from './repo'
 import { LISTED_COPIES } from './repetidos'
-import { sensitiveName } from './sensibles'
+import { looksSensitive, sensitiveName } from './sensibles'
 
 export interface GamesReprocessParams {
 	/**
@@ -110,6 +111,8 @@ export interface GamesReprocessParams {
 	federaciones?: boolean
 	/** Sólo los FIDE ID inverosímiles (applyFideIds), sin recorrer todas las partidas: si cambia la regla. */
 	fideIds?: boolean
+	/** Sólo lista en su salida lo que harían los rótulos guardados (rehearseLabels), sin tocar nada: antes de borrar por ellos. */
+	ensayo?: boolean
 }
 
 /** Partidas por paso: unos 2 MB de PGN y unas décimas de segundo de CPU. */
@@ -133,7 +136,8 @@ export interface ReprocessedBatch {
 }
 
 export class GamesReprocessWorkflow extends WorkflowEntrypoint<Env, GamesReprocessParams> {
-	async run(event: WorkflowEvent<GamesReprocessParams>, step: WorkflowStep): Promise<void> {
+	async run(event: WorkflowEvent<GamesReprocessParams>, step: WorkflowStep): Promise<LabelRehearsal | void> {
+		if (event.payload.ensayo) return step.do('ensayo de los rótulos', () => rehearseLabels(this.env.DB))
 		const { retiradas, ocultaciones, sensibles, menores, repetidos, lugares, federaciones, fideIds } = event.payload
 		const all =
 			!retiradas && !ocultaciones && !sensibles && !menores && !repetidos && !lugares && !federaciones && !fideIds
@@ -413,6 +417,42 @@ export async function applyFideIds(db: D1Database): Promise<FideIdCleanup> {
 /** El rótulo de la pestaña de un torneo guardado (tournaments.related); vacío sin grupo. */
 function storedLabel(related: string | null, key: string): string {
 	return related ? ownLabel(JSON.parse(related) as RelatedTournament[], key) : ''
+}
+
+/** Un torneo guardado al que sólo el rótulo de su pestaña hace borrar o apuntar. */
+export interface LabelHit {
+	key: string
+	name: string
+	label: string
+}
+
+export interface LabelRehearsal {
+	/** Los que borraría applyMinorsTournaments. */
+	minors: LabelHit[]
+	/** Los que apuntaría applySensitive, si aún no están en torneos_sensibles. */
+	sensitive: LabelHit[]
+}
+
+/**
+ * Los torneos guardados a los que sólo el rótulo de su pestaña hace borrar o
+ * apuntar, sin tocar nada. Las reglas se hicieron para nombres y el borrado va en
+ * cascada, sin una excepción como la de los sensibles: tras cargar grupos, esta
+ * lista se mira antes de lanzar el reprocesado.
+ */
+export async function rehearseLabels(db: D1Database): Promise<LabelRehearsal> {
+	const { results } = await db
+		.prepare(
+			'SELECT source_key AS key, name, city, start_date AS startDate, related FROM tournaments WHERE related IS NOT NULL'
+		)
+		.all<{ key: string; name: string; city: string | null; startDate: string | null; related: string }>()
+	const stored = results.map((t) => ({ ...t, label: storedLabel(t.related, t.key) }))
+	const hit = ({ key, name, label }: LabelHit): LabelHit => ({ key, name, label })
+	return {
+		minors: stored
+			.filter((t) => isMinorsTournament(t.label, t.startDate) && !isMinorsTournament(t.name, t.startDate))
+			.map(hit),
+		sensitive: stored.filter((t) => looksSensitive(t.label) && !looksSensitive(t.name, t.city)).map(hit)
+	}
 }
 
 /** Lo que applySensitive ha hecho. */
