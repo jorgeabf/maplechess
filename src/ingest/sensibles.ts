@@ -48,3 +48,12 @@ const telling = (text: string) =>
 export function looksSensitive(name: string, city?: string | null): boolean {
 	return telling(name) || (!!city && telling(city))
 }
+
+/**
+ * El nombre con que se apunta para revisarlo un torneo que lo parece: con el
+ * rótulo de su pestaña si sólo lo dice él. Null si no lo parece.
+ */
+export function sensitiveName(name: string, city: string | null, label: string): string | null {
+	if (looksSensitive(name, city)) return name
+	return looksSensitive(label) ? `${name} (pestaña «${label}»)` : null
+}

@@ -27,16 +27,19 @@ import {
 	replaceParticipations,
 	replaceStandings,
 	saveGames,
+	saveGroup,
 	upsertTournament,
 	type CheckedTournament,
 	type GamesSource
 } from '../repo'
 import { isListedMinors, isMinorsTournament } from '../menores'
 import { isListedCopy } from '../repetidos'
-import { looksSensitive } from '../sensibles'
+import { sensitiveName } from '../sensibles'
 import {
+	ownLabel,
 	parseEvents,
 	parseGamesPage,
+	parseGroupPage,
 	parseRoundPage,
 	parseStandingsPage,
 	parseTeamListing,
@@ -85,6 +88,25 @@ export interface Info64SyncParams {
 	 * los torneos que ya no se releen; encadenable con chain.
 	 */
 	standings?: 'only'
+	/**
+	 * 'only': sólo el grupo de torneos (tournaments.related) de los ya guardados:
+	 * los de keys o los que empiezan en la ventana y aún no lo tienen, sin pedir el
+	 * calendario ni tocar nada más. Para los torneos que ya no se releen;
+	 * encadenable con chain. Pide siempre después de la diaria (msUntilAfterDaily).
+	 */
+	groups?: 'only'
+}
+
+/** Lo que deja en su salida una ventana de sólo grupo. */
+export interface GroupsSummary {
+	/** Torneos que se han pedido. */
+	tournaments: number
+	/** Los que tienen grupo. */
+	groups: number
+	/** Los que no tienen esa página (404). */
+	missing: number
+	/** Los que han fallado tras sus reintentos. */
+	failed: string[]
 }
 
 /** Torneo leído y guardado; es lo que pasa del paso "torneo" al de "partidas". */
@@ -128,6 +150,30 @@ const FETCH_STEP: WorkflowStepConfig = {
 
 const PAUSE = '1 second'
 
+/** Un torneo guardado, de los que lee una pasada que no pide el calendario. */
+interface StoredTournament {
+	key: string
+	id: number
+	type: TournamentType
+	hasGroup: boolean
+}
+
+/**
+ * Página de la que se leen sólo las pestañas del grupo: salen en todas las del
+ * torneo, y ésta pesa poco (unos 26 KB; la principal lleva el ranking inicial).
+ */
+const GROUP_PAGE = 'schedule'
+
+/**
+ * Pocos reintentos y seguidos de GROUP_MAX_FAILURES: con los de FETCH_STEP, unos
+ * 15 minutos por torneo, una caída de info64 dejaría pidiendo más allá de las 06:00.
+ */
+const GROUP_STEP: WorkflowStepConfig = {
+	retries: { limit: 2, delay: '30 seconds', backoff: 'exponential' },
+	timeout: '2 minutes'
+}
+const GROUP_MAX_FAILURES = 5
+
 /** Días tras el final de un torneo durante los que se sigue buscando si sube partidas. */
 export const RECHECK_DAYS = 14
 
@@ -158,28 +204,71 @@ export function msUntilInfo64Hours(date: Date): number {
 	return wait * 60_000 - (date.getTime() % 60_000)
 }
 
+/**
+ * Minuto UTC del día desde el que una carga larga puede pedir a info64 sin
+ * coincidir con la diaria (CRON_INFO64_DAILY, a las 00:00 UTC), que del 1 al
+ * 7-nov-2026 acabó antes de las 00:22 UTC. Si se alarga, lo ve waitAfterDaily.
+ */
+const AFTER_DAILY_MINUTE = 30
+
+/**
+ * Milisegundos que faltan para que una carga larga pueda pedir a info64: 0 entre
+ * las 00:30 UTC (la 01:30 de Madrid en invierno y las 02:30 en verano) y las
+ * 05:00 de Madrid. Va por UTC, como el cron: el cambio de hora no la mueve.
+ */
+export function msUntilAfterDaily(date: Date): number {
+	const minute = date.getUTCHours() * 60 + date.getUTCMinutes()
+	const time = madridDateTime(date).slice(11, 16)
+	// Hasta mediodía UTC: de 22:00 a 24:00 UTC también es de madrugada en Madrid, pero aún no ha pasado la diaria.
+	if (minute >= AFTER_DAILY_MINUTE && minute < 12 * 60 && time < INFO64_HOURS.until) return 0
+	const wait = (AFTER_DAILY_MINUTE - minute + 24 * 60) % (24 * 60)
+	return wait * 60_000 - (date.getTime() % 60_000)
+}
+
+/** Mientras corre la diaria de info64 se espera, y se mira cada INFO64_WAIT hasta INFO64_WAIT_TRIES veces. */
+export const INFO64_WAIT = '10 minutes'
+export const INFO64_WAIT_TRIES = 6
+const BUSY = new Set(['queued', 'running', 'waiting', 'waitingForPause'])
+
+/** ¿Está en marcha la diaria de info64 de ese día (UTC, como la lanza el cron)? */
+export async function info64Running(env: Env, today: string): Promise<boolean> {
+	try {
+		const instance = await env.INFO64_SYNC.get(dailyInstanceId(today))
+		return BUSY.has((await instance.status()).status)
+	} catch {
+		// Aún no existe (o ya no se guarda): no está en marcha.
+		return false
+	}
+}
+
 export class Info64SyncWorkflow extends WorkflowEntrypoint<Env, Info64SyncParams> {
-	async run(event: WorkflowEvent<Info64SyncParams>, step: WorkflowStep): Promise<void> {
+	async run(event: WorkflowEvent<Info64SyncParams>, step: WorkflowStep): Promise<GroupsSummary | undefined> {
 		const params = event.payload
 		const db = this.env.DB
-		// Lanzada a mano o encadenada fuera de la franja de info64: la espera.
-		const wait = await step.do('franja de info64', async () => msUntilInfo64Hours(new Date()))
-		if (wait > 0) await step.sleep('espera a la franja de info64', wait)
-		if (params.standings === 'only') {
-			await this.syncStoredStandings(params, step)
+		let groups: GroupsSummary | undefined
+		if (params.groups === 'only') {
+			await this.waitAfterDaily(step)
+			groups = await this.syncStoredGroups(params, step)
 		} else {
-			const tournaments = params.pairings === 'only' ? null : await this.syncWindow(params, step)
-			// Antes de encadenar la ventana siguiente: nunca dos instancias pidiendo a info64.
-			const upcoming = params.pairings ? await this.syncUpcomingRounds(params, step) : null
-			if ((tournaments?.pending ?? 0) + (upcoming?.added ?? 0) > 0) await step.do('totales', () => refreshTotals(db))
+			// Lanzada a mano o encadenada fuera de la franja de info64: la espera.
+			const wait = await step.do('franja de info64', async () => msUntilInfo64Hours(new Date()))
+			if (wait > 0) await step.sleep('espera a la franja de info64', wait)
+			if (params.standings === 'only') {
+				await this.syncStoredStandings(params, step)
+			} else {
+				const tournaments = params.pairings === 'only' ? null : await this.syncWindow(params, step)
+				// Antes de encadenar la ventana siguiente: nunca dos instancias pidiendo a info64.
+				const upcoming = params.pairings ? await this.syncUpcomingRounds(params, step) : null
+				if ((tournaments?.pending ?? 0) + (upcoming?.added ?? 0) > 0) await step.do('totales', () => refreshTotals(db))
 
-			// La salud (lib/salud.ts) sólo la escriben las pasadas programadas
-			// (schedule.ts): una a mano no debe tapar que falle la diaria.
-			if (!params.keys && !params.chain) {
-				if (tournaments && params.pairings === 'also') {
-					await step.do('salud', () => saveHealth(db, 'info64', tournaments.health))
+				// La salud (lib/salud.ts) sólo la escriben las pasadas programadas
+				// (schedule.ts): una a mano no debe tapar que falle la diaria.
+				if (!params.keys && !params.chain) {
+					if (tournaments && params.pairings === 'also') {
+						await step.do('salud', () => saveHealth(db, 'info64', tournaments.health))
+					}
+					if (upcoming) await step.do('salud emparejamientos', () => saveHealth(db, 'emparejamientos', upcoming.health))
 				}
-				if (upcoming) await step.do('salud emparejamientos', () => saveHealth(db, 'emparejamientos', upcoming.health))
 			}
 		}
 
@@ -188,7 +277,7 @@ export class Info64SyncWorkflow extends WorkflowEntrypoint<Env, Info64SyncParams
 			await step.do('siguiente ventana', async () => {
 				const from = addDays(params.to, 1)
 				const to = minDate(endOfMonth(from, chain.months), chain.until)
-				const id = windowInstanceId(from, to, params.standings)
+				const id = windowInstanceId(from, to, windowMode(params))
 				// Idempotente: si el paso se reintenta tras crearla, no se duplica.
 				try {
 					await this.env.INFO64_SYNC.get(id)
@@ -198,11 +287,29 @@ export class Info64SyncWorkflow extends WorkflowEntrypoint<Env, Info64SyncParams
 				}
 				await this.env.INFO64_SYNC.create({
 					id,
-					params: { from, to, chain, force: params.force, standings: params.standings }
+					params: { from, to, chain, force: params.force, standings: params.standings, groups: params.groups }
 				})
 				return id
 			})
 		}
+		return groups
+	}
+
+	/**
+	 * Espera a poder pedir sin coincidir con la diaria: a su hora y, si aún sigue
+	 * en marcha, a que acabe. Si no acaba, para la cadena con un error: nunca dos
+	 * instancias pidiendo a info64 (pasarían de 1 petición/s).
+	 */
+	private async waitAfterDaily(step: WorkflowStep): Promise<void> {
+		const wait = await step.do('franja tras la diaria', async () => msUntilAfterDaily(new Date()))
+		if (wait > 0) await step.sleep('espera a que pase la diaria', wait)
+		const today = await step.do('día de la diaria', async () => isoDate(new Date()))
+		for (let i = 0; i < INFO64_WAIT_TRIES; i++) {
+			const busy = await step.do(`diaria en marcha ${i}`, () => info64Running(this.env, today))
+			if (!busy) return
+			await step.sleep(`espera a la diaria ${i}`, INFO64_WAIT)
+		}
+		throw new Error(`info64: la diaria del ${today} sigue en marcha; no se pide el grupo`)
 	}
 
 	/**
@@ -355,33 +462,72 @@ export class Info64SyncWorkflow extends WorkflowEntrypoint<Env, Info64SyncParams
 		return { added, health }
 	}
 
-	/** Sólo la clasificación (standings: 'only') de los torneos guardados: los de keys o los que empiezan en la ventana. */
+	/**
+	 * Los torneos guardados de una pasada que no pide el calendario: los de keys o
+	 * los que empiezan en la ventana. Uno sensible, de menores o repetido aún
+	 * guardado (sin reprocesar) no se lee. El de menores, por la lista o por su
+	 * nombre y su fecha o, con keys, por el slug.
+	 */
+	private async storedTournaments(params: Info64SyncParams): Promise<StoredTournament[]> {
+		const excluded = await loadExcluded(this.env.DB, SOURCE)
+		const listed = (key: string) => excluded.has(key) || isListedMinors(SOURCE, key) || isListedCopy(key)
+		const skipped = (key: string) => listed(key) || isMinorsTournament(key)
+		if (!params.keys) {
+			const stored = await loadTournamentsStarting(this.env.DB, SOURCE, params.from, params.to, isoDate(new Date()))
+			return stored
+				.filter((t) => !listed(t.key) && !isMinorsTournament(t.name, t.startDate))
+				.map(({ key, id, type, hasGroup }) => ({ key, id, type, hasGroup: Boolean(hasGroup) }))
+		}
+		const candidates = params.keys.map(keyToCandidate).filter((c) => !skipped(c.key))
+		const ids = await loadTournamentIds(
+			this.env.DB,
+			SOURCE,
+			candidates.map((c) => c.key)
+		)
+		return candidates.flatMap((c) =>
+			ids[c.key] === undefined ? [] : [{ key: c.key, id: ids[c.key], type: c.type, hasGroup: false }]
+		)
+	}
+
+	/** Sólo la clasificación (standings: 'only') de los torneos guardados. */
 	private async syncStoredStandings(params: Info64SyncParams, step: WorkflowStep): Promise<void> {
-		const tournaments = await step.do('torneos guardados', async () => {
-			// Uno sensible, de menores o repetido aún guardado (sin reprocesar) no
-			// se lee. El de menores, por la lista o por su nombre y su fecha o, con
-			// keys, por el slug.
-			const excluded = await loadExcluded(this.env.DB, SOURCE)
-			const listed = (key: string) => excluded.has(key) || isListedMinors(SOURCE, key) || isListedCopy(key)
-			const skipped = (key: string) => listed(key) || isMinorsTournament(key)
-			if (!params.keys) {
-				const stored = await loadTournamentsStarting(this.env.DB, SOURCE, params.from, params.to, isoDate(new Date()))
-				return stored
-					.filter((t) => !listed(t.key) && !isMinorsTournament(t.name, t.startDate))
-					.map(({ key, id, type }) => ({ key, id, type }))
-			}
-			const candidates = params.keys.map(keyToCandidate).filter((c) => !skipped(c.key))
-			const ids = await loadTournamentIds(
-				this.env.DB,
-				SOURCE,
-				candidates.map((c) => c.key)
-			)
-			return candidates.flatMap((c) => (ids[c.key] === undefined ? [] : [{ key: c.key, id: ids[c.key], type: c.type }]))
-		})
+		const tournaments = await step.do('torneos guardados', () => this.storedTournaments(params))
 		console.log(`[info64] ${params.from}…${params.to}: clasificación de ${tournaments.length} torneos`)
 		let avisos = 0
 		for (const t of tournaments) avisos += await this.standingsStep(step, t.key, t.type, t.id)
 		if (avisos > 0) console.warn(`[info64] ${params.from}…${params.to}: ${avisos} clasificaciones sin guardar`)
+	}
+
+	/**
+	 * Sólo el grupo (groups: 'only') de los torneos guardados: los de keys o los
+	 * que aún no lo tienen. Si info64 deja de responder, para la cadena: seguir
+	 * pidiendo podría sacarla de la franja.
+	 */
+	private async syncStoredGroups(params: Info64SyncParams, step: WorkflowStep): Promise<GroupsSummary> {
+		const tournaments = await step.do('torneos guardados', async () =>
+			(await this.storedTournaments(params)).filter((t) => !t.hasGroup)
+		)
+		const summary: GroupsSummary = { tournaments: tournaments.length, groups: 0, missing: 0, failed: [] }
+		let failures = 0
+		for (const t of tournaments) {
+			try {
+				const size = await step.do(`grupo ${t.key}`, GROUP_STEP, () =>
+					failFast(() => syncGroup(this.env.DB, t.id, t.key))
+				)
+				if (size === null) summary.missing++
+				else if (size > 0) summary.groups++
+				failures = 0
+			} catch (error) {
+				summary.failed.push(t.key)
+				console.warn(`[info64] grupo de ${t.key}: ${String(error)}`)
+				if (++failures === GROUP_MAX_FAILURES) {
+					throw new Error(`info64: ${failures} fallos seguidos al leer el grupo, hasta ${t.key}; se para la cadena`)
+				}
+			}
+			await step.sleep(`pausa grupo ${t.key}`, PAUSE)
+		}
+		console.log(`[info64] ${params.from}…${params.to}: grupos ${JSON.stringify(summary)}`)
+		return summary
 	}
 
 	/**
@@ -410,13 +556,24 @@ export function dailyInstanceId(day: string): string {
 	return `info64-diario-${day}`
 }
 
+const WINDOW_PREFIX = {
+	initial: 'info64',
+	standings: 'info64-clasificacion',
+	groups: 'info64-grupo'
+}
+
+/** Qué lee una ventana con esos parámetros. */
+export function windowMode(params: { standings?: unknown; groups?: unknown }): keyof typeof WINDOW_PREFIX {
+	if (params.groups === 'only') return 'groups'
+	return params.standings === 'only' ? 'standings' : 'initial'
+}
+
 /**
- * Instancia de una ventana. Las de sólo clasificación llevan otro nombre: las
- * ventanas de la carga inicial ya existen con el suyo, y la cadena se pararía
- * al encontrarlas.
+ * Instancia de una ventana. Cada modo lleva su nombre: las ventanas de la carga
+ * inicial ya existen con el suyo, y la cadena se pararía al encontrarlas.
  */
-export function windowInstanceId(from: string, to: string, standings?: 'only'): string {
-	return standings === 'only' ? `info64-clasificacion-${from}-${to}` : `info64-${from}-${to}`
+export function windowInstanceId(from: string, to: string, mode: keyof typeof WINDOW_PREFIX = 'initial'): string {
+	return `${WINDOW_PREFIX[mode]}-${from}-${to}`
 }
 
 function minDate(a: string, b: string): string {
@@ -495,6 +652,25 @@ async function syncStandings(db: D1Database, tournamentId: number, key: string, 
 }
 
 /**
+ * Lee las pestañas del grupo de un torneo guardado y las guarda, sin tocar nada
+ * más. Devuelve cuántos torneos tiene el grupo: 0 sin grupo y null sin esa
+ * página. Los de menores y los sensibles por el rótulo los decide el reprocesado.
+ */
+async function syncGroup(db: D1Database, tournamentId: number, key: string): Promise<number | null> {
+	let html: string
+	try {
+		html = await fetchText(`${INFO64_URL}/${key}/${GROUP_PAGE}`)
+	} catch (error) {
+		if (error instanceof HttpError && error.status === 404) return null
+		throw error
+	}
+	const group = relatedGroup(await parseGroupPage(html), key)
+	if (!group) return 0
+	await saveGroup(db, tournamentId, group)
+	return group.length
+}
+
+/**
  * Qué torneos del calendario hay que leer: los ya empezados que no se hayan
  * comprobado después de RECHECK_DAYS días desde su final. Así los torneos en
  * curso y recién acabados se revisan a diario hasta que pasa ese margen.
@@ -528,7 +704,7 @@ async function syncTournament(db: D1Database, candidate: EventTournament): Promi
 	const url = `${INFO64_URL}/${candidate.key}`
 	const page = await parseTournamentPage(await fetchText(url))
 	const startDate = page.startDate ?? validDate(candidate.firstRound)
-	const label = page.related.find((r) => r.key === candidate.key)?.label ?? ''
+	const label = ownLabel(page.related, candidate.key)
 	if (isMinorsTournament(page.name, startDate) || isMinorsTournament(label, startDate)) {
 		console.log(`[info64] ${candidate.key}: de menores por su página; no se guarda`)
 		return null
@@ -548,11 +724,8 @@ async function syncTournament(db: D1Database, candidate: EventTournament): Promi
 	})
 	// Si lo parece, por el nombre, la ciudad o el rótulo, se apunta para revisarlo;
 	// hasta entonces se guarda como los demás.
-	const looks = looksSensitive(page.name, page.city)
-	if (looks || looksSensitive(label)) {
-		const name = looks ? page.name : `${page.name} (pestaña «${label}»)`
-		await proposeSensitive(db, [{ source: SOURCE, key: candidate.key, name }])
-	}
+	const name = sensitiveName(page.name, page.city, label)
+	if (name) await proposeSensitive(db, [{ source: SOURCE, key: candidate.key, name }])
 	// En los torneos por equipos la página principal no trae jugadores: la
 	// plantilla se guarda en su propio paso (syncTeamRoster).
 	const kept = candidate.type === 'individual' && !(await replaceParticipations(db, id, page.players))

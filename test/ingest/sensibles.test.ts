@@ -356,6 +356,22 @@ describe('applySensitive', () => {
 		])
 	})
 
+	it('apunta también el que lo parece sólo por el rótulo de su pestaña, sin borrarlo', async () => {
+		const related = [
+			{ key: 'open-navidad-c', label: 'Ciegos' },
+			{ key: 'open-navidad-a', label: 'Absoluto' }
+		]
+		await store({ ...tournament('open-navidad-c', 'Open de Navidad Grupo C'), related }, [])
+		await store({ ...tournament('open-navidad-a', 'Open de Navidad Grupo A'), related }, [])
+
+		expect(await applySensitive(db)).toEqual({ proposed: 1, broadcasts: 0, deleted: 0 })
+
+		expect(await proposed()).toEqual([
+			{ source: 'info64', key: 'open-navidad-c', nombre: 'Open de Navidad Grupo C (pestaña «Ciegos»)', excluido: null }
+		])
+		expect(await count('SELECT count(*) AS n FROM tournaments')).toBe(2)
+	})
+
 	it('marca también la retransmisión que enlaza info64, aunque el enlace sea de una ronda', async () => {
 		const input = tournament('open-feds-inventado', 'Open FEDS Inventado')
 		const id = await upsertTournament(db, input)

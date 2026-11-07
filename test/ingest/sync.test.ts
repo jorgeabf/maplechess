@@ -6,6 +6,7 @@ import {
 	RECHECK_DAYS,
 	selectPending,
 	windowInstanceId,
+	windowMode,
 	type Info64SyncParams
 } from '../../src/ingest/info64/sync'
 import { addDays, endOfMonth, madridDateTime } from '../../src/lib/dates'
@@ -73,9 +74,13 @@ describe('Info64SyncWorkflow', () => {
 })
 
 describe('windowInstanceId', () => {
-	it('las ventanas de sólo clasificación no chocan con las de la carga inicial', () => {
-		expect(windowInstanceId('2014-01-01', '2014-01-31')).toBe('info64-2014-01-01-2014-01-31')
-		expect(windowInstanceId('2014-01-01', '2014-01-31', 'only')).toBe('info64-clasificacion-2014-01-01-2014-01-31')
+	const id = (params: Info64SyncParams) => windowInstanceId(params.from, params.to, windowMode(params))
+	const window = { from: '2014-01-01', to: '2014-01-31' }
+
+	it('las ventanas de sólo clasificación o sólo grupo no chocan con las de la carga inicial', () => {
+		expect(id(window)).toBe('info64-2014-01-01-2014-01-31')
+		expect(id({ ...window, standings: 'only' })).toBe('info64-clasificacion-2014-01-01-2014-01-31')
+		expect(id({ ...window, groups: 'only' })).toBe('info64-grupo-2014-01-01-2014-01-31')
 	})
 })
 

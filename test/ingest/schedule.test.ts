@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { msUntilInfo64Hours } from '../../src/ingest/info64/sync'
+import { msUntilAfterDaily, msUntilInfo64Hours } from '../../src/ingest/info64/sync'
 import { CRON_FIDE_MONTHLY, CRON_INFO64_DAILY, CRON_LICHESS_DAILY, runScheduled } from '../../src/ingest/schedule'
 import wranglerConfig from '../../wrangler.jsonc?raw'
 
@@ -43,5 +43,35 @@ describe('msUntilInfo64Hours', () => {
 
 	it('antes de las 00:05 espera unos minutos, y cuenta los segundos', () => {
 		expect(msUntilInfo64Hours(new Date('2026-10-25T23:02:30Z'))).toBe(2 * MINUTE + 30_000)
+	})
+})
+
+describe('msUntilAfterDaily', () => {
+	it('abre a las 00:30 UTC: la 01:30 de Madrid en invierno y las 02:30 en verano', () => {
+		expect(msUntilAfterDaily(new Date('2026-11-08T00:30:00Z'))).toBe(0)
+		expect(msUntilAfterDaily(new Date('2026-07-01T00:30:00Z'))).toBe(0)
+	})
+
+	it('mientras la diaria corre, espera a las 00:30 UTC, y cuenta los segundos', () => {
+		expect(msUntilAfterDaily(new Date('2026-11-08T00:00:00Z'))).toBe(30 * MINUTE)
+		expect(msUntilAfterDaily(new Date('2026-11-08T00:05:30Z'))).toBe(24 * MINUTE + 30_000)
+	})
+
+	it('de madrugada en Madrid pero antes de la diaria, también la espera', () => {
+		// 00:10 de Madrid en invierno.
+		expect(msUntilAfterDaily(new Date('2026-11-07T23:10:00Z'))).toBe(80 * MINUTE)
+		// 00:30 de Madrid en verano.
+		expect(msUntilAfterDaily(new Date('2026-06-30T22:30:00Z'))).toBe(120 * MINUTE)
+	})
+
+	it('cierra a las 05:00 de Madrid y espera a la noche siguiente', () => {
+		expect(msUntilAfterDaily(new Date('2026-11-08T03:59:00Z'))).toBe(0)
+		expect(msUntilAfterDaily(new Date('2026-11-08T04:00:00Z'))).toBe((20 * 60 + 30) * MINUTE)
+		expect(msUntilAfterDaily(new Date('2026-07-01T02:59:00Z'))).toBe(0)
+		expect(msUntilAfterDaily(new Date('2026-07-01T03:00:00Z'))).toBe((21 * 60 + 30) * MINUTE)
+	})
+
+	it('por la tarde espera a las 00:30 UTC del día siguiente', () => {
+		expect(msUntilAfterDaily(new Date('2026-11-07T18:30:00Z'))).toBe(6 * 60 * MINUTE)
 	})
 })

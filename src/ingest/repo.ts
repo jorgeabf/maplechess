@@ -1336,16 +1336,24 @@ export async function loadTournamentsStarting(
 	from: string,
 	to: string,
 	today: string
-): Promise<{ key: string; id: number; type: TournamentType; name: string; startDate: string }[]> {
+): Promise<{ key: string; id: number; type: TournamentType; name: string; startDate: string; hasGroup: number }[]> {
 	const { results } = await db
 		.prepare(
-			`SELECT source_key AS key, id, type, name, start_date AS startDate FROM tournaments
+			`SELECT source_key AS key, id, type, name, start_date AS startDate, related IS NOT NULL AS hasGroup FROM tournaments
 			WHERE start_date BETWEEN ?2 AND ?3 AND start_date <= ?4 AND source = ?1
 			ORDER BY start_date, id`
 		)
 		.bind(source, from, to, today)
-		.all<{ key: string; id: number; type: TournamentType; name: string; startDate: string }>()
+		.all<{ key: string; id: number; type: TournamentType; name: string; startDate: string; hasGroup: number }>()
 	return results
+}
+
+/** Guarda el grupo de un torneo ya guardado, sin tocar nada más. Si no cambia, no se reescribe. */
+export async function saveGroup(db: D1Database, tournamentId: number, group: RelatedTournament[]): Promise<void> {
+	await db
+		.prepare('UPDATE tournaments SET related = ?2 WHERE id = ?1 AND related IS NOT ?2')
+		.bind(tournamentId, JSON.stringify(group))
+		.run()
 }
 
 export interface CheckedTournament {
