@@ -37,7 +37,8 @@ export default {
 	partes: [cuerpo + base],
 	lineas: [
 		// La mejilla: de la garganta hacia la oreja, lo que separa la cabeza de la crin. En
-		// las negras, el mismo recorrido sin llegar al borde: si no, abriría la silueta.
+		// las negras, el mismo recorrido, algo más corto por abajo: el contorno rellena la
+		// garganta y la línea no tiene con qué unirse.
 		doble(
 			'M47.6 52.3C51.2 48.2 52.2 42.6 50.8 37.4C50.2 35.4 49.2 33.6 47.8 32.2',
 			'M48.8 50.8C51.4 46.9 52 42 50.8 37.4C50.2 35.4 49.2 33.6 47.8 32.2'

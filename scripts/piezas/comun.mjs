@@ -262,10 +262,7 @@ export function svgPieza(pieza, color) {
 	const macizas = (pieza.macizas ?? []).map((d) => `<path fill="${COLORES.tinta}" d="${d}"/>`).join('')
 	const luz = pieza.luz && color === 'w' ? `<path fill="${COLORES.claro}" stroke="none" d="${pieza.luz}"/>` : ''
 	const partes = macizas + luz + pieza.partes.map((d) => `<path d="${d}"/>`).join('')
-	const d = pieza.lineas
-		.map((l) => l[color])
-		.filter(Boolean)
-		.join('')
+	const d = pieza.lineas.map((l) => l[color]).join('')
 	const lineas = `<path fill="none" stroke="${linea}" stroke-width="${LINEA[color]}" d="${d}"/>`
 	const marcas = pieza.marcas ? `<path fill="${linea}" stroke="none" d="${pieza.marcas[color]}"/>` : ''
 	return (
