@@ -169,7 +169,7 @@ flowchart LR
 
 La ingesta es educada con las fuentes: como mucho una petición por segundo a info64 y a SICHESS y, a lichess, una cada vez, con pausa entre una y otra y con un token de sólo lectura, como pide su API. Siempre con un User-Agent que la identifica.
 
-**No se guardan** los torneos de hasta Sub 14 ni los escolares, que dirían la edad o el colegio de quien juega, ni los que revelan un dato de salud: los de ajedrecistas ciegos o sordos, con discapacidad física o de ajedrez inclusivo. La [política de privacidad](https://maplechess.es/privacidad#salud) lo explica.
+**No se guardan** los torneos de hasta Sub 14 ni los escolares, que dirían la edad o el colegio de quien juega, ni los que revelan un dato de salud (los de ajedrecistas ciegos o sordos, con discapacidad física o de ajedrez inclusivo) o penal (los que juegan internos de una prisión). La [política de privacidad](https://maplechess.es/privacidad#salud) lo explica.
 
 **chess-results no se usa:** sus términos prohíben copiar y republicar sus datos.
 

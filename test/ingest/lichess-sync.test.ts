@@ -501,6 +501,16 @@ describe('syncTour', () => {
 		})
 	})
 
+	it('apunta también el que lo parece sólo por el sitio', async () => {
+		mockLichess()
+		const place = { ...detail.tour.info, location: 'Centro Penitenciario Inventado' }
+		const info = { tour: { ...detail.tour, name: 'Open Inventado', info: place }, finished: true }
+		expect(await syncTour(db, candidate, direct, info)).toMatchObject({ status: 'propio', games: 6 })
+		expect(await db.prepare('SELECT source, source_key AS key, nombre, excluido FROM torneos_sensibles').all()).toMatchObject({
+			results: [{ source: 'lichess', key: TOUR_ID, nombre: 'Open Inventado', excluido: null }]
+		})
+	})
+
 	it('no pide una retransmisión marcada como sensible, ni con force', async () => {
 		const requested = mockLichess()
 		await db

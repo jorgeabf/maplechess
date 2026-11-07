@@ -18,7 +18,7 @@ import { parseGames } from '../../src/lib/chess/pgn'
 import { addDays, madridDateTime } from '../../src/lib/dates'
 import { getPlayerTournaments } from '../../src/lib/db/players'
 
-// Torneos que revelan un dato de salud (tabla torneos_sensibles): no se
+// Torneos que revelan un dato de salud o penal (tabla torneos_sensibles): no se
 // guardan. Torneos y jugadores inventados.
 const db = env.DB
 
@@ -79,6 +79,59 @@ describe('looksSensitive', () => {
 		}
 	})
 
+	it('reconoce los que se juegan en una prisión', () => {
+		for (const name of [
+			'Torneo en la Prisión de Ninguna Parte',
+			'Torneo en la Cárcel de Ninguna Parte',
+			'Torneo en las Cárceles de Ninguna Parte',
+			'Centro Carcelario Inventado',
+			'Torneo na Cárcere Inventada',
+			'Torneig a la Presó de Ningú',
+			'Torneig a les Presons de Ningú',
+			'Torneig de Presoners Inventat',
+			'Campeonato de Reclusos Inventado',
+			'Centro de Reclusión Inventado',
+			'Personas Privadas de Libertad',
+			'Penal de Ninguna Parte',
+			'Presidio de Ninguna Parte',
+			'Espetxeko Txapelketa Asmatua',
+			'Kartzelako Txapelketa Asmatua',
+			'Euskal Presoak Txapelketa',
+			'Online Championship for Prisoners',
+			'Inmates Cup',
+			'County Jail Open',
+			'State Penitentiary Open',
+			'Correctional Facility Open',
+			'Incarcerated Players Cup'
+		]) {
+			expect(looksSensitive(name), name).toBe(true)
+		}
+	})
+
+	it('mira también la ciudad, donde el organizador puede escribir el local', () => {
+		expect(looksSensitive('Open Inventado', 'Centro Penitenciario de Ninguna Parte')).toBe(true)
+		expect(looksSensitive('Open Inventado', 'Sede de la ONCE')).toBe(true)
+		for (const city of ['Ninguna Parte', 'Carcelén', null, undefined]) {
+			expect(looksSensitive('Open Inventado', city), String(city)).toBe(false)
+		}
+	})
+
+	it('no confunde el torneo interno de un club ni lo que empieza igual que una prisión', () => {
+		for (const name of [
+			'Torneo Interno Club Inventado',
+			'Open de Carcelén',
+			'Open de Càrcer',
+			'Open de Cáceres',
+			'Open de Prešov',
+			'Copa del Presidente',
+			'Copa Presencial',
+			'Memorial Peñalver',
+			'Tanda de Penaltis'
+		]) {
+			expect(looksSensitive(name), name).toBe(false)
+		}
+	})
+
 	it('no cuenta «a la ciega», que es jugar sin ver el tablero', () => {
 		for (const name of [
 			'II Desafío a la Ciega de Ninguna Parte',
@@ -106,6 +159,7 @@ describe('looksSensitive', () => {
 describe('torneos sensibles en la pasada de info64', () => {
 	const SENSITIVE = 'campeonato-sordos-inventado'
 	const OTHER = 'open-inventado'
+	const IN_PRISON = 'open-sala-inventada'
 	const tomorrow = addDays(madridDateTime(new Date()).slice(0, 10), 1)
 	let requested: string[] = []
 
@@ -130,7 +184,9 @@ describe('torneos sensibles en la pasada de info64', () => {
 		[SENSITIVE]: `<h1>Campeonato Inventado para Sordos</h1><table id="initial-ranking-table"><tbody>${ranking('Sordo')}</tbody></table>`,
 		[`${SENSITIVE}/games`]: `<textarea id="pgnText">${pgn('Sordo')}</textarea>`,
 		[OTHER]: `<h1>Open Inventado</h1><table id="initial-ranking-table"><tbody>${ranking('Abierto')}</tbody></table>`,
-		[`${OTHER}/games`]: `<textarea id="pgnText">${pgn('Abierto')}</textarea>`
+		[`${OTHER}/games`]: `<textarea id="pgnText">${pgn('Abierto')}</textarea>`,
+		[IN_PRISON]: `<h1>Open Sala Inventada</h1><div id="dates">Centro Penitenciario Inventado, from <span class="mommentdate short">2026-09-01</span> to <span class="mommentdate short">2026-09-01</span></div><table id="initial-ranking-table"><tbody>${ranking('Sala')}</tbody></table>`,
+		[`${IN_PRISON}/games`]: `<textarea id="pgnText">${pgn('Sala')}</textarea>`
 	}
 
 	// Pasos de verdad, sin Workflow: cada uno se ejecuta y su salida pasa por JSON.
@@ -173,6 +229,13 @@ describe('torneos sensibles en la pasada de info64', () => {
 		await mark('info64', SENSITIVE, 0)
 		await run({ from: '', to: '', keys: [SENSITIVE] })
 		expect(await proposed()).toMatchObject([{ key: SENSITIVE, excluido: 0 }])
+	})
+
+	it('apunta también el que lo parece sólo por la ciudad', async () => {
+		await run({ from: '', to: '', keys: [IN_PRISON] })
+		expect(await proposed()).toEqual([
+			{ source: 'info64', key: IN_PRISON, nombre: 'Open Sala Inventada', excluido: null }
+		])
 	})
 
 	it('marcado, ni la diaria ni una pasada a mano lo piden ni lo guardan', async () => {
@@ -283,6 +346,14 @@ describe('applySensitive', () => {
 
 		// Repetirlo no cambia nada.
 		expect(await applySensitive(db)).toEqual({ proposed: 0, broadcasts: 0, deleted: 0 })
+	})
+
+	it('apunta también el que lo parece sólo por la ciudad', async () => {
+		await store({ ...tournament('open-inventado', 'Open Inventado'), city: 'Centro Penitenciario Inventado' }, [])
+		expect(await applySensitive(db)).toEqual({ proposed: 1, broadcasts: 0, deleted: 0 })
+		expect(await proposed()).toEqual([
+			{ source: 'info64', key: 'open-inventado', nombre: 'Open Inventado', excluido: null }
+		])
 	})
 
 	it('marca también la retransmisión que enlaza info64, aunque el enlace sea de una ronda', async () => {

@@ -546,10 +546,11 @@ async function syncTournament(db: D1Database, candidate: EventTournament): Promi
 		syncedAt: new Date().toISOString(),
 		related: relatedGroup(page.related, candidate.key)
 	})
-	// Si lo parece, por el nombre o por el rótulo, se apunta para revisarlo;
+	// Si lo parece, por el nombre, la ciudad o el rótulo, se apunta para revisarlo;
 	// hasta entonces se guarda como los demás.
-	if (looksSensitive(page.name) || looksSensitive(label)) {
-		const name = looksSensitive(page.name) ? page.name : `${page.name} (pestaña «${label}»)`
+	const looks = looksSensitive(page.name, page.city)
+	if (looks || looksSensitive(label)) {
+		const name = looks ? page.name : `${page.name} (pestaña «${label}»)`
 		await proposeSensitive(db, [{ source: SOURCE, key: candidate.key, name }])
 	}
 	// En los torneos por equipos la página principal no trae jugadores: la
