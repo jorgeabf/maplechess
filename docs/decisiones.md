@@ -226,7 +226,14 @@ La historia, las medidas, los casos concretos y el detalle de cada página que s
     - info64: el 93,3 % con provincia y el 6,1 % sin sitio (locales, erratas, en línea);
     - la FCA: todos con provincia;
     - lichess: 52 en España y 221 fuera.
-    - Error conocido: «Gaia» (Portugal, sin el país) cae en Gaià (Barcelona).
+  - **Corregido el 7-nov-2026**, medido con `tournamentPlace` empaquetado sobre los 8.728 torneos de producción: cambian 26 y ninguno pasa de un sitio a otro.
+    - **Un municipio en el nombre** (`municipalityInName`), si la ciudad no dice el sitio y el nombre no dice una comunidad: «Spain», con «Open de Barberà del Vallès». Sólo exacto y de tres palabras o más. De 568 torneos sin sitio da 21, todos bien (2 de lichess y 19 de info64).
+    - **Comprobado con los que ya tienen provincia:** de 7.871, 232 nombran un municipio así. En 225 coincide con la ciudad, y en los otros 7 acierta el nombre y se equivoca lo guardado («Bembibre» con «Concello do Val do Dubra», «Arcos» con «Arcos de la Frontera», «Villarejo» con «Villarejo de Salvanés»). Ahí sigue mandando la ciudad.
+    - **Con dos palabras no:** daba 40 más y sólo 2 estaban bien. «San Pedro» Alcántara no es el de Albacete; el «Santa Bárbara» de Sama de Langreo no es el de Tarragona, ni la Colònia de Sant Jordi el de Castellón.
+    - **Con los cruces aproximados no:** ganaría 2 torneos y se equivocaría con barrios y advocaciones («San José Obrero», «Virgen del Carmen», «San Francisco Javier»), que son núcleos de otra provincia.
+    - **El riesgo que queda:** un apellido que sea un municipio («Memorial Castro del Río»), si la ciudad no dice el sitio. Hoy, ninguno.
+    - **Ciudades de fuera escritas solas** (`FOREIGN_TOWNS`): «Gaia» caía en Gaià (Barcelona) y «Lagos», en un núcleo de Vélez-Málaga. Exigir «Spain» a las de lichess perdería Alfaro, Blanes y Palmanova, que no lo dicen: por eso, una lista a mano. Así escritas no dicen el sitio, y el nombre aún puede decirlo; con la tilde o con algo más («Gaià», «Lagos, Spain», «Lagos (Málaga)»), son de aquí.
+    - **«Catalonia»**, un nombre más de Cataluña en `toponimos.ts`: 3 torneos pasan a tener comunidad. En `/torneos`, «catalonia» busca ya como «cataluña», por el sitio y por la palabra, así que esos 3 no salen hasta el reprocesado.
   - **En `/torneos`** (`tournamentTerms`, en `fts.ts`), una provincia o una comunidad se busca por dónde se juega el torneo o por la palabra escrita en su nombre (la columna `name` del FTS). Así «galicia» no encuentra el Memorial Gallego de Gijón, y «memorial gallego» sí.
     - Gana el nombre más largo («castilla y leon» frente a «leon») y vale el plural («gallegos»).
     - Las demás palabras se buscan en el nombre y en la ciudad, que está en el FTS («gijon»). El rótulo del campo es «Nombre o lugar».

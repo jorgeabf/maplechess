@@ -27,6 +27,12 @@ describe('tournamentTerms', () => {
 		expect(tournamentTerms('ARABA')).toEqual({ text: null, places: [place(['01'], [], '"araba"*', ALAVA)] })
 	})
 
+	it('una comunidad, también por su nombre en inglés', () => {
+		expect(tournamentTerms('catalonia')?.places).toEqual([
+			place([], ['09'], '"catalonia"*', '"cataluna"* OR "catalunya"* OR "catalonia"* OR "catala"*')
+		])
+	})
+
 	it('reconoce el plural del gentilicio', () => {
 		expect(tournamentTerms('gallegos')?.places).toEqual([
 			place([], ['12'], '"gallegos"*', '"galicia"* OR "gallego"* OR "gallega"* OR "galego"* OR "galega"*')

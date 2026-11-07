@@ -34,7 +34,7 @@ export function tournamentPlace(city: string | null, name: string): TournamentPl
 	const fromCity = cityPlace(city)
 	if (fromCity === 'extranjero') return NOWHERE
 	const fromName = namePlace(name)
-	if (!fromCity) return fromName ?? NOWHERE
+	if (!fromCity) return fromName ?? municipalityInName(name) ?? NOWHERE
 	const { province, community } = fromCity
 	if (fromName) {
 		if (!province && fromName.province && fromName.community === community) return fromName
@@ -53,6 +53,32 @@ function namePlace(name: string): TournamentPlace | null {
 	return { province: provinces.size === 1 ? [...provinces][0] : null, community: [...communities][0] }
 }
 
+/** Con menos palabras, un municipio en el nombre suele ser otra cosa: «San Pedro» Alcántara no es el de Albacete. */
+const MIN_WORDS_IN_NAME = 3
+
+/**
+ * El municipio que dice el nombre del torneo («Open de Barberà del Vallès»),
+ * sin contar los aproximados, si todos los que dice son de una misma provincia.
+ */
+function municipalityInName(name: string): TournamentPlace | null {
+	const text = words(name)
+	const provinces = new Set<string>()
+	for (let i = 0; i < text.length; i++) {
+		for (let end = text.length; end >= i + MIN_WORDS_IN_NAME; end--) {
+			const found = candidates(text.slice(i, end).join(' '), new Set(), 1)
+			const province = found && provinceOf(found)
+			if (province) {
+				provinces.add(province)
+				i = end - 1
+				break
+			}
+		}
+	}
+	if (provinces.size !== 1) return null
+	const [province] = provinces
+	return { province, community: COMMUNITY_OF.get(province)! }
+}
+
 interface CityPlace extends TournamentPlace {
 	community: string
 	/** Si sale de un núcleo de población o de un principio de nombre. */
@@ -64,7 +90,7 @@ interface CityPlace extends TournamentPlace {
  * comunidad; 'extranjero', o null si no se reconoce.
  */
 export function cityPlace(city: string | null): CityPlace | 'extranjero' | null {
-	if (!city) return null
+	if (!city || FOREIGN_TOWNS.has(city.trim().toLowerCase())) return null
 	const { regions, countries } = tables()
 	const text = expand(stripDiacritics(city).toLowerCase())
 	const full = words(text).join(' ')
@@ -83,9 +109,7 @@ export function cityPlace(city: string | null): CityPlace | 'extranjero' | null 
 	const whole = regions.has(full) ? candidates(full, hinted, 1) : candidates(full, hinted)
 	const found = whole ?? fromSegments(segments, hinted, regions)
 	if (found) {
-		const municipality = pick(found.matches)
-		const provinces = new Set(found.matches.map((m) => m.municipality.slice(0, 2)))
-		const province = municipality?.slice(0, 2) ?? (provinces.size === 1 ? [...provinces][0] : null)
+		const province = provinceOf(found)
 		// Con la provincia escrita («Beniaján (Murcia)»), la provincia es segura aunque el municipio sea aproximado.
 		const approximate = found.tier === 2 && hinted.size === 0
 		if (province) return { province, community: COMMUNITY_OF.get(province)!, approximate }
@@ -177,6 +201,14 @@ function isStreet(segment: string): boolean {
 
 const SPAIN = new Set(['spain', 'espana'])
 
+/**
+ * Ciudades de fuera que las retransmisiones escriben solas, sin el país, y que
+ * caerían en un sitio de aquí: Gaia y Lagos (Portugal), por Gaià (Barcelona) y
+ * un núcleo de Vélez-Málaga. Así escritas no dicen el sitio; con la tilde o con
+ * algo más, sí («Gaià», «Lagos, Spain», «Lagos (Málaga)»).
+ */
+const FOREIGN_TOWNS = new Set(['gaia', 'lagos'])
+
 /** Islas: no son una provincia, pero la dicen. */
 const ISLANDS: [string, string][] = [
 	['07', 'Mallorca, Menorca, Ibiza, Eivissa, Formentera'],
@@ -220,6 +252,14 @@ function pick(matches: Match[]): string | null {
 	if (matches.length === 1) return matches[0].municipality
 	const [first, second] = [...matches].sort((a, b) => b.population - a.population)
 	return first.population >= 10 * Math.max(second.population, 1) ? first.municipality : null
+}
+
+/** La provincia del municipio elegido entre los encontrados o, si no se elige ninguno, la que compartan. */
+function provinceOf({ matches }: Found): string | null {
+	const municipality = pick(matches)
+	if (municipality) return municipality.slice(0, 2)
+	const provinces = new Set(matches.map((m) => m.municipality.slice(0, 2)))
+	return provinces.size === 1 ? [...provinces][0] : null
 }
 
 function provincesOf(community: string): string[] {
