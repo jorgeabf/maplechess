@@ -276,8 +276,10 @@ const me = resolveMe(null, Astro.cookies.get(ME_COOKIE)?.value).fideId
 	 *
 	 * Si no caben (a 250 px, que es la letra al 150 % en el móvil), una sombra
 	 * en el borde dice que hay más por ese lado, como en .table-wrap
-	 * (global.css): sombras fijas y, encima, tapas del color de la cabecera que
-	 * se desplazan con la lista y las cubren en cada extremo.
+	 * (global.css): sombras fijas, 1 px dentro de la caja, y, encima, tapas del
+	 * color de la cabecera que se desplazan con la lista y las cubren en cada
+	 * extremo. Aquí los bordes de la lista suelen caer en fracciones de píxel:
+	 * los da el ancho del texto y, en el móvil, el alto de la cabecera.
 	 */
 	.tabs ul {
 		display: flex;
@@ -295,8 +297,10 @@ const me = resolveMe(null, Astro.cookies.get(ME_COOKIE)?.value).fideId
 		background:
 			linear-gradient(to right, var(--surface) var(--space-3), transparent) left / var(--space-6) 100% no-repeat local,
 			linear-gradient(to left, var(--surface) var(--space-3), transparent) right / var(--space-6) 100% no-repeat local,
-			linear-gradient(to right, var(--border-strong), transparent) left / var(--space-3) 100% no-repeat,
-			linear-gradient(to left, var(--border-strong), transparent) right / var(--space-3) 100% no-repeat;
+			linear-gradient(to right, var(--border-strong), transparent)
+				1px center / var(--space-3) calc(100% - 2px) no-repeat,
+			linear-gradient(to left, var(--border-strong), transparent)
+				calc(100% - 1px) center / var(--space-3) calc(100% - 2px) no-repeat;
 	}
 
 	.tabs li {
