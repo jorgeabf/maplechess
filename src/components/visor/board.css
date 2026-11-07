@@ -181,6 +181,9 @@ cg-board square.check {
  * número un 39 % de la casilla (translateY): sólo se compensan con casillas
  * de 56px o más. En el móvil (41px) el número quedaba 4px por encima de su
  * casilla, y el 8 fuera del tablero.
+ *
+ * Sin el aire de la altura de línea, 2px más arriba: las piezas se pintan encima,
+ * y con él la dama tapaba el número a 40px (un 12 %).
  */
 .cg-wrap coords.ranks {
 	top: 0;
@@ -190,6 +193,7 @@ cg-board square.check {
 .cg-wrap coords.ranks coord {
 	transform: none;
 	padding-inline-start: 0.3em;
+	line-height: 1;
 }
 
 /*

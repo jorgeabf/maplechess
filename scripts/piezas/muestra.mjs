@@ -252,7 +252,8 @@ figcaption { color: var(--muted); font-size: 14px; margin-top: 4px; }
 .suelta.jaque { background-color: var(--board-light) !important; }
 .numeros, .letras { position: absolute; display: flex; pointer-events: none; font: 600 9px/1.5 system-ui, 'Segoe UI', sans-serif; }
 .numeros { top: 0; left: 0; flex-direction: column; height: 100%; width: 12px; }
-.numeros b { flex: 1 1 auto; padding-inline-start: 0.3em; }
+.numeros b, .letras b { font-weight: inherit; }
+.numeros b { flex: 1 1 auto; padding-inline-start: 0.3em; line-height: 1; }
 .letras { bottom: -4px; left: 0; width: 100%; height: 16px; text-transform: uppercase; }
 .letras b { flex: 1 1 auto; text-align: end; padding-inline-end: 0.3em; }
 .sobre-clara { color: var(--coord-light); }
