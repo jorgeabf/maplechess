@@ -106,7 +106,7 @@ De quien puede ser menor de edad (cumple 18 años o menos este año, según la l
   - **Compartir la variante:** va en la dirección de la página, y «Copiar enlace» la copia. Quien abra el enlace ve la misma posición, con tu variante.
   - **Stockfish 19** funciona en el propio navegador: las 3 mejores líneas, que se pueden pulsar, la barra de evaluación y la mejor jugada como flecha. Analiza cada posición hasta 10 s o hasta la profundidad 22, para no agotar la batería del móvil; «Seguir analizando» continúa sin límite. Con la pestaña oculta se para y, al volver, sigue.
   - Si la fuente anota evaluaciones, un gráfico las muestra jugada a jugada.
-  - **Piezas propias,** dibujadas para MapleChess en madera de arce y nogal. Todas llevan un borde claro y otro oscuro, así que se distinguen bien sobre las dos casillas: al menos 4,8:1 de contraste, que es lo máximo que permite el nogal.
+  - **Piezas propias,** dibujadas para MapleChess como las de un libro de ajedrez, en blanco y negro puros, así que se distinguen bien sobre las dos casillas: al menos 4,5:1 de contraste.
 - **Notación con figuras:** las jugadas se escriben con las mismas piezas del tablero (♘f3 en lugar de Nf3), que se leen igual en cualquier idioma, en el visor, el motor, el repertorio y el dossier. Al copiar y en el PGN siguen en letras.
 - **Descargas en PGN:** de una partida, de un torneo, de todas las de un jugador o de una posición del repertorio (hasta 5.000 partidas), o del resultado de una búsqueda (las que enseña, hasta 1.000).
 

@@ -150,19 +150,21 @@
 		--control-height-l: 3rem;
 
 		/*
-		 * Grosor de la raya de acento que marca lo actual: el subrayado de las
-		 * pestañas (el menú, la lupa y .page-tabs), la fila enlazada y lo tuyo (.tu).
+		 * Grosor de la raya que marca lo actual: el subrayado de las pestañas (el
+		 * menú, la lupa y .page-tabs), la fila enlazada, lo tuyo (.tu) y el anillo de
+		 * la casilla elegida.
 		 */
 		--mark-width: 3px;
 
 		/*
 		 * Madera de la marca: arce natural y nogal frío. Son fijas en los dos
 		 * modos, como el tablero, y distintas de las maderas de lichess y chess24
-		 * (tostadas y anaranjadas). La marca es identidad (logo, favicón,
-		 * tablero), nunca interacción: un enlace de nogal se confundiría con el
-		 * texto y, con daltonismo, con los resultados. Para eso está el acento.
-		 * El nogal deja las piezas negras a 4,1:1; más claro se parecería al
-		 * tablero de lichess.
+		 * (tostadas y anaranjadas). La marca es identidad (logo, favicón y, el arce,
+		 * las casillas claras), nunca interacción: un enlace de nogal se confundiría
+		 * con el texto y, con daltonismo, con los resultados. Para eso está el
+		 * acento. El nogal se queda en la marca (el logo, los iconos y la tarjeta para
+		 * compartir): la casilla oscura del tablero es --board-dark, otra madera algo
+		 * más clara.
 		 */
 		--maple: #e8e1cf;
 		--maple-pale: #fbf7ee;
@@ -215,36 +217,38 @@
 		--result-draw-soft: color-mix(in oklab, var(--result-draw) 45%, var(--surface));
 
 		/*
-		 * Tablero y barra de evaluación. Las casillas, de la madera de la marca.
-		 * La última jugada en el azul claro del acento (es «dónde estás»), y no en
-		 * el verde de lichess.
+		 * Tablero y barra de evaluación. La casilla clara, del arce de la marca; la
+		 * oscura, una madera propia, a 3,51:1 de la clara, en la que blanco y negro
+		 * puros destacan por igual (4,58:1). La última jugada en el azul claro del
+		 * acento (es «dónde estás»), y no en el verde de lichess.
 		 */
 		--board-light: var(--maple);
-		--board-dark: var(--walnut);
+		--board-dark: #877259;
 		--board-last-move: rgb(140 195 240 / 0.5);
 		/*
 		 * Pieza elegida y casillas a las que puede ir (el explorador del
 		 * repertorio): el azul tinta casi negro. Un punto de 3:1 sobre las dos
-		 * casillas sólo puede ser muy oscuro: 12,4:1 sobre arce y 3,2:1 sobre
-		 * nogal. La casilla elegida, el mismo al 50 %.
+		 * casillas sólo puede ser muy oscuro: 12,4:1 sobre el arce y 3,53:1 sobre la
+		 * oscura. La casilla elegida, el mismo al 30 %: una pieza negra sobre la
+		 * casilla oscura baja de 3:1 a partir del 32 %. Lo que la marca es un anillo
+		 * de --board-dest (board.css), que sí pasa el 3:1 frente a las casillas de al
+		 * lado; igual, un destino al pasar por encima.
 		 */
 		--board-dest: #0a2238;
-		--board-selected: rgb(10 34 56 / 0.5);
-		/* Coordenadas sobre cada casilla: 9,4:1 y 4,8:1. */
+		--board-selected: rgb(10 34 56 / 0.3);
+		/* Coordenadas sobre cada casilla: 9,4:1 y 4,58:1. */
 		--board-coord-on-light: var(--walnut-dark);
-		--board-coord-on-dark: var(--maple-pale);
+		--board-coord-on-dark: #ffffff;
 		/*
-		 * Piezas: un tono claro y una tinta de nogal casi negra, en el borde de
-		 * todas, para que uno de los dos destaque sobre cualquier casilla. El
-		 * nogal es de luminosidad media: contra él, ningún color pasa de 5,1:1, y
-		 * una pieza de un solo tono oscuro no llega a 4,5:1. Las blancas, relleno
-		 * claro y contorno de tinta; las negras, al revés, con el filete claro
-		 * por fuera (la taracea del logo). La tinta queda a 13,7:1 sobre el arce;
-		 * el claro, a 4,8:1 sobre el nogal. Las SVG llevan los colores escritos:
-		 * las genera scripts/piezas.mjs a partir de estos tokens.
+		 * Piezas, en blanco y negro puros: la casilla oscura es de luminosidad media
+		 * y sólo los extremos pasan de 4,5:1 sobre ella. Las blancas, relleno blanco
+		 * y contorno negro; las negras, macizas y con la misma silueta, sin borde
+		 * claro. El negro queda a 16,1:1 sobre el arce. Las SVG llevan los colores
+		 * escritos: las genera scripts/piezas.mjs a partir de estos tokens (con 6
+		 * cifras: comun.mjs y test/piezas.test.ts no leen otra cosa).
 		 */
-		--board-piece-light: var(--maple-pale);
-		--board-piece-ink: #1c1610;
+		--board-piece-light: #ffffff;
+		--board-piece-ink: #000000;
 		/* Blanco puro en modo claro: el crema de la página se confundiría con él. */
 		--eval-white: light-dark(#ffffff, #f4f2ec);
 		--eval-black: #2a2b2f;

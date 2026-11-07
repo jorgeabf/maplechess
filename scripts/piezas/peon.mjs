@@ -1,17 +1,21 @@
-// Peón: la pieza menor de la familia, con la peana más estrecha, pero robusto:
-// bola grande y cuello grueso, lejos del cono fino. Tres piezas de torno
-// apiladas: cuerpo cóncavo con peana, bola y, delante, un collar de píldora
-// en el que se asienta la bola, como el collar del rey.
-import { circulo, filetePeana, peana, torno } from './comun.mjs'
+// Peón: la pieza más baja, con una cabeza redonda sobre un collar y una base como
+// la de las demás, algo más estrecha.
+import { collar, cuello, juntasBase, juntasCollar, molduras, torno } from './comun.mjs'
 
 export default {
 	letra: 'P',
 	partes: [
-		torno([50, 56.5], ['L', 58.5, 56.5], ['C', 58.5, 67, 61.5, 75.5, 71.5, 78], ...peana(24.5)),
-		circulo(50, 44, 11.5),
-		torno([50, 51.5], ['L', 61.3, 51.5], ['Q', 64.5, 51.5, 64.5, 54.8], ['Q', 64.5, 58, 61.3, 58], ['L', 50, 58])
+		torno(
+			[50, 26.7],
+			['C', 58.5, 26.7, 64.8, 32.8, 64.8, 40.8],
+			['C', 64.8, 46.2, 62, 50.4, 58.4, 52.5],
+			['Q', 57.8, 52.9, 58.6, 52.9],
+			...collar(52.9, 16, 4.9, 9.4),
+			cuello(24, 59.8, 65),
+			...molduras(24)
+		)
 	],
-	lineas: filetePeana(24.5),
+	lineas: [...juntasCollar(52.9, 16, 4.9, 9.4), ...juntasBase(24)],
 	// En SAN el peón no lleva letra: no hay figura.
 	figura: null
 }
