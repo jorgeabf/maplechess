@@ -164,7 +164,7 @@ Este archivo lleva las reglas, dónde está cada cosa, los comandos y las trampa
   - **Tablas:** cabecera sin fondo; `--surface-muted`, sólo en `.group-row`; al pasar, sólo las filas que son un enlace; lo tuyo y la fila enlazada (`.tu`, `:target`), `--accent-soft` y la raya; una celda sin dato, vacía (`td:empty`).
     - Una tabla que se apila con un container query pasa a columnas sólo donde le cabe su contenido real (GamesTable, desde 60rem). En el móvil ninguna esconde tras un scroll el dato que decide: los listados de más de 3–4 columnas llevan `.table-wrap.stack`, con `.cell-label` (`aria-hidden`) sólo en las celdas con dato. Las cortas se compactan.
     - **El explorador del repertorio** se apila por debajo de 19.5rem con media query, no con `container-type`.
-    - **Indicio de scroll:** sombras con `background-attachment: local` en la `.table-wrap`; no dentro de una `.card`.
+    - **Indicio de scroll:** sombras fijas y tapas con `background-attachment: local`, en la `.table-wrap`; no dentro de una `.card`. Las sombras, 1 px dentro de la caja por los cuatro lados: si no, asoma una raya que a 1× no sale, y `medir.mjs` va a 1×.
     - Una regla `@container` sobre `.data-table` va acotada a su tabla.
     - El número de la partida en su ronda es la **mesa**; «tablero» es el puesto en un equipo. El enlace de cada fila de `GamesTable` lleva «Ver la partida» en `.visually-hidden`.
   - Campos, selects, botones y Segmented miden `--control-height`, con `min-height`. La sombra (`--shadow-m`), sólo para lo que flota. El `label` es una rejilla de una columna `minmax(0, 1fr)`.

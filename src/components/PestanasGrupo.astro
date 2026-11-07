@@ -39,8 +39,8 @@ const { tabs, current } = Astro.props
 	 * Un grupo puede tener muchas pestañas o rótulos largos: en una fila, que se
 	 * desplaza como el menú de la cabecera y se abre en la actual. Una sombra
 	 * en el borde dice que hay más por ese lado, como en .table-wrap: sombras
-	 * fijas y, encima, tapas del color de la página que se desplazan con la
-	 * lista.
+	 * fijas, 1 px dentro de la caja, y, encima, tapas del color de la página que
+	 * se desplazan con la lista.
 	 *
 	 * La raya de debajo es el primer fondo y no un borde: la lista recorta lo
 	 * que sale de su caja, y así el subrayado de la actual la tapa, como en
@@ -62,8 +62,10 @@ const { tabs, current } = Astro.props
 			linear-gradient(var(--border), var(--border)) bottom / 100% 1px no-repeat,
 			linear-gradient(to right, var(--bg) var(--space-3), transparent) left / var(--space-6) 100% no-repeat local,
 			linear-gradient(to left, var(--bg) var(--space-3), transparent) right / var(--space-6) 100% no-repeat local,
-			linear-gradient(to right, var(--border-strong), transparent) left / var(--space-3) 100% no-repeat,
-			linear-gradient(to left, var(--border-strong), transparent) right / var(--space-3) 100% no-repeat;
+			linear-gradient(to right, var(--border-strong), transparent)
+				1px center / var(--space-3) calc(100% - 2px) no-repeat,
+			linear-gradient(to left, var(--border-strong), transparent)
+				calc(100% - 1px) center / var(--space-3) calc(100% - 2px) no-repeat;
 	}
 
 	a {
