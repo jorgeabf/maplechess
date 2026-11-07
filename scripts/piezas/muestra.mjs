@@ -1,11 +1,10 @@
 // Hoja de muestra de las piezas: un HTML suelto, sin dependencias, para
-// comparar juegos (direcciones, grosores, opciones de una pieza) en el
-// tablero real. Lleva:
+// comparar juegos en el tablero real. Lleva:
 // - tableros a 32, 41 y 72 px por casilla, con las coordenadas de board.css;
 // - cada pieza sobre las casillas sin marcar y marcadas, con su contraste;
 // - las figuras en una lista de jugadas, en sans y en serif, en claro y en
 //   oscuro;
-// - las cburnett (las de lichess), para comprobar que no se parecen.
+// - las cburnett (las de lichess), para compararlas.
 // La escribe `node scripts/piezas.mjs --muestra <carpeta>`.
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -92,15 +91,15 @@ function cajaFigura(pieza) {
 }
 
 /**
- * Cómo se reparten la altura las figuras en el texto, con 0,76 em para la
+ * Cómo se reparten la altura las figuras en el texto, con 0,88 em para la
  * más alta (scripts/fuente-figuras.py): con las proporciones del tablero, la
- * torre se queda en tres cuartos del rey; todas iguales, la torre pesa como el
- * rey; la intermedia toma la raíz de la proporción.
+ * torre se queda en el 88 % del rey; todas iguales, la torre pesa como el rey; la
+ * intermedia toma la raíz de la proporción.
  */
 const ESCALAS = {
-	comun: { nombre: 'Escala común: las proporciones del tablero', alto: (a, max) => (0.76 * a) / max },
-	intermedia: { nombre: 'Intermedia: la raíz de la proporción del tablero', alto: (a, max) => 0.76 * Math.sqrt(a / max) },
-	igual: { nombre: 'Todas a 0,76 em', alto: () => 0.76 }
+	comun: { nombre: 'Escala común: las proporciones del tablero', alto: (a, max) => (0.88 * a) / max },
+	intermedia: { nombre: 'Intermedia: la raíz de la proporción del tablero', alto: (a, max) => 0.88 * Math.sqrt(a / max) },
+	igual: { nombre: 'Todas a 0,88 em', alto: () => 0.88 }
 }
 
 /** La figura recortada a su tinta, `em` de alto y con 0,04 em de margen a cada lado, como en la fuente. */
@@ -133,7 +132,7 @@ function lista(piezas, escala) {
  * @param {object} hoja
  * @param {string} hoja.titulo
  * @param {string} hoja.intro HTML
- * @param {{ nombre: string, nota?: string, piezas: Record<string, object>, opciones?: object, escalas?: string[] }[]} hoja.juegos
+ * @param {{ nombre: string, nota?: string, piezas: Record<string, object>, escalas?: string[] }[]} hoja.juegos
  *   `escalas`: cómo se reparten la altura las figuras en el texto (ESCALAS); por defecto, la común
  * @param {boolean} [hoja.artifact] sin el esqueleto del documento (doctype, html, head, body), que pone el Artifact al publicar
  */
@@ -153,8 +152,8 @@ export function hojaMuestra({ titulo, intro = '', juegos, artifact = false }) {
 		const filas = []
 		const letras = Object.keys(ROLES).filter((l) => juego.piezas[l])
 		for (const letra of letras) {
-			for (const color of ['w', 'b']) uris[`${color}${letra}`] = uri(svgPieza(juego.piezas[letra], color, juego.opciones))
-			for (const fila of informe(juego.piezas[letra], juego.opciones)) filas.push({ letra, ...fila })
+			for (const color of ['w', 'b']) uris[`${color}${letra}`] = uri(svgPieza(juego.piezas[letra], color))
+			for (const fila of informe(juego.piezas[letra])) filas.push({ letra, ...fila })
 		}
 		const blancas = registrar(`j${i}`, uris)
 		const franjas = letras

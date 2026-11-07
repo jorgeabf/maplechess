@@ -62,9 +62,9 @@ UPM = 1000
 # la línea base, el de las líneas del dossier, es de 1,1 em.
 # Las demás miden HEIGHT por la raíz cuadrada de su alto entre el de la más
 # alta, medidos en la tinta: guardan el orden de alturas del tablero con menos
-# diferencia, y la torre, que con una escala común se quedaba en unos tres
-# cuartos del rey, pasa a un 85 %. Elegido por Jorge el 24-oct-2026 entre esa
-# escala común, ésta (la intermedia) y todas a HEIGHT.
+# diferencia, y la torre, que con una escala común se quedaría en el 88 % del rey,
+# pasa al 94 %. Elegido por Jorge el 24-oct-2026 entre esa escala común, ésta (la
+# intermedia) y todas a HEIGHT.
 HEIGHT = 880
 SIDE = 40
 # Altura sobre y bajo la línea base. No mueven nada: la altura de la línea la

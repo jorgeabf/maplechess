@@ -1,15 +1,18 @@
-// Lo común a las piezas de MapleChess: el lienzo, la peana, los grosores, los
+// Lo común a las piezas de MapleChess: el lienzo, los grosores, las molduras, los
 // colores, las ayudas para dibujar y la medida del contraste. Cada pieza se
 // dibuja en su módulo (scripts/piezas/<pieza>.mjs) con estas ayudas, y
 // scripts/piezas.mjs escribe las SVG del tablero y las de las figuras.
 //
-// Las piezas son propias: se dibujan aquí desde cero, sin calcar ni adaptar
-// trazos de otro juego. Pueden recordar la forma Staunton, que es lo que hace
-// legible una pieza, pero no copiarla.
+// El juego se llama «Libro»: piezas de diagrama de un libro de ajedrez clásico,
+// en blanco y negro puros. Son coordenadas propias, dibujadas con cburnett y
+// mpchess a la vista y midiendo el parecido contra cburnett, sin abrir sus
+// trazados.
 //
-// La marca entra por el material y el oficio: perfiles de torno (bases anchas,
-// cuellos gruesos), la taracea del logo (arce incrustado en nogal) y las
-// juntas redondas del «!?».
+// La silueta es la misma en los dos colores. Las negras son macizas, sin borde
+// claro por fuera; sus juntas, líneas blancas que no tocan el borde. Las esquinas
+// van a inglete, como un grabado; donde el trazo vuelve casi sobre sí mismo (bajo
+// la cabeza del peón, en la garganta del caballo…), una curva mínima en el trazado
+// evita el pico que dejaría el inglete dentro de las blancas.
 import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -21,49 +24,20 @@ export const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..')
 // casilla (background-size: cover), sin márgenes.
 export const LADO = 100
 export const CENTRO = 50
-/** Línea base: donde apoya la peana. */
-export const BASE = 88
+/** Línea base: donde apoya la silueta, con el medio contorno de abajo. */
+export const BASE = 90
 /**
- * Grosor del borde: el contorno de tinta de las blancas y el filete claro de
- * las negras. Va centrado en el trazo, así que la mitad cae fuera.
+ * Grosor del contorno, en los dos colores. Va centrado en el trazo, así que la
+ * mitad cae fuera. A 32 px por casilla, una unidad son 0,32 px: mide 1,09 px.
  */
-export const CONTORNO = 4
-/** Grosor de las líneas interiores (juntas, filetes de taracea). */
-export const LINEA = 3
+export const CONTORNO = 3.4
 /**
- * Grosor del perfil de tinta que rodea a las negras por fuera del filete
- * claro. Sobre el arce el filete casi no se ve (1,2:1) y la pieza parecía
- * llevar un halo: el perfil marca el borde, y el filete queda incrustado entre
- * dos líneas oscuras. Con 2 es una línea de 1,1 a 1,4 px en el escritorio
- * (casillas de 56 a 72 px), sin suavizarse a gris como una de menos de un
- * píxel, y de 1,3 a 1,6 px del dispositivo en el móvil; mide la mitad del
- * filete, que sigue mandando. Lo eligió Jorge el 24-oct-2026 entre 1,5, 2 y
- * 2,5, con el caballo.
+ * Grosor de las juntas: 0,96 px a 32 px en las blancas y 1,09 en las negras, donde
+ * el blanco sobre negro se apagaba.
  */
-export const SOMBRA = 2
-
-/*
- * Con el perfil, la negra asoma 4 unidades por fuera de su forma (medio
- * filete y el perfil) y la blanca, 2 (medio contorno): la negra salía un 7 %
- * más ancha y un 5 % más alta. Se encoge sobre el centro de la línea base lo
- * que crece una pieza típica de la familia, de unos 70 de lado: con el
- * perfil de 2, al 94,6 %. Así las dos ocupan lo mismo en la casilla.
- */
-const TIPICA = 70
-
-/*
- * Esquinas que ocupan las coordenadas (9 px fijos, chessground.base.css, con
- * los ajustes de board.css): el número arriba a la izquierda (x < .., y < ..)
- * y la letra abajo a la derecha (x > .., y > ..). La pieza se pinta encima y
- * las taparía. Con la casilla de 41 px (el móvil), la peana de las negras,
- * con su perfil, roza el borde de la letra en menos de un píxel; con la de 32
- * (--board-min: 16rem, pantallas muy estrechas), la peana tapa un poco la
- * letra.
- */
-export const ESQUINAS = {
-	41: { numero: { x: 20, y: 21 }, letra: { x: 79, y: 76 } },
-	32: { numero: { x: 26, y: 27 }, letra: { x: 73, y: 69 } }
-}
+export const LINEA = { w: 3, b: 3.4 }
+/** Lo que se acorta una junta en las negras para no tocar el borde de la silueta. */
+const MARGEN = 3.8
 
 // Colores, de los tokens de global.css: las SVG no ven variables CSS.
 const css = readFileSync(join(ROOT, 'src', 'styles', 'global.css'), 'utf8')
@@ -96,30 +70,30 @@ const hex = (rgb) => `#${rgb.slice(0, 3).map((c) => c.toString(16).padStart(2, '
 export const COLORES = { claro: token('board-piece-light'), tinta: token('board-piece-ink') }
 
 const arce = rgba(token('board-light'))
-const nogal = rgba(token('board-dark'))
+const oscura = rgba(token('board-dark'))
 const ultima = rgba(token('board-last-move'))
 const elegida = rgba(token('board-selected'))
 
 /**
  * Las casillas sobre las que se mide, con el contraste que se pide. WCAG no
  * tiene AAA para gráficos (1.4.11 pide 3:1): se usan los umbrales del texto.
- * Sobre el nogal, 7:1 es imposible (el máximo es 5,1:1, con blanco puro), así
- * que se pide 4,5:1. Las marcadas son de paso: 3:1. El jaque, en el centro del
- * degradado rojo de board.css, donde es más intenso.
+ * Sobre la casilla oscura, 7:1 es imposible (blanco y negro puros dan 4,58:1), así que se
+ * pide 4,5:1. Las marcadas son de paso: 3:1. El jaque, en el centro del degradado
+ * rojo de board.css, donde es más intenso.
  */
 export const CASILLAS = [
 	{ nombre: 'arce', color: hex(arce), umbral: 7 },
-	{ nombre: 'nogal', color: hex(nogal), umbral: 4.5 },
+	{ nombre: 'oscura', color: hex(oscura), umbral: 4.5 },
 	{ nombre: 'arce, última', color: hex(sobre(ultima, arce)), umbral: 3 },
-	{ nombre: 'nogal, última', color: hex(sobre(ultima, nogal)), umbral: 3 },
+	{ nombre: 'oscura, última', color: hex(sobre(ultima, oscura)), umbral: 3 },
 	{ nombre: 'arce, elegida', color: hex(sobre(elegida, arce)), umbral: 3 },
-	{ nombre: 'nogal, elegida', color: hex(sobre(elegida, nogal)), umbral: 3 },
+	{ nombre: 'oscura, elegida', color: hex(sobre(elegida, oscura)), umbral: 3 },
 	{ nombre: 'jaque', color: '#ff0000', umbral: 3 }
 ]
 
 // Trazados. Los números van con un decimal como mucho: cada SVG tiene que
 // quedar por debajo de 4 KB para que Vite la incruste en el CSS.
-const n = (x) => String(Math.round(x * 10) / 10)
+export const n = (x) => String(Math.round(x * 10) / 10)
 const pt = (x, y) => `${n(x)} ${n(y)}`
 const espejo = (x) => LADO - x
 
@@ -156,76 +130,148 @@ export function torno([x0, y0], ...tramos) {
 	return `M${pt(x0, y0)}${derecha.join('')}${izquierda.join('')}Z`
 }
 
-/**
- * La peana común, como tramos de un perfil de torno: del hombro, en
- * (50 + semiancho − 3, BASE − alto), hasta el eje en la línea base.
- */
-export function peana(semiancho, alto = 10) {
-	const x = CENTRO + semiancho
-	const y = BASE - alto
-	return [
-		['C', x - 1.2, y, x, y + 1.2, x, y + 3],
-		['L', x, BASE - 2],
-		['Q', x, BASE, x - 2, BASE],
-		['L', CENTRO, BASE]
-	]
-}
-
-/** Filete de taracea a lo largo de la peana. */
-export function filetePeana(semiancho, alto = 10) {
-	const y = BASE - alto / 2 + 0.5
-	return `M${pt(CENTRO - semiancho + 5, y)}H${n(CENTRO + semiancho - 5)}`
-}
-
 export function circulo(cx, cy, r) {
 	return `M${pt(cx - r, cy)}A${n(r)} ${n(r)} 0 1 1 ${pt(cx + r, cy)}A${n(r)} ${n(r)} 0 1 1 ${pt(cx - r, cy)}Z`
 }
 
-/** Rectángulo con las esquinas redondeadas (radio r). */
-export function rect(x, y, ancho, alto, r = 0) {
-	if (!r) return `M${pt(x, y)}H${n(x + ancho)}V${n(y + alto)}H${n(x)}Z`
-	return (
-		`M${pt(x + r, y)}H${n(x + ancho - r)}Q${pt(x + ancho, y)} ${pt(x + ancho, y + r)}V${n(y + alto - r)}` +
-		`Q${pt(x + ancho, y + alto)} ${pt(x + ancho - r, y + alto)}H${n(x + r)}Q${pt(x, y + alto)} ${pt(x, y + alto - r)}` +
-		`V${n(y + r)}Q${pt(x, y)} ${pt(x + r, y)}Z`
-	)
+/*
+ * Filas de píxeles a 32 px por casilla (3,125 u cada una): una junta centrada en
+ * una fila se pinta entera en ella, y no repartida en dos filas de gris.
+ */
+export const fila = (k) => (k + 0.5) * 3.125
+/** La junta de la base, en la fila 25. Debajo quedan dos filas de plinto en las blancas. */
+export const Y_PLINTO = fila(25)
+/** El fondo del trazado: con medio contorno, la silueta acaba en BASE. */
+const Y_FONDO = BASE - CONTORNO / 2
+/** El hombro de la base, sobre la grada. */
+const Y_HOMBRO = Y_PLINTO - 4.6
+
+/** Parábola de x = 50 − s a x = 50 + s, con flecha f hacia abajo en el centro. */
+const arco = (y, s, f) =>
+	f ? `M${n(50 - s)} ${n(y)}Q50 ${n(y + 2 * f)} ${n(50 + s)} ${n(y)}` : `M${n(50 - s)} ${n(y)}H${n(50 + s)}`
+
+/**
+ * Una junta de lado a lado. En las blancas llega hasta el contorno; en las
+ * negras se queda `margen` antes, sobre la misma parábola, para flotar dentro.
+ */
+export function junta(y, s, f = 0, margen = MARGEN) {
+	const k = s - margen
+	const fb = f * (k / s) ** 2
+	return { w: arco(y, s, f), b: arco(y + f - fb, k, fb) }
 }
 
-/** Polígono cerrado por sus vértices: poligono([x, y], [x, y]…). */
-export function poligono(...vertices) {
-	return `M${vertices.map(([x, y]) => pt(x, y)).join('L')}Z`
+/** Una línea libre, igual en los dos colores (no toca el borde). */
+export const libre = (d) => ({ w: d, b: d })
+/** Una línea distinta en cada color: en las blancas llega al contorno. */
+export const doble = (w, b) => ({ w, b })
+
+/**
+ * El semiancho de un perfil de torno a la altura y: recorre los tramos y
+ * devuelve el x del primer cruce. Para que las juntas caigan en el contorno.
+ */
+export function semiancho(inicio, tramos, y) {
+	let [x0, y0] = inicio
+	for (const [tipo, ...v] of tramos) {
+		const P =
+			tipo === 'L'
+				? (t) => [x0 + (v[0] - x0) * t, y0 + (v[1] - y0) * t]
+				: tipo === 'Q'
+					? (t) => [
+							(1 - t) ** 2 * x0 + 2 * (1 - t) * t * v[0] + t * t * v[2],
+							(1 - t) ** 2 * y0 + 2 * (1 - t) * t * v[1] + t * t * v[3]
+						]
+					: (t) => [
+							(1 - t) ** 3 * x0 + 3 * (1 - t) ** 2 * t * v[0] + 3 * (1 - t) * t * t * v[2] + t ** 3 * v[4],
+							(1 - t) ** 3 * y0 + 3 * (1 - t) ** 2 * t * v[1] + 3 * (1 - t) * t * t * v[3] + t ** 3 * v[5]
+						]
+		let previo = P(0)
+		for (let i = 1; i <= 200; i++) {
+			const p = P(i / 200)
+			if ((previo[1] - y) * (p[1] - y) <= 0 && p[1] !== previo[1]) {
+				return previo[0] + ((p[0] - previo[0]) * (y - previo[1])) / (p[1] - previo[1]) - 50
+			}
+			previo = p
+		}
+		;[x0, y0] = v.slice(-2)
+	}
+	throw new Error(`[piezas] sin cruce a y=${y}`)
+}
+
+/** Parte una cúbica en t: devuelve los puntos de control de los dos trozos. */
+export function partir([p0, p1, p2, p3], t) {
+	const lerp = (a, b) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]
+	const [a, b, c] = [lerp(p0, p1), lerp(p1, p2), lerp(p2, p3)]
+	const [d, e] = [lerp(a, b), lerp(b, c)]
+	const f = lerp(d, e)
+	return [
+		[p0, a, d, f],
+		[f, e, c, p3]
+	]
+}
+export const curva = ([, a, b, c]) => `C${n(a[0])} ${n(a[1])} ${n(b[0])} ${n(b[1])} ${n(c[0])} ${n(c[1])}`
+
+/** El plinto, una losa de cantos vivos. Se entra por su canto superior. */
+export const plinto = (x) => [['L', x, Y_PLINTO], ['L', x, Y_FONDO], ['L', CENTRO, Y_FONDO]]
+
+/**
+ * La base, desde el final de la escocia hasta la línea base: un hombro, una grada
+ * y el plinto. Las gradas sólo se ven en la silueta: una línea más de lado a lado
+ * oscurecía la base de las blancas a 32 px.
+ */
+export function molduras(s) {
+	const x = CENTRO + s
+	return [['Q', x - 2.4, Y_HOMBRO, x - 2.4, Y_HOMBRO + 1.2], ['L', x - 2.4, Y_PLINTO], ...plinto(x)]
+}
+
+/** La escocia del cuello: una sola curva cóncava que llega plana al hombro de la grada. */
+export const cuello = (s, x1, y1) => ['C', x1, y1, CENTRO + s - 11, Y_HOMBRO, CENTRO + s - 3.6, Y_HOMBRO]
+
+/** La junta de la base, entre la grada y el plinto. */
+export const juntasBase = (s) => [junta(Y_PLINTO, s - 1.6, 0, 3)]
+
+/**
+ * Collar: un anillo de cantos redondos, de semiancho s, entre y y y + alto. Se
+ * entra por (50 + s − 1,6, y) y se sale por (50 + salida, y + alto).
+ */
+export function collar(y, s, alto, salida) {
+	const x = CENTRO + s
+	return [
+		['L', x - 1.6, y],
+		['Q', x, y, x, y + alto / 2],
+		['Q', x, y + alto, x - 1.6, y + alto],
+		['L', CENTRO + salida, y + alto]
+	]
 }
 
 /**
- * La SVG de una pieza. `pieza.partes` son las piezas de torno, de atrás
- * adelante: cada una con su relleno y su borde, así que donde una tapa a otra
- * queda la junta. `pieza.lineas`, trazos abiertos (juntas, filetes);
- * `pieza.marcas`, formas rellenas del color del borde (un ojo, una ranura).
- * Las negras son las blancas con los colores cambiados: el borde claro queda
- * fuera, que es lo que las separa del nogal. Con `sombra`, las negras llevan
- * además el perfil de tinta: una capa bajo toda la silueta, más ancha que el
- * filete, que sólo asoma por fuera y no se ve en las juntas. Y van encogidas
- * (ver TIPICA, o `escala`) para ocupar lo mismo que las blancas.
+ * La línea del anillo, debajo. En las blancas llega al contorno; en las negras no
+ * pasa del cuello (salida − 1): más allá, bajo el anillo, ya sólo queda el borde.
  */
-export function svgPieza(pieza, color, { contorno = CONTORNO, linea = LINEA, sombra = SOMBRA, escala } = {}) {
-	const [relleno, borde] = color === 'w' ? [COLORES.claro, COLORES.tinta] : [COLORES.tinta, COLORES.claro]
-	const partes = pieza.partes.map((d) => `<path d="${d}"/>`).join('')
-	const lineas = pieza.lineas ? `<path fill="none" stroke-width="${linea}" d="${pieza.lineas}"/>` : ''
-	const marcas = pieza.marcas ? `<path fill="${borde}" stroke="none" d="${pieza.marcas}"/>` : ''
-	const conPerfil = color === 'b' && sombra > 0
-	const perfil = conPerfil
-		? `<g fill="${COLORES.tinta}" stroke="${COLORES.tinta}" stroke-width="${contorno + 2 * sombra}" stroke-linejoin="round">${partes}</g>`
-		: ''
-	const dibujo =
-		`${perfil}<g fill="${relleno}" stroke="${borde}" stroke-width="${contorno}" stroke-linejoin="round" stroke-linecap="round">` +
-		`${partes}${lineas}${marcas}</g>`
-	const k = conPerfil ? (escala ?? TIPICA / (TIPICA + 2 * sombra)) : 1
-	// Encogida sobre el centro de la línea base y subida lo que el perfil
-	// asoma por debajo de la peana, para que apoye donde la blanca.
-	const sube = (contorno / 2 + sombra) * k - contorno / 2
-	const contenido =
-		k === 1 ? dibujo : `<g transform="translate(${CENTRO} ${n(BASE - sube)}) scale(${+k.toFixed(3)}) translate(-${CENTRO} -${BASE})">${dibujo}</g>`
-	return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${LADO} ${LADO}">${contenido}</svg>`
+export const juntasCollar = (y, s, alto, salida) => [doble(arco(y + alto, s - 1.6, 0), arco(y + alto, salida - 1, 0))]
+
+/**
+ * La SVG de una pieza, igual de silueta en los dos colores. `pieza.macizas`, formas
+ * siempre de tinta (la cruz del rey); `pieza.partes`, las formas con el relleno de
+ * su color y contorno de tinta; `pieza.lineas`, trazos abiertos (las juntas), cada
+ * uno con su versión para cada color (`{ w, b }`), del color contrario al relleno;
+ * `pieza.marcas`, formas rellenas de ese mismo color (`{ w, b }`: un ojo, la crin).
+ */
+export function svgPieza(pieza, color) {
+	const [relleno, linea] = color === 'w' ? [COLORES.claro, COLORES.tinta] : [COLORES.tinta, COLORES.claro]
+	const macizas = (pieza.macizas ?? []).map((d) => `<path fill="${COLORES.tinta}" d="${d}"/>`).join('')
+	const partes = macizas + pieza.partes.map((d) => `<path d="${d}"/>`).join('')
+	const d = pieza.lineas
+		.map((l) => l[color])
+		.filter(Boolean)
+		.join('')
+	const lineas = `<path fill="none" stroke="${linea}" stroke-width="${LINEA[color]}" d="${d}"/>`
+	const marcas = pieza.marcas ? `<path fill="${linea}" stroke="none" d="${pieza.marcas[color]}"/>` : ''
+	return (
+		`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${LADO} ${LADO}">` +
+		`<g fill="${relleno}" stroke="${COLORES.tinta}" stroke-width="${CONTORNO}" ` +
+		`stroke-linejoin="miter" stroke-miterlimit="6" stroke-linecap="round">` +
+		`${partes}${lineas}${marcas}</g></svg>\n`
+	)
 }
 
 /**
@@ -288,28 +334,28 @@ function erosionar(mascara, ancho, alto) {
  * - ese grosor en píxeles, redondeado hacia arriba (el radio en que se busca
  *   el borde).
  */
-function pintar(svg, px, contorno) {
+function pintar(svg, px) {
 	const { width: ancho, height: alto, pixels } = new Resvg(svg, { fitTo: { mode: 'width', value: px } }).render()
 	const silueta = new Uint8Array(ancho * alto)
 	for (let i = 0; i < silueta.length; i++) silueta[i] = pixels[i * 4 + 3] >= 128 ? 1 : 0
 	let cuerpo = silueta
-	for (let i = 0; i < Math.max(1, Math.round((contorno * px) / LADO)); i++) cuerpo = erosionar(cuerpo, ancho, alto)
+	for (let i = 0; i < Math.max(1, Math.round((CONTORNO * px) / LADO)); i++) cuerpo = erosionar(cuerpo, ancho, alto)
 	const fuera = (x, y) => x < 0 || y < 0 || x >= ancho || y >= alto || !silueta[y * ancho + x]
 	const orilla = []
 	for (let y = 0; y < alto; y++) {
 		for (let x = 0; x < ancho; x++) {
-			if (silueta[y * ancho + x] && (fuera(x - 1, y) || fuera(x + 1, y) || fuera(x, y - 1) || fuera(x, y + 1))) orilla.push(y * ancho + x)
+			const toca = fuera(x - 1, y) || fuera(x + 1, y) || fuera(x, y - 1) || fuera(x, y + 1)
+			if (silueta[y * ancho + x] && toca) orilla.push(y * ancho + x)
 		}
 	}
-	const radio = Math.max(1, Math.ceil((contorno * px) / LADO))
+	const radio = Math.max(1, Math.ceil((CONTORNO * px) / LADO))
 	return { pixels, ancho, alto, silueta, cuerpo, orilla, radio }
 }
 
 /**
  * Contraste de una pieza pintada sobre una casilla: el del borde y el del
  * cuerpo frente a la casilla. Una pieza se ve si destaca su borde o su
- * cuerpo: una blanca sobre el nogal se ve por el relleno, no por el contorno
- * de tinta.
+ * cuerpo.
  * - El borde: en cada punto de la orilla, el mejor contraste a menos de un
  *   grosor de contorno; luego, la mediana a lo largo de la silueta. Dice si
  *   hay una línea que destaca alrededor de la pieza, caiga donde caiga en la
@@ -344,11 +390,6 @@ function medirSobre({ pixels, ancho, alto, silueta, cuerpo, orilla, radio }, cas
 	return { borde: mediana(borde), cuerpo: mediana(dentro) }
 }
 
-/** Contraste de una pieza sobre una casilla, a `px` píxeles de lado. */
-export function medir(svg, casilla, px, contorno = CONTORNO) {
-	return medirSobre(pintar(svg, px, contorno), casilla)
-}
-
 /*
  * Tamaños en los que se mide, en píxeles del dispositivo. Los tableros
  * pequeños (casillas de 32 y 41 px) son de móvil, con 2 o 3 píxeles por píxel
@@ -366,18 +407,16 @@ export const TAMANOS = [
 ]
 
 /** Mide una pieza en todas las casillas y tamaños. */
-export function informe(pieza, opciones = {}) {
+export function informe(pieza) {
 	const filas = []
 	for (const color of ['w', 'b']) {
-		const svg = svgPieza(pieza, color, opciones)
-		// El borde de la negra con perfil es más ancho: perfil y filete.
-		const grosor = (opciones.contorno ?? CONTORNO) + (color === 'b' ? (opciones.sombra ?? SOMBRA) : 0)
+		const svg = svgPieza(pieza, color)
 		for (const tamano of TAMANOS) {
-			const pintada = pintar(svg, tamano.css * tamano.dpr, grosor)
-			for (const casilla of CASILLAS) {
-				const { borde, cuerpo } = medirSobre(pintada, casilla.color)
+			const pintada = pintar(svg, tamano.css * tamano.dpr)
+			for (const { nombre, color: fondo, umbral } of CASILLAS) {
+				const { borde, cuerpo } = medirSobre(pintada, fondo)
 				const valor = Math.max(borde, cuerpo)
-				filas.push({ color, casilla: casilla.nombre, ...tamano, borde, cuerpo, valor, umbral: casilla.umbral, ok: valor >= casilla.umbral })
+				filas.push({ color, casilla: nombre, ...tamano, borde, cuerpo, valor, umbral, ok: valor >= umbral })
 			}
 		}
 	}

@@ -48,8 +48,9 @@ describe('piezas del tablero', () => {
 		}
 	})
 
-	it('cada tono destaca sobre una casilla: la tinta sobre el arce y el claro sobre el nogal', () => {
+	it('cada tono destaca sobre las casillas: la tinta sobre las dos y el claro sobre la oscura', () => {
 		expect(contrast(ink, token('board-light'))).toBeGreaterThanOrEqual(7)
+		expect(contrast(ink, token('board-dark'))).toBeGreaterThanOrEqual(4.5)
 		expect(contrast(light, token('board-dark'))).toBeGreaterThanOrEqual(4.5)
 		// Los detalles interiores, uno sobre el otro.
 		expect(contrast(light, ink)).toBeGreaterThanOrEqual(7)

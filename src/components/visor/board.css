@@ -45,13 +45,14 @@ cg-board {
 }
 
 /*
- * Piezas propias de MapleChess, dibujadas desde cero: perfiles de torno, la
- * taracea del logo y, en el borde de todas, un tono claro y una tinta casi
- * negra, para que destaquen sobre las dos casillas (13,7:1 sobre el arce y
- * 4,8:1 sobre el nogal). Las genera scripts/piezas.mjs, que también las mide.
- * Ninguna llega a los 4 KB de assetsInlineLimit, así que Vite las incrusta en
- * este CSS: llegan con él, sin peticiones aparte. Las del diálogo de coronar
- * (Coronacion.astro) van en las mismas reglas, para no incrustarlas dos veces.
+ * Piezas propias de MapleChess, de diagrama de libro, en blanco y negro puros y
+ * con la misma silueta en los dos colores: destacan sobre las dos casillas (16,1:1
+ * sobre el arce y 4,58:1 sobre la oscura). Se dibujaron con cburnett y mpchess a
+ * la vista y midiendo contra cburnett, sin abrir sus trazados. Las genera
+ * scripts/piezas.mjs, que también las mide. Ninguna llega a los 4 KB de
+ * assetsInlineLimit, así que Vite las incrusta en este CSS: llegan con él, sin
+ * peticiones aparte. Las del diálogo de coronar (Coronacion.astro) van en las
+ * mismas reglas, para no incrustarlas dos veces.
  */
 .cg-wrap piece.pawn.white {
 	background-image: url('../../assets/pieces/maple/wP.svg');
@@ -116,12 +117,8 @@ cg-board square.last-move {
 /*
  * En el explorador se mueve (movable.showDests): la pieza elegida y sus
  * destinos, un punto en las casillas vacías y las esquinas en las ocupadas,
- * como en lichess. Al pasar por encima de un destino se marca entero.
+ * como en lichess.
  */
-cg-board square.selected {
-	background-color: var(--board-selected);
-}
-
 cg-board square.move-dest {
 	background: radial-gradient(var(--board-dest) 22%, transparent 0);
 }
@@ -130,8 +127,17 @@ cg-board square.oc.move-dest {
 	background: radial-gradient(transparent 80%, var(--board-dest) 0);
 }
 
+/*
+ * La casilla elegida, y un destino al pasar por encima, se oscurecen poco, para
+ * que una pieza negra no baje de 3:1 sobre ellos. Los marca el anillo, que pasa el
+ * 3:1 frente a las casillas de al lado (12,4:1 con el arce y 3,53:1 con la oscura).
+ * box-shadow no admite porcentajes: de 32 a 72 px por casilla, 3 px son del 9,4 al
+ * 4,2 %, y el 6 % a 50 px.
+ */
+cg-board square.selected,
 cg-board square.move-dest:hover {
 	background: var(--board-selected);
+	box-shadow: inset 0 0 0 var(--mark-width) var(--board-dest);
 }
 
 cg-board square.check {
