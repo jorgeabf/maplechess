@@ -442,16 +442,32 @@ export interface LabelRehearsal {
 export async function rehearseLabels(db: D1Database): Promise<LabelRehearsal> {
 	const { results } = await db
 		.prepare(
-			'SELECT source_key AS key, name, city, start_date AS startDate, related FROM tournaments WHERE related IS NOT NULL'
+			`SELECT t.source, t.source_key AS key, t.name, t.city, t.start_date AS startDate, t.related,
+				s.source_key IS NOT NULL AS reviewed
+			FROM tournaments t LEFT JOIN torneos_sensibles s ON s.source = t.source AND s.source_key = t.source_key
+			WHERE t.related IS NOT NULL`
 		)
-		.all<{ key: string; name: string; city: string | null; startDate: string | null; related: string }>()
+		.all<{
+			source: string
+			key: string
+			name: string
+			city: string | null
+			startDate: string | null
+			related: string
+			reviewed: number
+		}>()
 	const stored = results.map((t) => ({ ...t, label: storedLabel(t.related, t.key) }))
 	const hit = ({ key, name, label }: LabelHit): LabelHit => ({ key, name, label })
 	return {
 		minors: stored
-			.filter((t) => isMinorsTournament(t.label, t.startDate) && !isMinorsTournament(t.name, t.startDate))
+			.filter(
+				(t) =>
+					isMinorsTournament(t.label, t.startDate) &&
+					!isMinorsTournament(t.name, t.startDate) &&
+					!isListedMinors(t.source, t.key)
+			)
 			.map(hit),
-		sensitive: stored.filter((t) => looksSensitive(t.label) && !looksSensitive(t.name, t.city)).map(hit)
+		sensitive: stored.filter((t) => !t.reviewed && looksSensitive(t.label) && !looksSensitive(t.name, t.city)).map(hit)
 	}
 }
 

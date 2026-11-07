@@ -167,7 +167,7 @@ const GROUP_PAGE = 'schedule'
 
 /**
  * Pocos reintentos y seguidos de GROUP_MAX_FAILURES: con los de FETCH_STEP, unos
- * 15 minutos por torneo, una caída de info64 dejaría pidiendo más allá de las 06:00.
+ * 15 minutos por torneo, una caída de info64 seguiría pidiendo más de una hora.
  */
 const GROUP_STEP: WorkflowStepConfig = {
 	retries: { limit: 2, delay: '30 seconds', backoff: 'exponential' },

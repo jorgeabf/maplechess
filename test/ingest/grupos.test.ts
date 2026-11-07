@@ -332,6 +332,16 @@ describe('INFO64_SYNC con groups: only', () => {
 			expect(requested).toEqual([])
 		})
 
+		it('si para a mitad de ventana porque la diaria no acaba, lo que ha fallado queda apuntado', async () => {
+			await store(B)
+			pages[`${A}/schedule`] = 500
+			vi.setSystemTime(new Date('2026-11-08T03:59:30Z'))
+			pauseMs = 60_000
+			await expect(run({}, running(['complete', ...Array(6).fill('running')]))).rejects.toThrow(/no se ve acabada/)
+			expect(requested).toEqual([`${A}/schedule`])
+			expect(await failures()).toEqual([A])
+		})
+
 		it('una ventana lenta no pasa de las 05:00: sigue la noche siguiente, tras la diaria', async () => {
 			await store(B)
 			pages[`${A}/schedule`] = nav(A, B)
@@ -372,6 +382,21 @@ describe('el ensayo de los rótulos', () => {
 			minors: [{ key: 'navidad-c', name: 'Torneo de Navidad Grupo C', label: 'Sub 12' }],
 			sensitive: [{ key: 'navidad-d', name: 'Torneo de Navidad Grupo D', label: 'Ciegos' }]
 		})
+	})
+
+	it('no lista lo que el rótulo no cambia: lo ya apuntado o revisado y lo que borra la lista a mano', async () => {
+		await store('navidad-e', 'Torneo de Navidad Grupo E', '2026-09-01', related('navidad-e', 'Sordos'))
+		await db
+			.prepare(
+				"INSERT INTO torneos_sensibles (source, source_key, nombre, excluido, creado) VALUES ('info64', 'navidad-e', 'Torneo', 0, '2026-10-01')"
+			)
+			.run()
+		const listed = 'open-sub-08-12-santa-catalina-park-2021'
+		await store(listed, 'Open Promoción', '2026-09-01', related(listed, 'Sub 12'))
+
+		const { minors, sensitive } = await rehearseLabels(db)
+		expect(minors.map((t) => t.key)).toEqual(['navidad-c'])
+		expect(sensitive.map((t) => t.key)).toEqual(['navidad-d'])
 	})
 
 	it('el Workflow lo deja en su salida y no toca nada, ni lo que el reprocesado completo borraría', async () => {
