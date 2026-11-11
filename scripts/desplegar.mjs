@@ -1,8 +1,9 @@
 // Despliegue a producción: `pnpm run deploy` (sin «run», pnpm ejecuta su propio
 // «deploy»). Lo opera sólo Jorge. En orden:
 // 1. Se niega si el árbol tiene cambios, si HEAD no es origin/main tras un
-//    fetch o si es la ventana de un cron: la hora y media que sigue a cada expresión
-//    de wrangler.jsonc, para no desplegar a mitad de una pasada.
+//    fetch o si es la ventana de un cron: la media hora que sigue a cada
+//    expresión de wrangler.jsonc (hora y media tras la diaria de info64), para
+//    no desplegar a mitad de una pasada.
 // 2. copy-engine: public/engine/ no se versiona y `git pull` no ejecuta el
 //    postinstall.
 // 3. Apunta en despliegues.log (ignorado por git, como todos los .log) la
@@ -26,11 +27,20 @@ import { fileURLToPath } from 'node:url'
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const LOG = join(root, 'despliegues.log')
 const DATABASE = 'ajedrez'
+/** Minutos, desde que salta un cron, en los que no se despliega, salvo los de LONG_CRON_WINDOWS. */
+const CRON_WINDOW_MIN = 30
 /**
- * Minutos, desde que salta un cron, en los que no se despliega. La diaria de
- * info64 puede pasar de una hora con los torneos sin calendario (UNCALENDARED_PER_NIGHT).
+ * Los crons que duran más. La diaria de info64 (CRON_INFO64_DAILY en
+ * src/ingest/schedule.ts) puede pasar de una hora con los torneos sin calendario
+ * (UNCALENDARED_PER_NIGHT). Si cambia su expresión en wrangler.jsonc, hay que
+ * cambiarla aquí: el despliegue se niega mientras no la encuentre.
  */
-const CRON_WINDOW_MIN = 90
+const LONG_CRON_WINDOWS = { '0 0 * * *': 90 }
+
+/** Minutos de la ventana de `cron`. */
+function cronWindow(cron) {
+	return LONG_CRON_WINDOWS[cron] ?? CRON_WINDOW_MIN
+}
 
 function fail(message) {
 	console.error(`[desplegar] ${message}`)
@@ -63,13 +73,13 @@ function pnpmCommand() {
 	return /\.[cm]?js$/.test(execPath) ? [process.execPath, execPath] : [execPath]
 }
 
-/** ¿Ha saltado `cron` (`*` o listas de números, en UTC) en los últimos CRON_WINDOW_MIN minutos? */
+/** ¿Ha saltado `cron` (`*` o listas de números, en UTC) dentro de su ventana (cronWindow)? */
 function inCronWindow(cron, now) {
 	const fields = cron.split(/\s+/).map((field) => (field === '*' ? null : field.split(',').map(Number)))
 	if (fields.length !== 5 || fields.some((field) => field?.some((n) => !Number.isInteger(n)))) {
 		fail(`no entiendo el cron «${cron}»: sólo admito * y listas de números`)
 	}
-	for (let back = 0; back < CRON_WINDOW_MIN; back++) {
+	for (let back = 0; back < cronWindow(cron); back++) {
 		const t = new Date(now.getTime() - back * 60_000)
 		const values = [t.getUTCMinutes(), t.getUTCHours(), t.getUTCDate(), t.getUTCMonth() + 1, t.getUTCDay()]
 		if (fields.every((field, i) => field === null || field.includes(values[i]))) return true
@@ -90,8 +100,13 @@ async function refusals(now) {
 	// Los crons, de la configuración que despliega wrangler.
 	const { unstable_readConfig } = await import('wrangler')
 	const crons = unstable_readConfig({ config: join(root, 'wrangler.jsonc') }).triggers?.crons ?? []
+	for (const expression of Object.keys(LONG_CRON_WINDOWS)) {
+		if (!crons.includes(expression)) {
+			reasons.push(`el cron «${expression}» de LONG_CRON_WINDOWS no está en wrangler.jsonc: ponlo al día`)
+		}
+	}
 	const cron = crons.find((expression) => inCronWindow(expression, now))
-	if (cron) reasons.push(`es la ventana del cron «${cron}»: ${CRON_WINDOW_MIN} min desde que salta (UTC)`)
+	if (cron) reasons.push(`es la ventana del cron «${cron}»: ${cronWindow(cron)} min desde que salta (UTC)`)
 	return { reasons, head }
 }
 

@@ -298,7 +298,7 @@ curl -X POST localhost:4321/api/admin/sync -H "Authorization: Bearer $TOKEN" \
 
 https://maplechess.es, en un Worker de Cloudflare (Workers Paid), con la D1 en la UE.
 
-- **Desplegar:** `pnpm run deploy` (`scripts/desplegar.mjs`) sólo despliega `origin/main`, con el árbol limpio y fuera de la hora y media que sigue a cada cron. Copia el motor, apunta el marcador de Time Travel de D1, construye, despliega y pasa `scripts/humo.mjs`.
+- **Desplegar:** `pnpm run deploy` (`scripts/desplegar.mjs`) sólo despliega `origin/main`, con el árbol limpio y fuera de la media hora que sigue a cada cron (hora y media tras la diaria de info64). Copia el motor, apunta el marcador de Time Travel de D1, construye, despliega y pasa `scripts/humo.mjs`.
 - Las migraciones sólo añaden (tablas, columnas, índices) o rehacen una tabla con su nombre y las columnas que lee el Worker anterior, como la 0013 y la 0017: así, volver atrás el Worker no obliga a restaurar D1.
 - **Vigilancia de la ingesta** (`src/lib/salud.ts`):
   - Al terminar, cada pasada programada guarda en `sync_state` la clave `salud.<pasada>` (`info64`, `emparejamientos`, `sin-calendario`, `lichess` y `fide`) con `{fin, ok, fallos, avisos}` (`saveHealth`). Una pasada a mano con `keys`, `chain`, `tours` o `rounds`, no, para no tapar que falle la programada. Sí la escriben las lanzadas a mano sin ellos: `pairings` (`emparejamientos` y, con `'also'`, `info64` y `sin-calendario`), lichess sin `tours` ni `rounds` y la FIDE siempre, y una de ellas puede taparlo.
