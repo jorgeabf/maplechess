@@ -27,6 +27,6 @@ export async function fetchOk(url: string, init: RequestInit = {}): Promise<Resp
 	return response
 }
 
-export async function fetchText(url: string): Promise<string> {
-	return (await fetchOk(url)).text()
+export async function fetchText(url: string, init: RequestInit = {}): Promise<string> {
+	return (await fetchOk(url, init)).text()
 }

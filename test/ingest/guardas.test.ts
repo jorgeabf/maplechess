@@ -187,6 +187,8 @@ describe('pasada diaria de info64', () => {
 		const events = JSON.stringify([{ title: 'R.1 - Torneo de las guardas', url: `/${KEY}/`, start: '2026-09-01T17:00:00' }])
 		pages = {
 			'events.json': events,
+			// La lista de la API, para los torneos sin calendario: aquí, vacía.
+			'api/3/tournaments': JSON.stringify({ count: 0, results: [] }),
 			[KEY]: `<h1>Torneo de las guardas</h1><table id="initial-ranking-table"><tbody>${ranking}</tbody></table>`,
 			[`${KEY}/games`]: `<textarea id="pgnText">${pgnOf(10)}</textarea>`
 		}

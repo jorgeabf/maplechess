@@ -20,6 +20,7 @@ import {
 	loadParticipants,
 	loadTournamentIds,
 	loadTournamentsStarting,
+	loadUncalendaredState,
 	markGamesChecked,
 	proposeSensitive,
 	refreshTotals,
@@ -29,6 +30,7 @@ import {
 	saveGames,
 	saveGroup,
 	saveGroupFailures,
+	saveUncalendaredState,
 	upsertTournament,
 	type CheckedTournament,
 	type GamesSource
@@ -38,6 +40,7 @@ import { isListedCopy } from '../repetidos'
 import { sensitiveName } from '../sensibles'
 import {
 	ownLabel,
+	parseApiTournaments,
 	parseEvents,
 	parseGamesPage,
 	parseGroupPage,
@@ -48,6 +51,7 @@ import {
 	parseUpcomingRounds,
 	PageFormatError,
 	relatedGroup,
+	type ApiTournament,
 	type EventTournament,
 	type TournamentPlayer,
 	type TournamentType,
@@ -186,11 +190,45 @@ export const RECHECK_DAYS = 14
 export const PAIRINGS_DAYS = 8
 
 /**
+ * Torneos que el calendario no enseña: sus rondas no tienen fecha, y /events.json
+ * sólo da rondas con fecha (medido el 11-nov-2026: 1.996 empezados desde 2014). La
+ * diaria los busca en la lista de la API (/api/3/tournaments, de API_PAGE en
+ * API_PAGE: unas 31 peticiones) y lee como mucho UNCALENDARED_PER_NIGHT, los más
+ * recientes primero: así entran los nuevos y, noche a noche, los que faltaban.
+ */
+export const UNCALENDARED_PER_NIGHT = 300
+const API_PAGE = 500
+/**
+ * Tope de páginas de la lista: unas 31 de 500. Llegar a él sin acabarla (la API
+ * da menos por página o se dispara su total) es un fallo, no una lista a medias.
+ */
+const API_MAX_PAGES = 100
+/** La API también se pide en inglés y en JSON, no la vista navegable de Django. */
+const API_HEADERS: RequestInit = { headers: { Accept: 'application/json' } }
+/** El primer día de la carga inicial: lo anterior no se carga. */
+export const UNCALENDARED_FROM = '2014-01-01'
+/**
+ * Pocos reintentos, como los del grupo (GROUP_STEP): si info64 deja de
+ * responder, los fallos seguidos lo paran en minutos y no en más de una hora. El
+ * tiempo, el de FETCH_STEP: las partidas y la clasificación de un torneo grande
+ * pesan más que /schedule.
+ */
+const UNCALENDARED_STEP: WorkflowStepConfig = { retries: GROUP_STEP.retries, timeout: FETCH_STEP.timeout }
+/** Fallos seguidos tras los que se deja de leer: info64 no responde. */
+const UNCALENDARED_MAX_FAILURES = 5
+/**
+ * Noches que se vuelve a pedir uno que falla; luego, hasta que se lea bien con
+ * keys. No cuenta la noche en que fallan los primeros sin leer ninguno y también
+ * la ventana del calendario: es un fallo de info64 o del parser, no de esos torneos.
+ */
+export const UNCALENDARED_MAX_NIGHTS = 3
+
+/**
  * Horas de Madrid en que una pasada puede empezar a pedir a info64. Su
  * administración pidió el 25-oct-2026 que el robot le consulte sólo de 00:00 a
  * 06:00: fuera de esa franja puede responder 429. Se empieza a las 00:05 y no
- * después de las 05:00, para acabar antes de las 06:00 (la diaria tarda unos
- * 20 minutos; una carga larga en ventanas encadenadas sigue a la noche siguiente).
+ * después de las 05:00, para acabar antes de las 06:00 (la diaria tarda de 20 minutos
+ * a algo más de una hora; una carga larga en ventanas encadenadas sigue a la noche siguiente).
  */
 export const INFO64_HOURS = { from: '00:05', until: '05:00' }
 
@@ -208,8 +246,8 @@ export function msUntilInfo64Hours(date: Date): number {
 /**
  * Minuto UTC del día desde el que una carga larga puede pedir a info64 sin
  * coincidir con la diaria (CRON_INFO64_DAILY, a las 00:00 UTC), que del 1 al
- * 7-nov-2026 acabó antes de las 00:22 UTC. Si se retrasa o se alarga, lo ve
- * waitAfterDaily.
+ * 7-nov-2026 acabó antes de las 00:22 UTC. Si se retrasa o se alarga (con los
+ * torneos sin calendario, hasta algo más de una hora), lo ve waitAfterDaily.
  */
 const AFTER_DAILY_MINUTE = 30
 
@@ -227,9 +265,9 @@ export function msUntilAfterDaily(date: Date): number {
 	return wait * 60_000 - (date.getTime() % 60_000)
 }
 
-/** Cada cuánto y cuántas veces se mira si la diaria ha acabado. */
+/** Cada cuánto y cuántas veces se mira si la diaria ha acabado: hasta las 02:00 UTC, por los torneos sin calendario. */
 const DAILY_WAIT = '10 minutes'
-const DAILY_WAIT_TRIES = 6
+export const DAILY_WAIT_TRIES = 9
 const FINISHED = new Set(['complete', 'errored', 'terminated'])
 
 /**
@@ -264,16 +302,21 @@ export class Info64SyncWorkflow extends WorkflowEntrypoint<Env, Info64SyncParams
 				const tournaments = params.pairings === 'only' ? null : await this.syncWindow(params, step)
 				// Antes de encadenar la ventana siguiente: nunca dos instancias pidiendo a info64.
 				const upcoming = params.pairings ? await this.syncUpcomingRounds(params, step) : null
-				if ((tournaments?.pending ?? 0) + (upcoming?.added ?? 0) > 0) await step.do('totales', () => refreshTotals(db))
-
 				// La salud (lib/salud.ts) sólo la escriben las pasadas programadas
 				// (schedule.ts): una a mano no debe tapar que falle la diaria.
-				if (!params.keys && !params.chain) {
-					if (tournaments && params.pairings === 'also') {
-						await step.do('salud', () => saveHealth(db, 'info64', tournaments.health))
-					}
-					if (upcoming) await step.do('salud emparejamientos', () => saveHealth(db, 'emparejamientos', upcoming.health))
+				const scheduled = !params.keys && !params.chain
+				// La de los emparejamientos, antes de los torneos sin calendario: la web de
+				// la FADA los lee a las 00:47 UTC (/api/emparejamientos) y la mira.
+				if (scheduled && upcoming) {
+					await step.do('salud emparejamientos', () => saveHealth(db, 'emparejamientos', upcoming.health))
 				}
+				const daily = scheduled && tournaments !== null && params.pairings === 'also'
+				if (daily) await step.do('salud', () => saveHealth(db, 'info64', tournaments.health))
+				// Sólo la diaria, y lo último: los torneos que el calendario no enseña.
+				// Con su salud: lo que falle aquí no toca la de la ventana.
+				const uncalendared = daily ? await this.syncUncalendared(step, tournaments.keys, tournaments.health) : 0
+				const changed = (tournaments?.pending ?? 0) + (upcoming?.added ?? 0) + uncalendared
+				if (changed > 0) await step.do('totales', () => refreshTotals(db))
 			}
 		}
 
@@ -328,7 +371,7 @@ export class Info64SyncWorkflow extends WorkflowEntrypoint<Env, Info64SyncParams
 	private async syncWindow(
 		params: Info64SyncParams,
 		step: WorkflowStep
-	): Promise<{ pending: number; health: HealthCounts }> {
+	): Promise<{ pending: number; health: HealthCounts; keys: string[] }> {
 		const today = isoDate(new Date())
 		const candidates = params.keys
 			? params.keys.map(keyToCandidate)
@@ -357,48 +400,174 @@ export class Info64SyncWorkflow extends WorkflowEntrypoint<Env, Info64SyncParams
 
 		const health = { ok: 0, fallos: 0, avisos: 0 }
 		const replace = params.replace ?? false
-		for (const candidate of pending) {
-			// Un torneo que falla tras sus reintentos no para los demás, ni los
-			// emparejamientos y los totales de después. Sin games_checked_at, se
-			// vuelve a intentar al día siguiente.
-			try {
-				const synced = await step.do(`torneo ${candidate.key}`, FETCH_STEP, () =>
-					failFast(() => syncTournament(this.env.DB, candidate))
+		for (const candidate of pending) await this.syncCandidate(step, candidate, replace, health)
+		return { pending: pending.length, health, keys: candidates.map((c) => c.key) }
+	}
+
+	/**
+	 * Un torneo: su página, la plantilla si es por equipos, la clasificación y las
+	 * partidas, cada cosa en su paso y con su pausa. Suma a `health` lo que pase y
+	 * dice si se ha guardado, si no se guarda (de menores por su página) o si ha
+	 * fallado. Un torneo que falla tras sus reintentos no para los demás, ni los
+	 * emparejamientos y los totales de después. Sin games_checked_at, se vuelve a
+	 * intentar al día siguiente. `config`, los reintentos de los pasos de info64.
+	 */
+	private async syncCandidate(
+		step: WorkflowStep,
+		candidate: EventTournament,
+		replace: boolean,
+		health: HealthCounts,
+		config: WorkflowStepConfig = FETCH_STEP
+	): Promise<'ok' | 'skipped' | 'failed'> {
+		try {
+			const synced = await step.do(`torneo ${candidate.key}`, config, () =>
+				failFast(() => syncTournament(this.env.DB, candidate))
+			)
+			await step.sleep(`pausa torneo ${candidate.key}`, PAUSE)
+			if (!synced) return 'skipped'
+			let tournament = synced
+			health.avisos += tournament.avisos ?? 0
+			// Antes de las partidas: sus nombres se cruzan con la plantilla.
+			if (candidate.type === 'team') {
+				const roster = await step.do(`plantilla ${candidate.key}`, config, () =>
+					failFast(() => syncTeamRoster(this.env.DB, tournament))
 				)
-				await step.sleep(`pausa torneo ${candidate.key}`, PAUSE)
-				if (!synced) continue
-				let tournament = synced
-				health.avisos += tournament.avisos ?? 0
-				// Antes de las partidas: sus nombres se cruzan con la plantilla.
-				if (candidate.type === 'team') {
-					const roster = await step.do(`plantilla ${candidate.key}`, FETCH_STEP, () =>
-						failFast(() => syncTeamRoster(this.env.DB, tournament))
-					)
-					tournament = { ...tournament, participants: roster.participants }
-					health.avisos += roster.avisos ?? 0
-					await step.sleep(`pausa plantilla ${candidate.key}`, PAUSE)
-				}
-				// Después de los participantes: la de un torneo individual casa con ellos.
-				health.avisos += await this.standingsStep(step, candidate.key, candidate.type, tournament.id)
-				let summary = await step.do(`partidas ${candidate.key}`, FETCH_STEP, () =>
-					failFast(() => syncGames(this.env.DB, tournament, replace))
-				)
-				// Otro servidor: no hace falta la pausa de info64 antes de pedir a lichess.
-				if (summary.deferred) {
-					summary = await step.do(`lichess ${candidate.key}`, LICHESS_STEP, () =>
-						syncBroadcastGames(this.env.DB, tournament, replace)
-					)
-				}
-				health.avisos += summary.avisos ?? 0
-				health.ok++
-				if (summary.games > 0) console.log(`[info64] ${candidate.key}: ${JSON.stringify(summary)}`)
-			} catch (error) {
-				health.fallos++
-				console.warn(`[info64] ${candidate.key}: ${String(error)}`)
+				tournament = { ...tournament, participants: roster.participants }
+				health.avisos += roster.avisos ?? 0
+				await step.sleep(`pausa plantilla ${candidate.key}`, PAUSE)
 			}
+			// Después de los participantes: la de un torneo individual casa con ellos.
+			health.avisos += await this.standingsStep(step, candidate.key, candidate.type, tournament.id, config)
+			let summary = await step.do(`partidas ${candidate.key}`, config, () =>
+				failFast(() => syncGames(this.env.DB, tournament, replace))
+			)
+			// Otro servidor: no hace falta la pausa de info64 antes de pedir a lichess.
+			if (summary.deferred) {
+				summary = await step.do(`lichess ${candidate.key}`, LICHESS_STEP, () =>
+					syncBroadcastGames(this.env.DB, tournament, replace)
+				)
+			}
+			health.avisos += summary.avisos ?? 0
+			health.ok++
+			if (summary.games > 0) console.log(`[info64] ${candidate.key}: ${JSON.stringify(summary)}`)
 			await step.sleep(`pausa partidas ${candidate.key}`, PAUSE)
+			return 'ok'
+		} catch (error) {
+			health.fallos++
+			console.warn(`[info64] ${candidate.key}: ${String(error)}`)
+			await step.sleep(`pausa partidas ${candidate.key}`, PAUSE)
+			return 'failed'
 		}
-		return { pending: pending.length, health }
+	}
+
+	/**
+	 * Los torneos que el calendario no enseña, con su salud (`sin-calendario`).
+	 * Lo que falle aquí, también la lista entera, es un fallo de esa salud: no
+	 * impide los totales ni toca la de la ventana. Devuelve cuántos ha leído.
+	 */
+	private async syncUncalendared(step: WorkflowStep, calendarKeys: string[], calendar: HealthCounts): Promise<number> {
+		const health = { ok: 0, fallos: 0, avisos: 0 }
+		let read = 0
+		try {
+			read = await this.readUncalendared(step, calendarKeys, calendar, health)
+		} catch (error) {
+			health.fallos++
+			console.warn(`[info64] sin calendario: ${String(error)}`)
+		}
+		await step.do('salud sin calendario', () => saveHealth(this.env.DB, 'sin-calendario', health))
+		return read
+	}
+
+	/**
+	 * Busca en la lista de la API (UNCALENDARED_PER_NIGHT) los que han empezado y
+	 * no están guardados, o siguen abiertos, como los del calendario
+	 * (selectPending). No relee los de esta noche (`calendarKeys`), los ya
+	 * descartados por su página ni los que llevan UNCALENDARED_MAX_NIGHTS noches
+	 * fallando, salvo que se hayan leído bien después (con keys: tienen
+	 * games_checked_at). La franja se mira antes de la lista y de cada torneo y,
+	 * si info64 deja de responder, para. Lanza si falla la lista. `calendar`, la
+	 * salud de la ventana de esta noche, y `health`, la de esta parte.
+	 */
+	private async readUncalendared(
+		step: WorkflowStep,
+		calendarKeys: string[],
+		calendar: HealthCounts,
+		health: HealthCounts
+	): Promise<number> {
+		const open = await step.do('franja sin calendario', async () => msUntilInfo64Hours(new Date()) === 0)
+		if (!open) return 0
+		const today = isoDate(new Date())
+		const listed = await this.listApiTournaments(step, today)
+		const pending = await step.do('sin calendario', async () => {
+			const state = await loadUncalendaredState(this.env.DB)
+			const skip = new Set([...calendarKeys, ...(await loadExcluded(this.env.DB, SOURCE)), ...state.descartados])
+			const candidates = listed.filter((c) => !skip.has(c.key))
+			const checked = await loadCheckedTournaments(
+				this.env.DB,
+				SOURCE,
+				candidates.map((c) => c.key)
+			)
+			const readSince = new Set(checked.filter((c) => c.gamesCheckedAt).map((c) => c.key))
+			const failing = (key: string) => (state.fallos[key] ?? 0) >= UNCALENDARED_MAX_NIGHTS && !readSince.has(key)
+			return selectUncalendared(
+				candidates.filter((c) => !failing(c.key)),
+				checked,
+				today,
+				UNCALENDARED_PER_NIGHT
+			)
+		})
+		console.log(`[info64] sin calendario: ${listed.length} en la API, ${pending.length} para leer`)
+
+		const night = { ok: [] as string[], skipped: [] as string[], failed: [] as string[] }
+		let failures = 0
+		for (const candidate of pending) {
+			const inHours = await step.do(`franja sin calendario ${candidate.key}`, async () => msUntilInfo64Hours(new Date()) === 0)
+			if (!inHours) break
+			const result = await this.syncCandidate(step, candidate, false, health, UNCALENDARED_STEP)
+			night[result].push(candidate.key)
+			failures = result === 'failed' ? failures + 1 : 0
+			if (failures === UNCALENDARED_MAX_FAILURES) {
+				console.warn(`[info64] sin calendario: ${failures} fallos seguidos, hasta ${candidate.key}; se para`)
+				break
+			}
+		}
+		const read = night.ok.length + night.skipped.length + night.failed.length
+		// Cortada por los fallos seguidos sin leer ninguno bien, y con la ventana del
+		// calendario también fallando: es info64 o el parser, no esos torneos.
+		const general =
+			failures === UNCALENDARED_MAX_FAILURES &&
+			night.ok.length + night.skipped.length === 0 &&
+			calendar.ok === 0 &&
+			calendar.fallos > 0
+		const counted = general ? { ...night, failed: [] } : night
+		if (read > 0) await step.do('sin calendario apuntados', () => saveUncalendaredState(this.env.DB, counted))
+		return read
+	}
+
+	/**
+	 * La lista de la API, página a página, con sólo los torneos que pueden leerse
+	 * (uncalendaredCandidates), una vez cada uno. Cada página empieza donde acaba
+	 * la anterior: si la API da menos de API_PAGE, no se salta ninguno. Lanza si
+	 * falla una página tras sus reintentos o si no acaba en API_MAX_PAGES.
+	 */
+	private async listApiTournaments(step: WorkflowStep, today: string): Promise<EventTournament[]> {
+		const found = new Map<string, EventTournament>()
+		let offset = 0
+		for (let page = 0; page < API_MAX_PAGES; page++) {
+			const from = offset
+			const result = await step.do(`api ${from}`, UNCALENDARED_STEP, () =>
+				failFast(async () => {
+					const list = parseApiTournaments(await fetchText(apiTournamentsUrl(from), API_HEADERS))
+					return { count: list.count, rows: list.rows, candidates: uncalendaredCandidates(list.tournaments, today) }
+				})
+			)
+			for (const candidate of result.candidates) if (!found.has(candidate.key)) found.set(candidate.key, candidate)
+			await step.sleep(`pausa api ${from}`, PAUSE)
+			offset += result.rows
+			if (offset >= result.count) return [...found.values()]
+			if (result.rows === 0) throw new Error(`info64: la lista de la API se acaba en ${offset} de ${result.count}`)
+		}
+		throw new Error(`info64: la lista de la API no acaba en ${API_MAX_PAGES} páginas`)
 	}
 
 	/**
@@ -551,10 +720,16 @@ export class Info64SyncWorkflow extends WorkflowEntrypoint<Env, Info64SyncParams
 	 * uno si falla tras sus reintentos o si una guarda no la deja guardar. Ni lo
 	 * uno ni lo otro impide leer las partidas.
 	 */
-	private async standingsStep(step: WorkflowStep, key: string, type: TournamentType, tournamentId: number): Promise<number> {
+	private async standingsStep(
+		step: WorkflowStep,
+		key: string,
+		type: TournamentType,
+		tournamentId: number,
+		config: WorkflowStepConfig = FETCH_STEP
+	): Promise<number> {
 		let avisos = 0
 		try {
-			const saved = await step.do(`clasificación ${key}`, FETCH_STEP, () =>
+			const saved = await step.do(`clasificación ${key}`, config, () =>
 				failFast(() => syncStandings(this.env.DB, tournamentId, key, type))
 			)
 			avisos = Number(!saved)
@@ -706,6 +881,45 @@ export function selectPending(
 		if (!state?.gamesCheckedAt || !end) return true
 		return state.gamesCheckedAt.slice(0, 10) < addDays(end, RECHECK_DAYS)
 	})
+}
+
+/**
+ * De una página de la lista de la API, los torneos que la diaria puede leer: con
+ * fecha, desde UNCALENDARED_FROM y ya empezados; ni de menores por el nombre y la
+ * fecha ni de las listas a mano, como los del calendario. Los sensibles y los
+ * descartados se quitan después, con la base (syncUncalendared).
+ */
+export function uncalendaredCandidates(tournaments: ApiTournament[], today: string): EventTournament[] {
+	return tournaments.flatMap((t): EventTournament[] => {
+		const start = t.startDate
+		if (!start || start < UNCALENDARED_FROM || start > today) return []
+		if (isMinorsTournament(t.name, start) || isListedMinors(SOURCE, t.key) || isListedCopy(t.key)) return []
+		return [{ key: t.key, type: t.type, name: t.name, firstRound: start, lastRound: t.endDate ?? start }]
+	})
+}
+
+/**
+ * Cuáles leer esta noche: los que no están guardados o siguen abiertos
+ * (selectPending), los más recientes primero, como mucho `limit`. Un guardado
+ * sin fecha de fin en la D1 toma la de la API: si no, contaría como abierto y se
+ * pediría todas las noches.
+ */
+export function selectUncalendared(
+	candidates: EventTournament[],
+	checked: CheckedTournament[],
+	today: string,
+	limit: number
+): EventTournament[] {
+	const ends = new Map(candidates.map((c) => [c.key, c.lastRound]))
+	const withEnd = checked.map((c) => ({ ...c, endDate: c.endDate ?? ends.get(c.key) ?? null }))
+	return selectPending(candidates, withEnd, today, false)
+		.sort((a, b) => b.firstRound.localeCompare(a.firstRound) || a.key.localeCompare(b.key))
+		.slice(0, limit)
+}
+
+/** Una página de la lista de torneos de la API de info64. */
+export function apiTournamentsUrl(offset: number): string {
+	return `${INFO64_URL}/api/3/tournaments?limit=${API_PAGE}&offset=${offset}`
 }
 
 /**

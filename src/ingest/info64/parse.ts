@@ -1,7 +1,8 @@
 // Extracción de datos de las páginas de info64.org.
 //
-// Se leen las páginas HTML de info64, no su API (docs/decisiones.md#api-de-info64),
-// con HTMLRewriter (el parser en streaming del runtime de Workers). Se piden siempre
+// Se leen las páginas HTML de info64 (docs/decisiones.md#api-de-info64), con
+// HTMLRewriter (el parser en streaming del runtime de Workers); de su API, sólo la
+// lista de torneos, para los que el calendario no enseña (parseApiTournaments). Se piden siempre
 // en inglés (sin ?hl=), así que los textos fijos ("from", "There are no games.") son
 // estables.
 import { plausibleFideId, plausibleRating } from '../../lib/chess/rating'
@@ -91,6 +92,49 @@ export function parseEvents(events: CalendarEvent[]): EventTournament[] {
 		})
 	}
 	return [...byKey.values()]
+}
+
+/** Un torneo de la lista de la API de info64 (/api/3/tournaments), con lo que se usa. */
+export interface ApiTournament {
+	/** Como en el calendario: "slug" o "team/slug". */
+	key: string
+	type: TournamentType
+	name: string
+	startDate: string | null
+	endDate: string | null
+}
+
+/**
+ * Una página de /api/3/tournaments: el total, cuántas filas trae (para pedir la
+ * siguiente donde acaba ésta) y sus torneos. Sólo se leen el slug, el nombre, si
+ * es por equipos y las fechas: del árbitro y lo demás, nada. Una fila sin slug
+ * válido se salta; una respuesta sin la forma de la API es un PageFormatError.
+ */
+export function parseApiTournaments(text: string): { count: number; rows: number; tournaments: ApiTournament[] } {
+	let body: { count?: unknown; results?: unknown }
+	try {
+		body = JSON.parse(text)
+	} catch {
+		throw new PageFormatError('info64: la lista de la API no es JSON')
+	}
+	if (!Number.isInteger(body?.count) || !Array.isArray(body.results)) {
+		throw new PageFormatError('info64: la lista de la API no trae count y results')
+	}
+	const tournaments = body.results.flatMap((row: Record<string, unknown>): ApiTournament[] => {
+		const slug = row?.slug
+		if (typeof slug !== 'string' || !/^[-a-zA-Z0-9_]+$/.test(slug)) return []
+		const team = row.team_tournament === true
+		return [
+			{
+				key: team ? `team/${slug}` : slug,
+				type: team ? 'team' : 'individual',
+				name: typeof row.name === 'string' ? clean(row.name) : slug,
+				startDate: validDate(typeof row.startdate === 'string' ? row.startdate : null),
+				endDate: validDate(typeof row.enddate === 'string' ? row.enddate : null)
+			}
+		]
+	})
+	return { count: body.count as number, rows: body.results.length, tournaments }
 }
 
 /** Siguiente ronda de un torneo individual según el calendario. */

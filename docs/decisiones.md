@@ -14,7 +14,7 @@ La historia, las medidas, los casos concretos y el detalle de cada página que s
 
 #### info64 sólo de madrugada
 
-- **info64 sólo de madrugada** (lo pidió su administración el 25-oct-2026: fuera de 00:00–06:00 puede responder 429). La diaria va a las 00:00 UTC, que es la 01:00 de Madrid en invierno y las 02:00 en verano, y tarda unos 20 minutos (unas 434 peticiones). Cualquier pasada de `INFO64_SYNC` lanzada a otra hora, también a mano o encadenada, espera a las 00:05 antes de pedir nada (`INFO64_HOURS`, `msUntilInfo64Hours`): una que empieza después de las 05:00, a la noche siguiente. Las pasadas de sólo emparejamientos de las 15:00 y las 22:00 se quitaron por eso.
+- **info64 sólo de madrugada** (lo pidió su administración el 25-oct-2026: fuera de 00:00–06:00 puede responder 429). La diaria va a las 00:00 UTC, que es la 01:00 de Madrid en invierno y las 02:00 en verano, y tarda unos 20 minutos (unas 434 peticiones); con los torneos sin calendario, algo más de una hora mientras quedan por leer (ver «Torneos sin calendario»). Cualquier pasada de `INFO64_SYNC` lanzada a otra hora, también a mano o encadenada, espera a las 00:05 antes de pedir nada (`INFO64_HOURS`, `msUntilInfo64Hours`): una que empieza después de las 05:00, a la noche siguiente. Las pasadas de sólo emparejamientos de las 15:00 y las 22:00 se quitaron por eso.
 
 #### Emparejamientos
 
@@ -803,10 +803,23 @@ Decidido el 5-nov-2026, leído sólo su esquema (https://info64.org/api/3/schema
 - **Se usaría para los encuentros por equipos, si una llamada de prueba, de madrugada, lo confirma:** `/api/3/orion/{orion_slug}/rounds/{number}/` da el marcador y cada tablero, y 566 de los 608 torneos por equipos no tienen partidas.
 - **`last_update`** evitaría releer lo que no cambia. De unos 104 torneos que se revisan cada noche, 56 ya han acabado y suponen unas 169 de unas 434 peticiones. Si cambia al subir un PGN, ahorraría de unas 110 a casi 170, según haya que pedirlo torneo a torneo o baste con la lista. En la web no se notaría, así que se hará sólo si su administración lo prefiere.
 - **Sus campos personales no se guardan,** entre ellos `birthdate`, `sex`, `email`, `captain`, los árbitros, `natrat1id` y el texto libre de `info`. Falta ver si vienen llenos. Una lectura con la API toma sólo los campos permitidos.
+- **Desde el 11-nov-2026 se lee su lista de torneos** (`/api/3/tournaments`), para los que el calendario no enseña (ver «Torneos sin calendario»). Lo demás sigue saliendo de las páginas.
 
 #### Calendario
 
 - Calendario: `/events.json?start=&end=`.
+
+#### Torneos sin calendario
+
+- **El calendario sólo da rondas con fecha.** Un torneo cuyas rondas no la tienen en info64 (vacía, o escrita a mano, como «10:30h») no sale en `/events.json`, y la ingesta no lo veía nunca. Se vio con tres de Vitoria, que se cargaron con `keys` el 9-nov-2026.
+- **Medido el 11-nov-2026 con la lista de la API** (31 peticiones, de madrugada): 15.499 torneos (14.201 individuales y 1.298 por equipos) y 8.335 guardados. Sin contar lo que se salta a propósito (4.865 de menores por el nombre, 89 sensibles, 4 repetidos, 113 sin empezar y 101 de antes de 2014), faltaban **1.996**: 1.780 acabados, 404 de 2025 y 361 de 2026, 288 por equipos. Ninguno de los 26 de octubre de 2025 salía en el calendario de ese mes.
+- **La diaria los busca en la lista** (`syncUncalendared`), lo último: después de los emparejamientos, que lee la web de la FADA a las 00:47 UTC, y de guardar la salud de la ventana y la de los emparejamientos.
+  - **La lista,** de 500 en 500 (`/api/3/tournaments?limit=…&offset=…`: unas 31 peticiones, a 1 por segundo), con `Accept: application/json`. `/vega/` y `/orion/` van de 10 en 10 y no admiten `page_size`: serían más de 1.500. Cada página empieza donde acaba la anterior, así que, si la API diera menos de 500, no se saltaría ninguno; un torneo que sale en dos páginas se lee una vez. De cada torneo se leen el slug, el nombre, si es por equipos y las fechas (`parseApiTournaments`); del árbitro y lo demás, nada.
+  - **Cuáles** (`uncalendaredCandidates`, `selectUncalendared`): empezados, desde el 1-ene-2014 (el primer día de la carga inicial), ni de menores ni de las listas a mano, ni sensibles, ni los del calendario de esa noche; y, como los del calendario, los que no están guardados o siguen abiertos (`selectPending`). Uno guardado sin fecha de fin en la D1 toma la de la API: si no, contaría como abierto todas las noches.
+  - **Como mucho 300 por noche, los más recientes primero** (`UNCALENDARED_PER_NIGHT`, decidido con Jorge): los nuevos entran al día siguiente y los que faltaban, en unas siete noches. Cada uno se lee como uno del calendario (página, plantilla, clasificación y partidas): 300 son unas 940 peticiones, y la diaria pasa de unos 20 minutos a algo más de una hora mientras quedan por leer. Por eso `pnpm run deploy` espera hora y media tras cada cron y una cadena de sólo grupo mira hasta las 02:00 UTC si la diaria ha acabado (`DAILY_WAIT_TRIES`).
+  - **`sync_state`, `sin_calendario`,** recuerda dos cosas. `descartados`: los que se leen y no se guardan (de menores por su página o por el rótulo de su pestaña: el nombre de la API no lo dice), para no pedirlos cada noche. `fallos`: las noches en que falla cada uno; tras 3 (`UNCALENDARED_MAX_NIGHTS`) no se vuelve a pedir, para que no gaste la noche ni tape a los demás, hasta que se lee bien con `keys` (queda con `games_checked_at` y vuelve a la pasada) o se quita de ahí. No cuenta la noche en que fallan los 5 primeros sin leer ninguno bien y también falla la ventana del calendario: es info64 o el parser, no esos torneos.
+  - **Se para** si sale de la franja (antes de la lista y de cada torneo, `msUntilInfo64Hours`) o tras 5 fallos seguidos. Sus pasos reintentan poco (como los del grupo, `GROUP_STEP`, con el tiempo de `FETCH_STEP`): con info64 caído, se para en minutos.
+  - **Su propia salud** (`salud.sin-calendario`, con `/api/estado`): si falla la lista, ese día no se lee ninguno y es un fallo de 1 entre 1, una alarma. Lo que falle aquí no impide los totales ni toca la salud de la ventana.
 
 #### Ranking inicial con FIDE ID
 

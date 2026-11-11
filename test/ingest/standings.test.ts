@@ -149,6 +149,8 @@ describe('INFO64_SYNC', () => {
 		])
 		pages = {
 			'events.json': events,
+			// La lista de la API, para los torneos sin calendario: aquí, vacía.
+			'api/3/tournaments': JSON.stringify({ count: 0, results: [] }),
 			[KEY]: `<h1>Open inventado</h1><table id="initial-ranking-table"><tbody>${ranking}</tbody></table>`,
 			[`${KEY}/standings`]: standingsHtml,
 			[`${KEY}/games`]: '<div class="well">There are no games.</div>',
