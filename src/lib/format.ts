@@ -19,12 +19,16 @@ export function formatMonth(iso: string): string {
 
 const roundDayFormat = new Intl.DateTimeFormat('es-ES', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' })
 
-/** Hora de una ronda ('YYYY-MM-DD HH:MM', ya en hora local) → "sáb, 24 oct, 16:00". */
+/**
+ * Hora de una ronda ('YYYY-MM-DD HH:MM', ya en hora local) → "sáb, 24 oct, 16:00".
+ * Las 00:00 son una ronda sin hora (así la da el calendario de info64 cuando
+ * el organizador no la dice): sólo el día.
+ */
 export function formatRoundTime(startsAt: string): string {
 	const date = new Date(`${startsAt.slice(0, 10)}T00:00:00Z`)
 	if (Number.isNaN(date.getTime())) return startsAt
 	const time = startsAt.slice(11, 16)
-	return time ? `${roundDayFormat.format(date)}, ${time}` : roundDayFormat.format(date)
+	return time && time !== '00:00' ? `${roundDayFormat.format(date)}, ${time}` : roundDayFormat.format(date)
 }
 
 /** Segundos de reloj → "4 min 30 s", "45 s"; desde 10 minutos, en minutos enteros ("49 min"). */

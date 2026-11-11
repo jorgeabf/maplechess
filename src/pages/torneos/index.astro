@@ -5,17 +5,25 @@ import Pagination from '../../components/Pagination.astro'
 import Segmented from '../../components/Segmented.astro'
 import Base from '../../layouts/Base.astro'
 import { madridDate } from '../../lib/dates'
-import { searchTournaments } from '../../lib/db/tournaments'
-import { formatDate, formatNumber, formatRange } from '../../lib/format'
-import { tournamentFilters, withParams } from '../../lib/params'
+import { searchPairedTournaments, searchTournaments } from '../../lib/db/tournaments'
+import { formatDate, formatNumber, formatRange, formatRoundTime } from '../../lib/format'
+import { TOURNAMENT_TABS, tournamentFilters, withParams } from '../../lib/params'
 
 const filters = tournamentFilters(Astro.url.searchParams)
-const result = await searchTournaments(env.DB, filters, madridDate(new Date()))
-// Pestañas: los ya empezados, por defecto, y los próximos, que no tienen
-// partidas: al pasar a ellos se quita «Sólo con partidas».
+const today = madridDate(new Date())
+// Los emparejados tienen su consulta y su tabla: la ronda, cuándo empieza y sus mesas.
+const paired = filters.when === 'paired' ? await searchPairedTournaments(env.DB, filters, today) : null
+const listed = paired ? null : await searchTournaments(env.DB, filters, today)
+const result = paired ?? listed!
+// Pestañas: los ya empezados, por defecto; los próximos, que no tienen
+// partidas, y los que tienen emparejada la próxima ronda: al pasar a ellos se
+// quita «Sólo con partidas». Los emparejados van sin recuento: contarlos
+// recorre pairings entera, y saldría en cada búsqueda de torneos.
+const tab = TOURNAMENT_TABS[filters.when]
 const tabs = [
-	{ id: '', label: 'En curso y terminados' },
-	{ id: 'proximos', label: `Próximos (${formatNumber(result.upcoming)})` }
+	{ id: TOURNAMENT_TABS.started, label: 'Ya empezados' },
+	{ id: TOURNAMENT_TABS.upcoming, label: `Próximos (${formatNumber(result.upcoming)})` },
+	{ id: TOURNAMENT_TABS.paired, label: 'Emparejados' }
 ]
 const tabHref = (id: string) => withParams(Astro.url, { cuando: id, p: null, ...(id ? { con_partidas: null } : {}) })
 // «Quitar filtros» deja el nombre o el lugar, y la pestaña.
@@ -35,12 +43,12 @@ const searchSummary = [
 <Base title={filters.q ? `Torneos: ${filters.q}` : 'Torneos'} section="torneos" noindex={Boolean(filters.q) || filtered}>
 	<h1>Torneos</h1>
 	<div class="when">
-		<Segmented navigation label="Torneos" options={tabs} current={filters.upcoming ? 'proximos' : ''} href={tabHref} />
+		<Segmented navigation label="Torneos" options={tabs} current={tab} href={tabHref} />
 		<a href="/torneos/campeones">Campeones de España</a>
 	</div>
 	<FiltrosPlegables label="Búsqueda" summary={searchSummary} fold={searchSummary.length > 0 && result.rows.length > 0}>
 		<form method="get" role="search" class="filters form-row">
-			{filters.upcoming && <input type="hidden" name="cuando" value="proximos" />}
+			{tab && <input type="hidden" name="cuando" value={tab} />}
 			<label class="grow">
 				Nombre o lugar
 				<input
@@ -71,7 +79,7 @@ const searchSummary = [
 				</select>
 			</label>
 			{
-				!filters.upcoming && (
+				filters.when === 'started' && (
 					<label class="check">
 						<input type="checkbox" name="con_partidas" value="1" checked={filters.withGames} />
 						Sólo con partidas
@@ -85,7 +93,42 @@ const searchSummary = [
 
 	{result.total > 0 && <Pagination page={result.page} pages={result.pages} total={result.total} noun={['torneo', 'torneos']} />}
 	{
-		result.rows.length > 0 ? (
+		paired ? (
+			paired.rows.length > 0 ? (
+				<div class="table-wrap stack">
+					<table class="data-table">
+						<thead>
+							<tr>
+								<th scope="col">Torneo</th>
+								<th scope="col" class="end">Ronda</th>
+								<th scope="col">Empieza</th>
+								<th scope="col">Lugar</th>
+								<th scope="col" class="end">Mesas</th>
+							</tr>
+						</thead>
+						<tbody>
+							{paired.rows.map((t) => (
+								<tr>
+									<td class="wrap">
+										<a href={`/torneos/${t.id}#proxima-ronda`}>{t.name}</a>
+									</td>
+									<td class="end num"><span class="cell-label" aria-hidden="true">Ronda </span>{t.round}</td>
+									<td class="num">{formatRoundTime(t.startsAt)}</td>
+									<td class="city">{t.city}</td>
+									<td class="end num"><span class="cell-label" aria-hidden="true">Mesas </span>{formatNumber(t.boards)}</td>
+								</tr>
+							))}
+						</tbody>
+					</table>
+				</div>
+			) : (
+				<p>
+					{paired.total === 0 && !filters.q && !filtered
+						? 'Ningún torneo tiene emparejada la próxima ronda.'
+						: 'No hay torneos con esos filtros.'}
+				</p>
+			)
+		) : listed!.rows.length > 0 ? (
 			<div class="table-wrap stack">
 				<table class="data-table">
 					<thead>
@@ -94,11 +137,11 @@ const searchSummary = [
 							<th scope="col">Fechas</th>
 							<th scope="col">Lugar</th>
 							<th scope="col" class="end">Jugadores</th>
-							{!filters.upcoming && <th scope="col" class="end">Partidas</th>}
+							{filters.when === 'started' && <th scope="col" class="end">Partidas</th>}
 						</tr>
 					</thead>
 					<tbody>
-						{result.rows.map((t) => (
+						{listed!.rows.map((t) => (
 							<tr>
 								<td class="wrap">
 									<a href={`/torneos/${t.id}`}>{t.name}</a>
@@ -113,7 +156,7 @@ const searchSummary = [
 								<td class="city">{t.city}</td>
 								{/* Apilada en el móvil (.stack): cada cifra lleva su rótulo, sólo si la hay. */}
 								<td class="end num">{t.players ? <><span class="cell-label" aria-hidden="true">Jugadores </span>{formatNumber(t.players)}</> : null}</td>
-								{!filters.upcoming && <td class="end num">{t.gamesCount ? <><span class="cell-label" aria-hidden="true">Partidas </span>{formatNumber(t.gamesCount)}</> : null}</td>}
+								{filters.when === 'started' && <td class="end num">{t.gamesCount ? <><span class="cell-label" aria-hidden="true">Partidas </span>{formatNumber(t.gamesCount)}</> : null}</td>}
 							</tr>
 						))}
 					</tbody>

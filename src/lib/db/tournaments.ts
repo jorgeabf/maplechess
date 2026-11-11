@@ -1,10 +1,11 @@
 // Consultas de torneos.
 import { isMinorsTournament } from '../../ingest/menores'
 import { looksSensitive } from '../../ingest/sensibles'
-import { madridYear } from '../dates'
+import { madridDateTime, madridYear } from '../dates'
 import { formatNumber } from '../format'
 import { tournamentTerms } from './fts'
 import { COUNT_LIMIT, countSql, offset, PAGE_SIZE, toPage, type Page } from './pagination'
+import { byRoundTime, pairedRoundsSql, type PairedRoundSummary } from './pairings'
 import { hasDossierSql, minorsBornSince } from './players'
 
 export interface TournamentRow {
@@ -30,11 +31,17 @@ export interface TournamentListRow extends TournamentRow {
 	players: number
 }
 
+/**
+ * La pestaña de /torneos: los que ya han empezado, en curso o terminados
+ * («Ya empezados»), los que aún no («Próximos») o los que tienen emparejada
+ * la próxima ronda («Emparejados», searchPairedTournaments).
+ */
+export type TournamentWhen = 'started' | 'upcoming' | 'paired'
+
 export interface TournamentFilters {
 	q: string
-	/** Los que aún no han empezado («Próximos»); si no, los ya empezados («En curso y terminados»). */
-	upcoming: boolean
-	/** Sólo torneos con partidas (no se aplica a los próximos). */
+	when: TournamentWhen
+	/** Sólo torneos con partidas (sólo en los ya empezados). */
 	withGames: boolean
 	from: string
 	to: string
@@ -96,9 +103,10 @@ function tournamentsWhere(f: Pick<TournamentFilters, 'q' | 'from' | 'to' | 'type
 }
 
 /**
- * Torneos ya empezados (los que empiezan `today` o antes) o, con `f.upcoming`,
- * los próximos. Da también cuántos próximos cumplen los filtros, para su
- * pestaña: son pocos (los anunciados), así que contarlos es barato.
+ * Torneos ya empezados (los que empiezan `today` o antes) o, en la pestaña
+ * «Próximos», los que aún no. Da también cuántos próximos cumplen los
+ * filtros, para su pestaña: son pocos (los anunciados), así que contarlos es
+ * barato. Los emparejados, con searchPairedTournaments.
  */
 export async function searchTournaments(
 	db: D1Database,
@@ -106,6 +114,7 @@ export async function searchTournaments(
 	today: string
 ): Promise<Page<TournamentListRow> & { upcoming: number }> {
 	const { where, params, p, fts, terms } = tournamentsWhere(f)
+	const upcomingTab = f.when === 'upcoming'
 	const filtered = where.length > 0 || f.withGames
 	const day = p(today)
 	const upcomingSql = `WHERE ${[...where, `t.start_date > ${day}`].join(' AND ')}`
@@ -117,7 +126,7 @@ export async function searchTournaments(
 	// andalucia» empieza por los Campeonatos de Andalucía. Sólo ordenan: qué
 	// torneos salen lo ha decidido el WHERE, así que no cuelan los de otro sitio.
 	const named = (terms?.places ?? []).map((place) => `(${fts(place.named)})`).join(' + ')
-	const byDate = f.upcoming ? SOONEST_FIRST : NEWEST_FIRST
+	const byDate = upcomingTab ? SOONEST_FIRST : NEWEST_FIRST
 
 	const statements = [
 		// Primero la página (los id) y después sus jugadores. Cuando hay que
@@ -127,7 +136,7 @@ export async function searchTournaments(
 		db
 			.prepare(
 				`SELECT ${COLUMNS}, ${PLAYERS}
-				FROM (SELECT t.id${named ? `, ${named} AS named` : ''} FROM tournaments t ${f.upcoming ? upcomingSql : startedSql}
+				FROM (SELECT t.id${named ? `, ${named} AS named` : ''} FROM tournaments t ${upcomingTab ? upcomingSql : startedSql}
 					ORDER BY ${named ? 'named DESC, ' : ''}${byDate} LIMIT ${PAGE_SIZE} OFFSET ${offset(f.page)}) AS page
 				JOIN tournaments t ON t.id = page.id
 				ORDER BY ${named ? 'page.named DESC, ' : ''}${byDate}`
@@ -138,7 +147,7 @@ export async function searchTournaments(
 	// Total de los empezados. Sin filtros, todos menos los próximos, con el
 	// total ya calculado: contarlos recorrería la tabla entera. (Si aún no hay
 	// totales, como recién creada la base, se cuentan todos.)
-	if (!f.upcoming) {
+	if (!upcomingTab) {
 		statements.push(
 			filtered
 				? db.prepare(`SELECT count(*) AS n FROM tournaments t ${startedSql}`).bind(...counted)
@@ -150,8 +159,52 @@ export async function searchTournaments(
 	const [rows, upcomingCount, startedCount] = await db.batch<TournamentListRow | { n: number }>(statements)
 	const count = (result: D1Result<TournamentListRow | { n: number }>) => (result.results[0] as { n: number }).n
 	const upcoming = count(upcomingCount)
-	const total = f.upcoming ? upcoming : filtered ? count(startedCount) : count(startedCount) - upcoming
+	const total = upcomingTab ? upcoming : filtered ? count(startedCount) : count(startedCount) - upcoming
 	return { ...toPage(rows.results as TournamentListRow[], total, f.page), upcoming }
+}
+
+/**
+ * La pestaña «Emparejados»: los torneos que cumplen los filtros y tienen
+ * emparejada la próxima ronda, que aún no ha empezado (`now`, en hora local),
+ * la más cercana primero, como en la portada (getPairedRounds). Parte de las
+ * rondas (pairedRoundsSql), que son pocas, y busca cada torneo por su clave
+ * primaria: se leen todas y se pagina aquí, sin recuento aparte.
+ *
+ * «Desde» y «Hasta» miran aquí el día de la ronda, que es la fecha que enseña
+ * la lista, y no las del torneo: uno del 17 de octubre al 28 de noviembre con
+ * la ronda el 14 saldría buscando desde el 15. Da también cuántos próximos
+ * cumplen los filtros, para su pestaña, con las fechas del torneo, como en las
+ * otras dos.
+ */
+export async function searchPairedTournaments(
+	db: D1Database,
+	f: TournamentFilters,
+	today: string,
+	now = madridDateTime(new Date())
+): Promise<Page<PairedRoundSummary> & { upcoming: number }> {
+	const paired = tournamentsWhere({ ...f, from: '', to: '' })
+	const rounds = pairedRoundsSql(paired.p(now))
+	if (f.from) paired.where.push(`substr(r.startsAt, 1, 10) >= ${paired.p(f.from)}`)
+	if (f.to) paired.where.push(`substr(r.startsAt, 1, 10) <= ${paired.p(f.to)}`)
+	const upcoming = tournamentsWhere(f)
+	const day = upcoming.p(today)
+	const [rows, upcomingCount] = await db.batch<PairedRoundSummary | { n: number }>([
+		db
+			.prepare(
+				`SELECT t.id, t.source_key AS slug, t.name, t.city, r.round, r.startsAt, r.boards
+				FROM ${rounds} r
+				CROSS JOIN tournaments t ON t.id = r.tournament_id
+				${paired.where.length > 0 ? `WHERE ${paired.where.join(' AND ')}` : ''}`
+			)
+			.bind(...paired.params),
+		db
+			.prepare(`SELECT count(*) AS n FROM tournaments t WHERE ${[...upcoming.where, `t.start_date > ${day}`].join(' AND ')}`)
+			.bind(...upcoming.params)
+	])
+	const all = (rows.results as PairedRoundSummary[]).sort(byRoundTime)
+	const start = offset(f.page)
+	const page = toPage(all.slice(start, start + PAGE_SIZE), all.length, f.page)
+	return { ...page, upcoming: (upcomingCount.results[0] as { n: number }).n }
 }
 
 /**
@@ -420,15 +473,22 @@ export async function getTournamentParticipants(
 	return results
 }
 
-/** Torneos recientes con partidas, para la portada. */
+/**
+ * Los últimos torneos con partidas jugados en España (los que tienen sitio,
+ * tournamentPlace), el límite en ?1. Sin el sitio salían sobre todo
+ * retransmisiones de lichess del extranjero, que traen sus partidas en
+ * directo: 36 de los 60 más recientes, el 11-nov-2026. El sitio va con `+`:
+ * así el planificador no puede ir por el índice parcial de la comunidad, que
+ * le obligaría a leer todos los torneos con sitio y ordenarlos, y recorre el
+ * de la fecha (100 filas para 8, en remoto).
+ */
+export const LATEST_WITH_GAMES_SQL = `SELECT ${COLUMNS} FROM tournaments t
+	WHERE t.games_count > 0 AND +t.comunidad IS NOT NULL
+	${TOURNAMENT_ORDER} LIMIT ?1`
+
+/** Los últimos torneos con partidas jugados en España, para la portada el día que no hay rondas emparejadas. */
 export async function latestTournamentsWithGames(db: D1Database, limit = 8): Promise<TournamentRow[]> {
-	const { results } = await db
-		.prepare(
-			`SELECT ${COLUMNS} FROM tournaments t WHERE t.games_count > 0
-			${TOURNAMENT_ORDER} LIMIT ?1`
-		)
-		.bind(limit)
-		.all<TournamentRow>()
+	const { results } = await db.prepare(LATEST_WITH_GAMES_SQL).bind(limit).all<TournamentRow>()
 	return results
 }
 

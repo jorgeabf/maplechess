@@ -9,6 +9,9 @@ import {
 	getTournamentParticipants,
 	groupLabels,
 	isIndexableTournament,
+	LATEST_WITH_GAMES_SQL,
+	latestTournamentsWithGames,
+	searchPairedTournaments,
 	searchTournaments,
 	tournamentSummary,
 	type TournamentFilters
@@ -113,7 +116,7 @@ describe('searchTournaments', () => {
 	const search = async (filters: Partial<TournamentFilters>) => {
 		const result = await searchTournaments(
 			db,
-			{ q: '', upcoming: false, withGames: false, from: '', to: '', type: null, page: 1, ...filters },
+			{ q: '', when: 'started', withGames: false, from: '', to: '', type: null, page: 1, ...filters },
 			TODAY
 		)
 		return { names: result.rows.map((t) => t.name), total: result.total, upcoming: result.upcoming }
@@ -134,12 +137,12 @@ describe('searchTournaments', () => {
 	})
 
 	it('los próximos, del más cercano al más lejano', async () => {
-		expect(await search({ upcoming: true })).toEqual({ names: ['Open Futuro', 'Open Lejano'], total: 2, upcoming: 2 })
+		expect(await search({ when: 'upcoming' })).toEqual({ names: ['Open Futuro', 'Open Lejano'], total: 2, upcoming: 2 })
 	})
 
 	it('los filtros cuentan en las dos pestañas', async () => {
 		expect(await search({ q: 'open' })).toEqual({ names: ['Open Pasado'], total: 1, upcoming: 2 })
-		expect(await search({ q: 'lejano', upcoming: true })).toEqual({ names: ['Open Lejano'], total: 1, upcoming: 1 })
+		expect(await search({ q: 'lejano', when: 'upcoming' })).toEqual({ names: ['Open Lejano'], total: 1, upcoming: 1 })
 		expect(await search({ to: '2026-11-15' })).toEqual({ names: ['Liga Hoy', 'Open Pasado'], total: 2, upcoming: 1 })
 	})
 
@@ -154,7 +157,7 @@ describe('searchTournaments', () => {
 		await replaceParticipations(db, otro, [player(1, 'Tres Inventado, C', null)])
 		const result = await searchTournaments(
 			db,
-			{ q: 'open', upcoming: false, withGames: false, from: '', to: '', type: null, page: 1 },
+			{ q: 'open', when: 'started', withGames: false, from: '', to: '', type: null, page: 1 },
 			TODAY
 		)
 		expect(result.rows.map((t) => [t.name, t.players])).toEqual([
@@ -166,12 +169,134 @@ describe('searchTournaments', () => {
 	it('la modalidad filtra las dos pestañas', async () => {
 		expect(await search({ type: 'team' })).toEqual({ names: ['Liga Hoy'], total: 1, upcoming: 0 })
 		expect(await search({ type: 'individual' })).toEqual({ names: ['Open Pasado'], total: 1, upcoming: 2 })
-		expect(await search({ type: 'individual', upcoming: true })).toEqual({
+		expect(await search({ type: 'individual', when: 'upcoming' })).toEqual({
 			names: ['Open Futuro', 'Open Lejano'],
 			total: 2,
 			upcoming: 2
 		})
-		expect(await search({ type: 'team', upcoming: true })).toEqual({ names: [], total: 0, upcoming: 0 })
+		expect(await search({ type: 'team', when: 'upcoming' })).toEqual({ names: [], total: 0, upcoming: 0 })
+	})
+})
+
+describe('searchPairedTournaments', () => {
+	const TODAY = '2026-10-20'
+	const NOW = '2026-10-20 12:00'
+	const filters: TournamentFilters = { q: '', when: 'paired', withGames: false, from: '', to: '', type: null, page: 1 }
+	/** Una ronda emparejada del torneo, con tantas mesas. */
+	const pair = (id: number, round: number, startsAt: string, boards: number) =>
+		db.batch(
+			Array.from({ length: boards }, (_, i) =>
+				db
+					.prepare(
+						`INSERT INTO pairings (tournament_id, round, board, starts_at, white_rank, white_name, black_rank, black_name)
+						VALUES (?1, ?2, ?3, ?4, ?3, 'Blancas, Una', ?3 + 50, 'Negras, Otra')`
+					)
+					.bind(id, round, i + 1, startsAt)
+			)
+		)
+
+	beforeEach(async () => {
+		await db.prepare('DELETE FROM pairings').run()
+	})
+
+	const names = async (changes: Partial<TournamentFilters>, now = NOW) =>
+		(await searchPairedTournaments(db, { ...filters, ...changes }, TODAY, now)).rows.map((t) => t.name)
+
+	/** Dos torneos largos con ronda emparejada (Gijón el 22 y Bilbao el 24), uno con la ronda empezada, uno sin ronda y uno próximo. */
+	async function load(): Promise<{ bilbao: number; gijon: number }> {
+		const bilbao = await tournament('Absoluto de Bizkaia', '2026-10-17', '2026-11-28', 'individual', 'Bilbao')
+		const gijon = await tournament('Asturias Primera', '2026-10-04', '2026-11-29', 'individual', 'Gijon')
+		const started = await tournament('Ronda Empezada', '2026-10-17', '2026-10-25')
+		await tournament('Sin Emparejar', '2026-10-17', '2026-10-25')
+		await tournament('Open Futuro', '2026-11-01', '2026-11-03')
+		await pair(bilbao, 2, '2026-10-24 16:00', 3)
+		await pair(gijon, 5, '2026-10-22 17:00', 2)
+		await pair(started, 4, '2026-10-20 10:00', 1)
+		return { bilbao, gijon }
+	}
+
+	it('los que tienen emparejada una ronda sin empezar, la más cercana primero', async () => {
+		const { bilbao, gijon } = await load()
+		const all = await searchPairedTournaments(db, filters, TODAY, NOW)
+		const round = (id: number, name: string, city: string, n: number, startsAt: string, boards: number) => ({
+			id,
+			slug: name,
+			name,
+			city,
+			round: n,
+			startsAt,
+			boards
+		})
+		expect(all.rows).toEqual([
+			round(gijon, 'Asturias Primera', 'Gijon', 5, '2026-10-22 17:00', 2),
+			round(bilbao, 'Absoluto de Bizkaia', 'Bilbao', 2, '2026-10-24 16:00', 3)
+		])
+		// El recuento de «Próximos» sigue saliendo: es el rótulo de su pestaña.
+		expect(all).toMatchObject({ total: 2, page: 1, pages: 1, upcoming: 1 })
+		// Empezada la ronda de Gijón, sólo queda la de Bilbao.
+		expect(await names({}, '2026-10-22 17:00')).toEqual(['Absoluto de Bizkaia'])
+	})
+
+	it('el nombre, el lugar y la modalidad filtran como en las otras pestañas', async () => {
+		await load()
+		const byCity = await searchPairedTournaments(db, { ...filters, q: 'gijon' }, TODAY, NOW)
+		expect(byCity.rows.map((t) => t.name)).toEqual(['Asturias Primera'])
+		expect(byCity).toMatchObject({ total: 1, upcoming: 0 })
+		// Una provincia: por el sitio del torneo, con sus parámetros antes que la hora.
+		expect(await names({ q: 'asturias' })).toEqual(['Asturias Primera'])
+		expect(await names({ q: 'bizkaia' })).toEqual(['Absoluto de Bizkaia'])
+		expect(await names({ type: 'individual' })).toEqual(['Asturias Primera', 'Absoluto de Bizkaia'])
+		// Sólo se leen los emparejamientos de los torneos individuales.
+		expect(await names({ type: 'team' })).toEqual([])
+	})
+
+	it('«Desde» y «Hasta» miran el día de la ronda, no las fechas del torneo', async () => {
+		await load()
+		// Los dos torneos duran hasta finales de noviembre: por sus fechas saldrían siempre.
+		expect(await names({ from: '2026-10-23' })).toEqual(['Absoluto de Bizkaia'])
+		expect(await names({ to: '2026-10-22' })).toEqual(['Asturias Primera'])
+		expect(await names({ to: '2026-10-21' })).toEqual([])
+		expect(await names({ from: '2026-10-22', to: '2026-10-24' })).toEqual(['Asturias Primera', 'Absoluto de Bizkaia'])
+		// Con un sitio y las dos fechas: varios parámetros antes y después de la hora.
+		expect(await names({ q: 'asturias', from: '2026-10-22', to: '2026-10-22' })).toEqual(['Asturias Primera'])
+		expect(await names({ q: 'asturias', from: '2026-10-23' })).toEqual([])
+		// Los próximos de la otra pestaña se siguen contando por las fechas del torneo.
+		const later = await searchPairedTournaments(db, { ...filters, from: '2026-11-02' }, TODAY, NOW)
+		expect(later).toMatchObject({ rows: [], total: 0, upcoming: 1 })
+	})
+
+	it('de 50 en 50, en el mismo orden', async () => {
+		for (let i = 1; i <= 52; i++) {
+			const n = String(i).padStart(2, '0')
+			await pair(await tournament(`Torneo ${n}`), 1, `2026-10-21 10:${n}`, 1)
+		}
+		const first = await searchPairedTournaments(db, filters, TODAY, NOW)
+		expect(first).toMatchObject({ total: 52, page: 1, pages: 2 })
+		expect(first.rows).toHaveLength(50)
+		expect([first.rows[0].name, first.rows[49].name]).toEqual(['Torneo 01', 'Torneo 50'])
+		expect(await names({ page: 2 })).toEqual(['Torneo 51', 'Torneo 52'])
+		expect(await names({ page: 3 })).toEqual([])
+	})
+})
+
+describe('latestTournamentsWithGames', () => {
+	it('sólo los jugados en España con partidas, del más reciente al más antiguo', async () => {
+		const madrid = await tournament('Open de Otoño', '2026-10-10', '2026-10-12', 'individual', 'Madrid')
+		const riga = await tournament('Rapid Memorial', '2026-10-17', '2026-10-18', 'individual', 'Riga (LAT)')
+		const gijon = await tournament('Torneo de Fiestas', '2026-10-01', '2026-10-03', 'individual', 'Gijon')
+		await tournament('Sin Partidas', '2026-10-18', '2026-10-19', 'individual', 'Bilbao')
+		await db.prepare('UPDATE tournaments SET games_count = 5 WHERE id IN (?1, ?2, ?3)').bind(madrid, riga, gijon).run()
+
+		expect((await latestTournamentsWithGames(db)).map((t) => t.name)).toEqual(['Open de Otoño', 'Torneo de Fiestas'])
+		expect((await latestTournamentsWithGames(db, 1)).map((t) => t.name)).toEqual(['Open de Otoño'])
+	})
+
+	it('recorre el índice de la fecha, sin ordenar ni ir por el de la comunidad', async () => {
+		const { results } = await db.prepare(`EXPLAIN QUERY PLAN ${LATEST_WITH_GAMES_SQL}`).bind(8).all<{ detail: string }>()
+		const plan = results.map((r) => r.detail).join(' | ')
+		expect(plan).toContain('tournaments_start_date')
+		expect(plan).not.toContain('tournaments_comunidad_start_date')
+		expect(plan).not.toContain('TEMP B-TREE')
 	})
 })
 
@@ -179,7 +304,7 @@ describe('searchTournaments por sitio', () => {
 	const search = async (q: string) => {
 		const result = await searchTournaments(
 			db,
-			{ q, upcoming: false, withGames: false, from: '', to: '', type: null, page: 1 },
+			{ q, when: 'started', withGames: false, from: '', to: '', type: null, page: 1 },
 			'2026-10-20'
 		)
 		return result.rows.map((t) => t.name).sort()
@@ -238,7 +363,7 @@ describe('searchTournaments: primero los que nombran el sitio', () => {
 	const search = async (q: string, upcoming = false) => {
 		const result = await searchTournaments(
 			db,
-			{ q, upcoming, withGames: false, from: '', to: '', type: null, page: 1 },
+			{ q, when: upcoming ? 'upcoming' : 'started', withGames: false, from: '', to: '', type: null, page: 1 },
 			'2026-10-20'
 		)
 		return result.rows.map((t) => t.name)
@@ -277,7 +402,7 @@ describe('searchTournaments: equivalencias en inglés', () => {
 	const search = async (q: string) => {
 		const result = await searchTournaments(
 			db,
-			{ q, upcoming: false, withGames: false, from: '', to: '', type: null, page: 1 },
+			{ q, when: 'started', withGames: false, from: '', to: '', type: null, page: 1 },
 			'2026-10-20'
 		)
 		return result.rows.map((t) => t.name).sort()
@@ -307,7 +432,7 @@ describe('searchTournaments: equivalencias en inglés', () => {
 describe('countTournamentsByName', () => {
 	const today = '2026-10-20'
 	const shown = async (q: string) =>
-		(await searchTournaments(db, { q, upcoming: false, withGames: false, from: '', to: '', type: null, page: 1 }, today)).total
+		(await searchTournaments(db, { q, when: 'started', withGames: false, from: '', to: '', type: null, page: 1 }, today)).total
 
 	beforeEach(async () => {
 		await tournament('Memorial Inventado Ficticio 2026', '2026-10-17', '2026-10-18', 'individual', 'Gijón')

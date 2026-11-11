@@ -2,11 +2,12 @@
 import { env } from 'cloudflare:workers'
 import ProximasPartidas from '../components/ProximasPartidas.astro'
 import Base from '../layouts/Base.astro'
-import { getUpcomingGames } from '../lib/db/pairings'
+import { getPairedRounds, getUpcomingGames } from '../lib/db/pairings'
 import { getPlayer } from '../lib/db/players'
 import { getTotals, latestTournamentsWithGames } from '../lib/db/tournaments'
-import { formatCount, formatGames, formatRange, givenName } from '../lib/format'
+import { formatCount, formatGames, formatNumber, formatRange, formatRoundTime, givenName } from '../lib/format'
 import { ME_COOKIE, resolveMe } from '../lib/me'
+import { TOURNAMENT_TABS } from '../lib/params'
 
 // Con la cookie yo, el saludo con tu nombre de pila en lugar de la pregunta,
 // que en una línea sólo cabe así (hasta 19 caracteres, el p99,9 de la lista
@@ -17,12 +18,18 @@ import { ME_COOKIE, resolveMe } from '../lib/me'
 // (retirado o inexistente), como sin la cookie: sin «Mi ficha», que daría un
 // 404, y con la nota de cómo decir quién eres.
 const me = resolveMe(null, Astro.cookies.get(ME_COOKIE)?.value).fideId
-const [totals, latest, upcoming, player] = await Promise.all([
+const [totals, rounds, upcoming, player] = await Promise.all([
 	getTotals(env.DB),
-	latestTournamentsWithGames(env.DB, 8),
+	getPairedRounds(env.DB),
 	me ? getUpcomingGames(env.DB, me) : [],
 	me ? getPlayer(env.DB, me) : null
 ])
+// Bajo el buscador, las rondas ya emparejadas que aún no han empezado, las más
+// cercanas: de ahí se va a la mesa y al dossier del rival. Las demás, en la
+// pestaña «Emparejados» de /torneos. Sólo el día que no hay ninguna, los
+// últimos torneos con partidas jugados en España.
+const SHOWN = 8
+const latest = rounds.length === 0 ? await latestTournamentsWithGames(env.DB, SHOWN) : []
 const given = player && givenName(player.name)
 // Lo que hay, en una línea: en el móvil, tres tarjetas ocupaban más que la entrada.
 const available = [
@@ -93,10 +100,37 @@ const available = [
 	</p>
 
 	{
+		rounds.length > 0 && (
+			<section>
+				<h2>Próximas rondas emparejadas</h2>
+				<ul class="cards">
+					{rounds.slice(0, SHOWN).map((r) => (
+						<li class="card">
+							<a href={`/torneos/${r.id}#proxima-ronda`}>{r.name}</a>
+							<span>
+								Ronda {r.round} · {formatRoundTime(r.startsAt)}
+							</span>
+							<span class="muted num">
+								{r.city && `${r.city} · `}
+								{formatCount(r.boards, 'mesa', 'mesas')}
+							</span>
+						</li>
+					))}
+				</ul>
+				{rounds.length > SHOWN && (
+					<p class="more">
+						<a href={`/torneos?cuando=${TOURNAMENT_TABS.paired}`}>Ver las {formatNumber(rounds.length)} rondas emparejadas</a>
+					</p>
+				)}
+			</section>
+		)
+	}
+
+	{
 		latest.length > 0 && (
 			<section>
 				<h2>Últimos torneos con partidas</h2>
-				<ul class="latest">
+				<ul class="cards">
 					{latest.map((t) => (
 						<li class="card">
 							<a href={`/torneos/${t.id}`}>{t.name}</a>
@@ -221,7 +255,7 @@ const available = [
 	}
 
 	/* min(100%, …): con la letra del navegador al 150 %, 18rem pasaban del ancho del móvil. */
-	.latest {
+	.cards {
 		display: grid;
 		grid-template-columns: repeat(auto-fill, minmax(min(100%, 18rem), 1fr));
 		gap: var(--space-4);
@@ -231,15 +265,20 @@ const available = [
 	}
 
 	/* Las tarjetas de una fila miden lo mismo: las líneas, arriba, sin repartirse el alto. */
-	.latest li {
+	.cards li {
 		display: grid;
 		align-content: start;
 		gap: var(--space-1);
 		font-size: var(--text-s);
 	}
 
-	.latest a {
+	.cards a {
 		font-size: var(--text-m);
 		font-weight: var(--weight-strong);
+	}
+
+	.more {
+		margin-block: var(--space-4) 0;
+		font-size: var(--text-s);
 	}
 </style>

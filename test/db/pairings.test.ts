@@ -288,13 +288,26 @@ describe('emparejamientos', () => {
 		it('una por torneo de info64, con su ronda, su hora y sus mesas, por hora; sin las empezadas', async () => {
 			await loadRound()
 			await loadOthers()
-			expect(await getPairedRounds(db, BEFORE)).toEqual([
-				{ slug: 'open-de-otono', round: 5, startsAt: '2026-10-22 17:00', boards: 3 },
-				{ slug: 'campeonato-absoluto-de-bizkaia-2026', round: 2, startsAt: '2026-10-24 16:00', boards: 7 }
-			])
-			expect(await getPairedRounds(db, '2026-10-22 17:00')).toEqual([
-				{ slug: 'campeonato-absoluto-de-bizkaia-2026', round: 2, startsAt: '2026-10-24 16:00', boards: 7 }
-			])
+			const bizkaia = {
+				id: expect.any(Number),
+				slug: 'campeonato-absoluto-de-bizkaia-2026',
+				name: NAME,
+				city: 'Bilbao',
+				round: 2,
+				startsAt: '2026-10-24 16:00',
+				boards: 7
+			}
+			const open = {
+				id: expect.any(Number),
+				slug: 'open-de-otono',
+				name: 'open-de-otono',
+				city: null,
+				round: 5,
+				startsAt: '2026-10-22 17:00',
+				boards: 3
+			}
+			expect(await getPairedRounds(db, BEFORE)).toEqual([open, bizkaia])
+			expect(await getPairedRounds(db, '2026-10-22 17:00')).toEqual([bizkaia])
 			expect(await getPairedRounds(db, '2026-10-24 16:00')).toEqual([])
 		})
 
@@ -310,5 +323,10 @@ describe('emparejamientos', () => {
 describe('formatRoundTime', () => {
 	it('da el día de la semana, la fecha y la hora', () => {
 		expect(formatRoundTime('2026-10-24 16:00')).toBe('sáb, 24 oct, 16:00')
+	})
+
+	it('a las 00:00, sólo el día: es una ronda sin hora', () => {
+		expect(formatRoundTime('2026-11-14 00:00')).toBe('sáb, 14 nov')
+		expect(formatRoundTime('2026-11-14 00:30')).toBe('sáb, 14 nov, 00:30')
 	})
 })

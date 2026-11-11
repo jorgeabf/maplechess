@@ -26,7 +26,10 @@ const html = (path, text, status = 200) => ({
 })
 
 const CHECKS = [
-	html('/', 'Últimos torneos con partidas'),
+	// La lista de bajo el buscador: su título cambia con los datos (las rondas emparejadas o, sin ninguna, los últimos torneos).
+	html('/', '<ul class="cards"'),
+	// Las rondas emparejadas, todas: unas 750 filas. Su consulta va antes de pintar: si falla, es un 500.
+	html('/torneos?cuando=emparejados', 'Emparejados'),
 	html('/jugadores', 'Ranking de España'),
 	html('/jugadores/2285525', '<title>David Anton Guijarro'),
 	html('/partidas/53051', '<visor-partida'),
