@@ -32,9 +32,9 @@ export interface TournamentListRow extends TournamentRow {
 }
 
 /**
- * La pestaña de /torneos: los ya empezados («En curso y terminados»), los que
- * aún no («Próximos») o los que tienen emparejada la próxima ronda
- * («Emparejados», searchPairedTournaments).
+ * La pestaña de /torneos: los que ya han empezado, en curso o terminados
+ * («Ya empezados»), los que aún no («Próximos») o los que tienen emparejada
+ * la próxima ronda («Emparejados», searchPairedTournaments).
  */
 export type TournamentWhen = 'started' | 'upcoming' | 'paired'
 

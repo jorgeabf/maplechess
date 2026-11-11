@@ -21,7 +21,7 @@ const result = paired ?? listed!
 // recorre pairings entera, y saldría en cada búsqueda de torneos.
 const tab = TOURNAMENT_TABS[filters.when]
 const tabs = [
-	{ id: TOURNAMENT_TABS.started, label: 'En curso y terminados' },
+	{ id: TOURNAMENT_TABS.started, label: 'Ya empezados' },
 	{ id: TOURNAMENT_TABS.upcoming, label: `Próximos (${formatNumber(result.upcoming)})` },
 	{ id: TOURNAMENT_TABS.paired, label: 'Emparejados' }
 ]
