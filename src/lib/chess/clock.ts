@@ -153,3 +153,23 @@ export function clockSummary(
 	summary.initial = median(initials)
 	return summary
 }
+
+/**
+ * El reloj como lo resume el dossier, sin mezclar ritmos: el de `chosen` o, sin
+ * él, el ritmo que más partidas con reloj tiene; `others`, los demás ritmos con
+ * reloj, sólo si no se ha elegido ninguno. Lo usan el dossier y el ejemplo de
+ * la portada, para que den las mismas cifras.
+ */
+export function dossierClock(
+	games: { clocks: string | null; timeClass: TimeClass | null; result: string; date: string | null }[],
+	color: Color,
+	chosen: TimeClass | null = null
+): { timeClass: TimeClass | null; others: { timeClass: TimeClass; games: number }[]; clock: ClockSummary } {
+	const classes = clockTimeClasses(games, color)
+	const timeClass = chosen ?? classes[0]?.timeClass ?? null
+	return {
+		timeClass,
+		others: chosen ? [] : classes.slice(1),
+		clock: clockSummary(timeClass ? games.filter((g) => g.timeClass === timeClass) : games, color)
+	}
+}

@@ -25,6 +25,7 @@ import { plausibleFideId, plausibleRating } from '../../lib/chess/rating'
 import { TIME_CLASS_LABEL } from '../../lib/chess/timecontrol'
 import { addDays, isoDate, validDate } from '../../lib/dates'
 import { saveHealth } from '../../lib/salud'
+import { refreshExampleStep } from '../ejemplo'
 import { buildGameRows, type TournamentContext } from '../games'
 import type { TournamentPlayer } from '../info64/parse'
 import { dailyInstanceId } from '../info64/sync'
@@ -221,7 +222,10 @@ export class LichessSyncWorkflow extends WorkflowEntrypoint<Env, LichessSyncPara
 				console.warn(`[lichess] ${candidate.id}: ${String(error)}`)
 			}
 		}
-		if (saved > 0) await step.do('totales', () => refreshTotals(db))
+		if (saved > 0) {
+			await step.do('totales', () => refreshTotals(db))
+			await refreshExampleStep(step, db, 'lichess')
+		}
 		if (daily) {
 			await step.do('fin', () => saveSyncState(db, LAST_RUN_KEY, event.timestamp.toISOString()))
 			// Sólo la diaria: una relectura a mano no debe tapar que falle (lib/salud.ts).

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { clockSummary, clockTimeClasses, gameClock, MIN_READINGS, sideReadings } from '../../src/lib/chess/clock'
+import { clockSummary, clockTimeClasses, dossierClock, gameClock, MIN_READINGS, sideReadings } from '../../src/lib/chess/clock'
 import { formatDuration } from '../../src/lib/format'
 
 /**
@@ -118,5 +118,30 @@ describe('formatDuration', () => {
 		expect(formatDuration(45)).toBe('45 s')
 		expect(formatDuration(120)).toBe('2 min')
 		expect(formatDuration(2970)).toBe('50 min')
+	})
+})
+
+describe('dossierClock', () => {
+	const game = (timeClass: 'standard' | 'blitz', troubled = false) => ({
+		clocks: clocks(troubled ? falling(40, 150) : steady(40), steady(40)),
+		timeClass,
+		result: '1-0',
+		date: '2026-10-01'
+	})
+	const games = [game('standard'), game('standard', true), game('standard'), game('blitz', true)]
+
+	it('sin ritmo elegido, el que más partidas con reloj tiene, y los demás aparte', () => {
+		const { timeClass, others, clock } = dossierClock(games, 'white')
+		expect(timeClass).toBe('standard')
+		expect(others).toEqual([{ timeClass: 'blitz', games: 1 }])
+		expect(clock).toEqual(clockSummary(games.slice(0, 3), 'white'))
+		expect(clock.trouble).toBe(1)
+	})
+
+	it('con un ritmo elegido, sólo ése y sin los demás', () => {
+		const { timeClass, others, clock } = dossierClock(games, 'white', 'blitz')
+		expect(timeClass).toBe('blitz')
+		expect(others).toEqual([])
+		expect(clock.games).toBe(1)
 	})
 })

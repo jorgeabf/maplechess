@@ -1,0 +1,55 @@
+---
+// Resultados según el ELO del rival (resultsByEloGap en lib/chess/dossier.ts),
+// sólo los grupos con partidas. La tabla del dossier y del ejemplo de la portada.
+import { ELO_GAP, type EloGap } from '../../lib/chess/dossier'
+import type { Stats } from '../../lib/chess/repertoire'
+import { formatNumber } from '../../lib/format'
+import ScoreBar from '../repertorio/ScoreBar.astro'
+
+interface Props {
+	byElo: Record<EloGap, Stats>
+	/** Tu propio dossier: «De tu nivel». */
+	own?: boolean
+}
+
+const { byElo, own = false } = Astro.props
+const eloGroups: { id: EloGap; label: string }[] = [
+	{ id: 'stronger', label: `Más fuerte (+${ELO_GAP})` },
+	{ id: 'similar', label: `De ${own ? 'tu' : 'su'} nivel (±${ELO_GAP})` },
+	{ id: 'weaker', label: `Más débil (−${ELO_GAP})` },
+	{ id: 'unknown', label: 'Sin ELO' }
+]
+---
+
+<table class="data-table">
+	<thead>
+		<tr>
+			<th scope="col">Rival</th>
+			<th scope="col" class="end">Partidas</th>
+			<th scope="col" class="end">Puntuación</th>
+		</tr>
+	</thead>
+	<tbody>
+		{
+			eloGroups
+				.filter((g) => byElo[g.id].games > 0)
+				.map((g) => (
+					<tr>
+						<th scope="row">{g.label}</th>
+						<td class="end num">{formatNumber(byElo[g.id].games)}</td>
+						<td class="end">
+							<ScoreBar stats={byElo[g.id]} />
+						</td>
+					</tr>
+				))
+		}
+	</tbody>
+</table>
+
+<style>
+	/* Las etiquetas de fila («De su nivel (±100)») parten línea antes que sacar
+	   la tabla de su tarjeta. */
+	th[scope='row'] {
+		white-space: normal;
+	}
+</style>

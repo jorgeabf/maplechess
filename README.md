@@ -94,6 +94,8 @@ El **dossier** es una página por color, para leer en el móvil o imprimir:
 - **Apuros de tiempo:** en las partidas que traen el reloj, en cuántas baja del 5 % de su tiempo, hacia qué jugada, cómo puntúa entonces y cuánto tiempo le queda tras la apertura. No mezcla ritmos.
 - **Tú contra tu rival:** con tu nombre o tu FIDE ID, vuestras partidas y, en cada una de sus líneas, dónde te desvías tú o dónde juega algo que nunca te han jugado. Si estáis emparejados, lo avisa y abre con tu color. Tu ID se recuerda en una cookie, la única del sitio; también se puede indicar con «Soy yo» en tu ficha. Va en un formulario, así que no queda en la dirección ni en los registros.
 
+En la portada, de ejemplo, tres trozos del dossier de uno de los primeros del ranking: su primera jugada con blancas, cómo puntúa según el rival y sus apuros de tiempo, con un enlace a su dossier entero. Se calcula cada noche.
+
 El **repertorio** es el árbol de aperturas del jugador con cada color. En cada posición se ve qué jugadas ha hecho él o sus rivales, cuántas veces, con qué resultado y cuándo fue la última. Junta las transposiciones, filtra por periodo (2 o 5 años), ritmo y ELO del rival, y se recorre pulsando en la tabla, moviendo las piezas en el tablero, escribiendo la jugada o pulsando una línea de Stockfish, con el motor en la posición y la descarga en PGN de las partidas que pasan por ella.
 
 De quien puede ser menor de edad (cumple 18 años o menos este año, según la lista FIDE) no hay dossier ni repertorio, y su ficha no sale en los buscadores. La [política de privacidad](https://maplechess.es/privacidad#menores) lo explica.

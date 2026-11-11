@@ -223,7 +223,7 @@ describe('Info64SyncWorkflow, torneos sin calendario', () => {
 		// Las salud de la ventana y la de los emparejamientos, antes de la lista.
 		expect(steps.indexOf('salud emparejamientos')).toBeLessThan(steps.indexOf('api 0'))
 		expect(steps.indexOf('salud')).toBeLessThan(steps.indexOf('api 0'))
-		expect(steps.slice(-3)).toEqual(['sin calendario apuntados', 'salud sin calendario', 'totales'])
+		expect(steps.slice(-4)).toEqual(['sin calendario apuntados', 'salud sin calendario', 'totales', 'ejemplo'])
 		expect(await health('info64')).toMatchObject({ ok: 1, fallos: 0 })
 		expect(await health('sin-calendario')).toMatchObject({ ok: 1, fallos: 0 })
 	})
@@ -315,7 +315,7 @@ describe('Info64SyncWorkflow, torneos sin calendario', () => {
 	it('si falla la lista, no lee ninguno: es una alarma, y la diaria sigue', async () => {
 		const { steps, read } = await run({ fail: (name) => name === 'api 0' })
 		expect(read).toEqual(['del-calendario'])
-		expect(steps.at(-1)).toBe('totales')
+		expect(steps.slice(-2)).toEqual(['totales', 'ejemplo'])
 		expect(await health('sin-calendario')).toMatchObject({ ok: 0, fallos: 1 })
 		expect(await health('info64')).toMatchObject({ ok: 1, fallos: 0 })
 	})

@@ -9,6 +9,7 @@ import { Unzip, UnzipInflate } from 'fflate'
 import { isoDate } from '../../lib/dates'
 import { FIDE_LIST_KEY } from '../../lib/db/players'
 import { saveHealth } from '../../lib/salud'
+import { refreshExampleStep } from '../ejemplo'
 import { fetchOk } from '../http'
 import { loadSyncState, refreshTotals, saveSyncState, upsertFidePlayers } from '../repo'
 import { FideListParser, FLAGS_LIST, PLAYERS_LIST, type ListFormat } from './parse'
@@ -55,6 +56,8 @@ export class FideSyncWorkflow extends WorkflowEntrypoint<Env, FideSyncParams> {
 			throw error
 		}
 		await step.do('totales', () => refreshTotals(db))
+		// El ranking ha cambiado: puede ser otro el n.º 1.
+		await refreshExampleStep(step, db, 'fide')
 		await step.do('salud', () => saveHealth(db, 'fide', { ok: 1, fallos: 0, avisos: 0 }))
 	}
 }
