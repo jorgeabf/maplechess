@@ -1410,6 +1410,38 @@ export async function saveGroupFailures(db: D1Database, attempted: string[], fai
 	if (JSON.stringify(next) !== JSON.stringify(stored)) await saveSyncState(db, GROUP_FAILURES_KEY, JSON.stringify(next))
 }
 
+/** sync_state: lo que la diaria recuerda de los torneos sin calendario. */
+export const UNCALENDARED_KEY = 'sin_calendario'
+
+export interface UncalendaredState {
+	/**
+	 * Los que ha leído y no ha guardado: de menores por su página o por el rótulo
+	 * de su pestaña. El nombre de la API no lo dice: sin esta lista, se volverían
+	 * a pedir cada noche.
+	 */
+	descartados: string[]
+	/** Noches seguidas en que ha fallado cada uno. Uno que lee bien sale de aquí. */
+	fallos: Record<string, number>
+}
+
+export async function loadUncalendaredState(db: D1Database): Promise<UncalendaredState> {
+	const state = JSON.parse((await loadSyncState(db, UNCALENDARED_KEY)) ?? '{}') as Partial<UncalendaredState>
+	return { descartados: state.descartados ?? [], fallos: state.fallos ?? {} }
+}
+
+/** Apunta lo de una noche: los descartados se suman, los fallos se cuentan y los leídos bien se olvidan. */
+export async function saveUncalendaredState(
+	db: D1Database,
+	night: { ok: string[]; skipped: string[]; failed: string[] }
+): Promise<void> {
+	const state = await loadUncalendaredState(db)
+	const fallos = { ...state.fallos }
+	for (const key of [...night.ok, ...night.skipped]) delete fallos[key]
+	for (const key of night.failed) fallos[key] = (fallos[key] ?? 0) + 1
+	const next: UncalendaredState = { descartados: [...new Set([...state.descartados, ...night.skipped])], fallos }
+	if (JSON.stringify(next) !== JSON.stringify(state)) await saveSyncState(db, UNCALENDARED_KEY, JSON.stringify(next))
+}
+
 // --- Retransmisiones de lichess (lichess/sync.ts) ---
 
 export type LichessTourStatus = 'sin_espanoles' | 'duplicado' | 'enlazado' | 'propio'

@@ -10,8 +10,12 @@
 // (la lista FIDE sin cambios). Mientras una pasada no haya escrito nunca, su
 // estado es «sin datos», que no es una alarma.
 
-/** Pasadas vigiladas. La diaria de info64 escribe también la de emparejamientos. */
-export const HEALTH_RUNS = ['info64', 'emparejamientos', 'lichess', 'fide'] as const
+/**
+ * Pasadas vigiladas. La diaria de info64 escribe también la de emparejamientos
+ * y la de los torneos sin calendario (info64/sync.ts, syncUncalendared): si falla
+ * la lista de la API, no lee ninguno, y así se ve.
+ */
+export const HEALTH_RUNS = ['info64', 'emparejamientos', 'sin-calendario', 'lichess', 'fide'] as const
 export type HealthRun = (typeof HEALTH_RUNS)[number]
 
 /** Recuento de una pasada. `ok` y `fallos` no se solapan; los avisos van aparte. */
@@ -44,12 +48,13 @@ const HOUR_MS = 3_600_000
  * intervalo de cada una, para que una pasada larga o el cambio de hora no den
  * una falsa alarma:
  * - info64 (00:00 UTC) y lichess (06:30 UTC): diarias;
- * - emparejamientos: los escribe la diaria de info64;
+ * - emparejamientos y torneos sin calendario: los escribe la diaria de info64;
  * - FIDE: el día 3 de cada mes.
  */
 export const MAX_AGE_MS: Record<HealthRun, number> = {
 	info64: 26 * HOUR_MS,
 	emparejamientos: 26 * HOUR_MS,
+	'sin-calendario': 26 * HOUR_MS,
 	lichess: 26 * HOUR_MS,
 	fide: 35 * 24 * HOUR_MS
 }

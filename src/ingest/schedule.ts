@@ -5,7 +5,7 @@ import { dailyInstanceId } from './info64/sync'
 
 // info64 pide que su robot le consulte sólo de madrugada (INFO64_HOURS en
 // info64/sync.ts). Los crons van en UTC: a las 00:00 UTC son la 01:00 en
-// invierno y las 02:00 en verano, y la diaria tarda unos 20 minutos. Trae
+// invierno y las 02:00 en verano, y la diaria tarda de 20 minutos a algo más de una hora. Trae
 // también los emparejamientos de los próximos días: los de la ronda de la
 // mañana se publican casi siempre la noche antes.
 export const CRON_INFO64_DAILY = '0 0 * * *'

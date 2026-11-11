@@ -64,6 +64,7 @@ describe('saveHealth y loadHealth', () => {
 		expect(await loadHealth(env.DB, now)).toEqual({
 			info64: 'ok',
 			emparejamientos: 'sin datos',
+			'sin-calendario': 'sin datos',
 			lichess: 'con fallos',
 			fide: 'sin datos'
 		})
@@ -84,7 +85,7 @@ describe('GET /api/estado', () => {
 		expect(cache).toBe('no-store')
 		expect(body).toEqual({
 			estado: 'ok',
-			pasadas: { info64: 'ok', emparejamientos: 'ok', lichess: 'ok', fide: 'ok' },
+			pasadas: { info64: 'ok', emparejamientos: 'ok', 'sin-calendario': 'ok', lichess: 'ok', fide: 'ok' },
 			sensibles: 'ok',
 			rectificaciones: 'ok'
 		})
@@ -98,7 +99,7 @@ describe('GET /api/estado', () => {
 		expect(cache).toBe('no-store')
 		expect(body).toEqual({
 			estado: 'fallo',
-			pasadas: { info64: 'caducada', emparejamientos: 'ok', lichess: 'ok', fide: 'ok' },
+			pasadas: { info64: 'caducada', emparejamientos: 'ok', 'sin-calendario': 'ok', lichess: 'ok', fide: 'ok' },
 			sensibles: 'ok',
 			rectificaciones: 'ok'
 		})
@@ -109,7 +110,13 @@ describe('GET /api/estado', () => {
 		expect(status).toBe(200)
 		expect(body).toEqual({
 			estado: 'ok',
-			pasadas: { info64: 'sin datos', emparejamientos: 'sin datos', lichess: 'sin datos', fide: 'sin datos' },
+			pasadas: {
+				info64: 'sin datos',
+				emparejamientos: 'sin datos',
+				'sin-calendario': 'sin datos',
+				lichess: 'sin datos',
+				fide: 'sin datos'
+			},
 			sensibles: 'ok',
 			rectificaciones: 'ok'
 		})
@@ -132,7 +139,7 @@ describe('GET /api/estado', () => {
 		expect(status).toBe(503)
 		expect(body).toEqual({
 			estado: 'fallo',
-			pasadas: { info64: 'ok', emparejamientos: 'ok', lichess: 'ok', fide: 'ok' },
+			pasadas: { info64: 'ok', emparejamientos: 'ok', 'sin-calendario': 'ok', lichess: 'ok', fide: 'ok' },
 			sensibles: 'por revisar',
 			rectificaciones: 'ok'
 		})
@@ -147,7 +154,7 @@ describe('GET /api/estado', () => {
 		expect(status).toBe(503)
 		expect(body).toEqual({
 			estado: 'fallo',
-			pasadas: { info64: 'ok', emparejamientos: 'ok', lichess: 'ok', fide: 'ok' },
+			pasadas: { info64: 'ok', emparejamientos: 'ok', 'sin-calendario': 'ok', lichess: 'ok', fide: 'ok' },
 			sensibles: 'ok',
 			rectificaciones: 'por revisar'
 		})

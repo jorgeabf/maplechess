@@ -1,8 +1,8 @@
 // Despliegue a producción: `pnpm run deploy` (sin «run», pnpm ejecuta su propio
 // «deploy»). Lo opera sólo Jorge. En orden:
 // 1. Se niega si el árbol tiene cambios, si HEAD no es origin/main tras un
-//    fetch o si es la ventana de un cron: la media hora que sigue a cada
-//    expresión de wrangler.jsonc, para no desplegar a mitad de una pasada.
+//    fetch o si es la ventana de un cron: la hora y media que sigue a cada expresión
+//    de wrangler.jsonc, para no desplegar a mitad de una pasada.
 // 2. copy-engine: public/engine/ no se versiona y `git pull` no ejecuta el
 //    postinstall.
 // 3. Apunta en despliegues.log (ignorado por git, como todos los .log) la
@@ -26,8 +26,11 @@ import { fileURLToPath } from 'node:url'
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const LOG = join(root, 'despliegues.log')
 const DATABASE = 'ajedrez'
-/** Minutos, desde que salta un cron, en los que no se despliega. */
-const CRON_WINDOW_MIN = 30
+/**
+ * Minutos, desde que salta un cron, en los que no se despliega. La diaria de
+ * info64 puede pasar de una hora con los torneos sin calendario (UNCALENDARED_PER_NIGHT).
+ */
+const CRON_WINDOW_MIN = 90
 
 function fail(message) {
 	console.error(`[desplegar] ${message}`)

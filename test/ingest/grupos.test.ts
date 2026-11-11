@@ -1,6 +1,6 @@
 import { env, type WorkflowEvent, type WorkflowStep } from 'cloudflare:workers'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { Info64SyncWorkflow, type GroupsSummary, type Info64SyncParams } from '../../src/ingest/info64/sync'
+import { DAILY_WAIT_TRIES, Info64SyncWorkflow, type GroupsSummary, type Info64SyncParams } from '../../src/ingest/info64/sync'
 import { GROUP_FAILURES_KEY, loadSyncState, replaceParticipations, upsertTournament } from '../../src/ingest/repo'
 import { LISTED_COPIES } from '../../src/ingest/repetidos'
 import { GamesReprocessWorkflow, rehearseLabels, type GamesReprocessParams } from '../../src/ingest/reprocess'
@@ -314,7 +314,7 @@ describe('INFO64_SYNC con groups: only', () => {
 		})
 
 		it('si no acaba, se para con un error y no pide nada', async () => {
-			await expect(run({}, running(Array(6).fill('running')))).rejects.toThrow(/no se ve acabada/)
+			await expect(run({}, running(Array(DAILY_WAIT_TRIES).fill('running')))).rejects.toThrow(/no se ve acabada/)
 			expect(requested).toEqual([])
 		})
 
@@ -328,7 +328,7 @@ describe('INFO64_SYNC con groups: only', () => {
 				}
 			}
 			await expect(run({}, missing)).rejects.toThrow(/no se ve acabada/)
-			expect(sleeps.filter(([name]) => name.startsWith('espera a la diaria'))).toHaveLength(6)
+			expect(sleeps.filter(([name]) => name.startsWith('espera a la diaria'))).toHaveLength(DAILY_WAIT_TRIES)
 			expect(requested).toEqual([])
 		})
 
@@ -337,7 +337,7 @@ describe('INFO64_SYNC con groups: only', () => {
 			pages[`${A}/schedule`] = 500
 			vi.setSystemTime(new Date('2026-11-08T03:59:30Z'))
 			pauseMs = 60_000
-			await expect(run({}, running(['complete', ...Array(6).fill('running')]))).rejects.toThrow(/no se ve acabada/)
+			await expect(run({}, running(['complete', ...Array(DAILY_WAIT_TRIES).fill('running')]))).rejects.toThrow(/no se ve acabada/)
 			expect(requested).toEqual([`${A}/schedule`])
 			expect(await failures()).toEqual([A])
 		})
