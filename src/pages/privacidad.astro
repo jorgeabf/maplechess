@@ -25,7 +25,7 @@ const title = Object.fromEntries(sections.map((s) => [s.id, s.title])) as Record
 	<article class="legal">
 		<header class="page-head">
 			<h1>Política de privacidad</h1>
-			<p class="page-meta">Actualizada el 7 de noviembre de 2026</p>
+			<p class="page-meta">Actualizada el 11 de noviembre de 2026</p>
 		</header>
 
 		{/* La capa básica del art. 11 LOPDGDD: con datos que no vienen del interesado, lleva también las categorías y las fuentes. */}
@@ -186,7 +186,10 @@ const title = Object.fromEntries(sections.map((s) => [s.id, s.title])) as Record
 					no se publican los torneos de hasta Sub&nbsp;14, los escolares ni los que dicen algo de la salud de quien juega o
 					que está en prisión;
 				</li>
-				<li>de nadie salen en los buscadores el repertorio, el dossier ni las descargas en PGN;</li>
+				<li>
+					de nadie salen en los buscadores el repertorio, el dossier ni las descargas en PGN, salvo el ejemplo de la
+					portada (ver <a href="#destinatarios">Quién los ve</a>);
+				</li>
 				<li>cualquiera puede pedir que se le retire, o sólo que no se vean su sexo y su año.</li>
 			</ul>
 
@@ -194,6 +197,12 @@ const title = Object.fromEntries(sections.map((s) => [s.id, s.title])) as Record
 			<p>
 				Cualquiera que visite la web, sin registrarse. Los buscadores muestran las fichas (salvo las de quien puede ser
 				menor), los torneos y las partidas, pero no el repertorio, el dossier ni las descargas.
+			</p>
+			<p>
+				La excepción es la portada: enseña como ejemplo tres resúmenes del dossier de uno de los diez primeros del
+				ranking, el primero que tenga partidas suficientes y no pueda ser menor (sus primeras jugadas con blancas, sus
+				resultados según el ELO del rival y sus apuros de tiempo). El dossier entero sigue fuera de los buscadores. Si
+				eres tú y prefieres no salir, escribe a <a href={mail}>{CONTACT}</a> y saldrá el siguiente.
 			</p>
 			<p>
 				El título y el ELO de cada jugador, y quién va primero en la clasificación de cada torneo (sin el nombre de quien
@@ -271,7 +280,8 @@ const title = Object.fromEntries(sections.map((s) => [s.id, s.title])) as Record
 				<p>
 					Puedes oponerte a que MapleChess publique tus datos y analice tus partidas (el repertorio y el dossier). Basta
 					con pedirlo: no tienes que explicar por qué, y es gratis. Si sólo quieres que no se vean tu sexo y tu año de
-					nacimiento, mira <a href="#derechos">{title.derechos}</a>.
+					nacimiento, mira <a href="#derechos">{title.derechos}</a>. Si sólo quieres no salir de ejemplo en la portada,
+					basta con pedirlo igual: sale el siguiente del ranking.
 				</p>
 				<dl class="def-list">
 					<div>

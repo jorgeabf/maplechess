@@ -14,24 +14,18 @@
 // suele apurarse de tiempo.
 import { env } from 'cloudflare:workers'
 import CabeceraJugador from '../../../components/CabeceraJugador.astro'
+import ApurosReloj from '../../../components/dossier/ApurosReloj.astro'
 import Cruce from '../../../components/dossier/Cruce.astro'
 import PrimeraJugada from '../../../components/dossier/PrimeraJugada.astro'
+import ResultadosRival from '../../../components/dossier/ResultadosRival.astro'
 import FiltrosPlegables from '../../../components/FiltrosPlegables.astro'
 import GamesTable from '../../../components/GamesTable.astro'
 import Icon from '../../../components/Icon.astro'
 import ScoreBar from '../../../components/repertorio/ScoreBar.astro'
 import Segmented from '../../../components/Segmented.astro'
 import Base from '../../../layouts/Base.astro'
-import { clockSummary, clockTimeClasses, MIN_CLOCK_GAMES, OPENING_MOVE, TROUBLE_SHARE } from '../../../lib/chess/clock'
-import {
-	crossReference,
-	ELO_GAP,
-	firstMoves,
-	mainLines,
-	recentChanges,
-	resultsByEloGap,
-	type EloGap
-} from '../../../lib/chess/dossier'
+import { dossierClock, MIN_CLOCK_GAMES } from '../../../lib/chess/clock'
+import { crossReference, firstMoves, mainLines, recentChanges, resultsByEloGap } from '../../../lib/chess/dossier'
 import { addGame, emptyStats, indexPositions, parseLine } from '../../../lib/chess/repertoire'
 import { TIME_CLASS_LABEL } from '../../../lib/chess/timecontrol'
 import { addYears, isoDate } from '../../../lib/dates'
@@ -44,11 +38,9 @@ import {
 	displayName,
 	formatCount,
 	formatDate,
-	formatDuration,
 	formatGames,
 	formatLine,
 	formatNumber,
-	formatPercent,
 	formatRoundTime
 } from '../../../lib/format'
 import {
@@ -139,15 +131,9 @@ for (const g of headToHead) addGame(headToHeadStats, g, g.whiteFideId === meId ?
 const changes = recentChanges(all, today)
 const byElo = resultsByEloGap(games, color)
 // El reloj, sin mezclar ritmos: el elegido arriba o, si no, el que más partidas con reloj tiene.
-const clockClasses = clockTimeClasses(games, color)
-const clockClass = timeClass ?? clockClasses[0]?.timeClass ?? null
-const otherClockClasses = timeClass ? [] : clockClasses.slice(1)
-const clock = clockSummary(clockClass ? games.filter((g) => g.timeClass === clockClass) : games, color)
+const { timeClass: clockClass, others: otherClockClasses, clock } = dossierClock(games, color, timeClass)
 const clockClassText = clockClass ? ` a ${TIME_CLASS_LABEL[clockClass].toLowerCase()}` : ''
 const listText = (items: string[]) => (items.length > 1 ? `${items.slice(0, -1).join(', ')} y ${items.at(-1)}` : (items[0] ?? ''))
-// El umbral en tiempo de reloj, redondeado: «4 min 30 s» y no «4 min 33 s».
-const troubleSeconds = (clock.initial ?? 0) * TROUBLE_SHARE
-const troubleLimit = `${formatDuration(troubleSeconds >= 60 ? Math.round(troubleSeconds / 15) * 15 : troubleSeconds)} (el ${formatPercent(TROUBLE_SHARE)} de ${own ? 'tu' : 'su'} tiempo)`
 const troublePhases = listText(
 	[
 		{ n: clock.phases.early, label: 'antes de la jugada 30' },
@@ -182,12 +168,6 @@ const colors: { id: RepertoireSearch['color']; label: string }[] = own
 		]
 // Lo elegido, para el resumen de los filtros plegados del móvil.
 const colorSummary = colors.find((c) => c.id === color)!.label.toLowerCase()
-const eloGroups: { id: EloGap; label: string }[] = [
-	{ id: 'stronger', label: `Más fuerte (+${ELO_GAP})` },
-	{ id: 'similar', label: `De ${own ? 'tu' : 'su'} nivel (±${ELO_GAP})` },
-	{ id: 'weaker', label: `Más débil (−${ELO_GAP})` },
-	{ id: 'unknown', label: 'Sin ELO' }
-]
 
 const name = displayName(player.name)
 const title = own ? 'Mi dossier' : `Preparar contra ${name}`
@@ -468,28 +448,7 @@ alternatives.push({
 
 				<section class="card rivals" aria-labelledby="rivales">
 					<h2 id="rivales">Resultados según el rival</h2>
-					<table class="data-table">
-						<thead>
-							<tr>
-								<th scope="col">Rival</th>
-								<th scope="col" class="end">Partidas</th>
-								<th scope="col" class="end">Puntuación</th>
-							</tr>
-						</thead>
-						<tbody>
-							{eloGroups
-								.filter((g) => byElo[g.id].games > 0)
-								.map((g) => (
-									<tr>
-										<th scope="row">{g.label}</th>
-										<td class="end num">{formatNumber(byElo[g.id].games)}</td>
-										<td class="end">
-											<ScoreBar stats={byElo[g.id]} />
-										</td>
-									</tr>
-								))}
-						</tbody>
-					</table>
+					<ResultadosRival byElo={byElo} own={own} />
 				</section>
 
 				<section class="card clock" aria-labelledby="reloj">
@@ -500,56 +459,22 @@ alternatives.push({
 							{clockClassText} traen el reloj en el PGN ({formatNumber(clock.games)}) para decir nada.
 						</p>
 					) : (
-						<div class="clock-body">
-							<div>
-								<p>
-									{clock.trouble === 0
-										? `${own ? 'No bajaste' : 'No bajó'} de ${troubleLimit} en ninguna de ${own ? 'tus' : 'sus'} ${formatGames(clock.games)}${clockClassText} con reloj.`
-										: `${own ? 'Bajaste' : 'Bajó'} de ${troubleLimit} en ${formatNumber(clock.trouble)} de ${own ? 'tus' : 'sus'} ${formatGames(clock.games)}${clockClassText} con reloj (${formatPercent(clock.trouble / clock.games)}); suele ser hacia la jugada ${clock.troubleMove}.`}
-									{clock.afterOpening !== null &&
-										` Tras ${OPENING_MOVE} jugadas ${own ? 'te' : 'le'} suele quedar el ${formatPercent(clock.afterOpening)} (${formatDuration((clock.initial ?? 0) * clock.afterOpening)}).`}
+						<ApurosReloj clock={clock} timeClass={clockClass} own={own}>
+							{clock.trouble > 0 && (
+								<p class="muted">
+									{own ? 'Empezaste' : 'Empezó'} {troublePhases}.
 								</p>
-								{clock.trouble > 0 && (
-									<p class="muted">
-										{own ? 'Empezaste' : 'Empezó'} {troublePhases}.
-									</p>
-								)}
-								{otherClockClasses.length > 0 && (
-									<p class="muted">
-										A otro ritmo, apurarse no es lo mismo: {own ? 'tienes' : 'tiene'} también{' '}
-										{listText(
-											otherClockClasses.map((c) => `${formatNumber(c.games)} a ${TIME_CLASS_LABEL[c.timeClass].toLowerCase()}`)
-										)}{' '}
-										con reloj. Elige el ritmo arriba.
-									</p>
-								)}
-							</div>
-							<table class="data-table">
-								<thead>
-									<tr>
-										<td />
-										<th scope="col" class="end">Partidas</th>
-										<th scope="col" class="end">Puntuación</th>
-									</tr>
-								</thead>
-								<tbody>
-									{[
-										{ label: 'Con apuro', stats: clock.withTrouble },
-										{ label: 'Sin apuro', stats: clock.withoutTrouble }
-									]
-										.filter((row) => row.stats.games > 0)
-										.map((row) => (
-											<tr>
-												<th scope="row">{row.label}</th>
-												<td class="end num">{formatNumber(row.stats.games)}</td>
-												<td class="end">
-													<ScoreBar stats={row.stats} />
-												</td>
-											</tr>
-										))}
-								</tbody>
-							</table>
-						</div>
+							)}
+							{otherClockClasses.length > 0 && (
+								<p class="muted">
+									A otro ritmo, apurarse no es lo mismo: {own ? 'tienes' : 'tiene'} también{' '}
+									{listText(
+										otherClockClasses.map((c) => `${formatNumber(c.games)} a ${TIME_CLASS_LABEL[c.timeClass].toLowerCase()}`)
+									)}{' '}
+									con reloj. Elige el ritmo arriba.
+								</p>
+							)}
+						</ApurosReloj>
 					)}
 				</section>
 
@@ -583,14 +508,6 @@ alternatives.push({
 	.clock,
 	.latest {
 		grid-column: 1 / -1;
-	}
-
-	/* A todo el ancho, el texto y la tabla van en dos columnas; en el móvil, una. */
-	.clock-body {
-		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr));
-		gap: var(--space-4);
-		align-items: start;
 	}
 
 	.dossier h3 {
@@ -706,12 +623,6 @@ alternatives.push({
 	.rivals,
 	.clock {
 		overflow-x: auto;
-	}
-
-	/* Las etiquetas de fila («De su nivel (±100)») parten línea antes que sacar
-	   la tabla de su tarjeta. */
-	.data-table th[scope='row'] {
-		white-space: normal;
 	}
 
 	@media print {

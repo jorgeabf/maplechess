@@ -20,7 +20,8 @@
 // Quita los FIDE ID inverosímiles (plausibleFideId, rating.ts): de los
 // participantes, de las partidas (columnas y cabeceras del PGN) y de los
 // emparejamientos. Y vacía la columna Fed. de los torneos en que no es la de
-// federaciones (federaciones.ts).
+// federaciones (federaciones.ts). Al final, recalcula el ejemplo de la
+// portada (ejemplo.ts), que sale de lo que acaba de cambiar.
 //
 //   POST /api/admin/sync  {"workflow":"reprocess"}
 //   wrangler workflows trigger games-reprocess '{}'
@@ -33,6 +34,7 @@
 //   wrangler workflows trigger games-reprocess '{"federaciones":true}' (sólo la columna Fed.)
 //   wrangler workflows trigger games-reprocess '{"fideIds":true}'      (sólo los FIDE ID inverosímiles)
 //   wrangler workflows trigger games-reprocess '{"ensayo":true}'       (sólo lista lo que harían los rótulos, sin tocar nada)
+//   wrangler workflows trigger games-reprocess '{"ejemplo":true}'      (sólo el ejemplo de la portada)
 import { WorkflowEntrypoint, type WorkflowEvent, type WorkflowStep } from 'cloudflare:workers'
 import { normalizeName } from '../lib/chess/names'
 import { parseGames } from '../lib/chess/pgn'
@@ -43,6 +45,7 @@ import { withoutHomonymYear } from '../lib/format'
 import { lichessUrl } from '../lib/licenses'
 import { tournamentPlace } from '../lib/lugares'
 import type { RelatedTournament } from '../lib/db/tournaments'
+import { refreshExampleStep } from './ejemplo'
 import { derivedColumns, type DerivedColumns } from './games'
 import { ownLabel } from './info64/parse'
 import { LICHESS_STEP, parseBroadcastUrl, resolveTourId, type BroadcastRef } from './lichess/api'
@@ -113,6 +116,8 @@ export interface GamesReprocessParams {
 	fideIds?: boolean
 	/** Sólo lista en su salida lo que harían los rótulos guardados (rehearseLabels), sin tocar nada: antes de borrar por ellos. */
 	ensayo?: boolean
+	/** Sólo el ejemplo de la portada (refreshExample), que los demás recalculan al final: tras desplegar, tras añadir a alguien a portada_excluidos o tras cargar Cantabria o SICHESS. */
+	ejemplo?: boolean
 }
 
 /** Partidas por paso: unos 2 MB de PGN y unas décimas de segundo de CPU. */
@@ -138,9 +143,18 @@ export interface ReprocessedBatch {
 export class GamesReprocessWorkflow extends WorkflowEntrypoint<Env, GamesReprocessParams> {
 	async run(event: WorkflowEvent<GamesReprocessParams>, step: WorkflowStep): Promise<LabelRehearsal | void> {
 		if (event.payload.ensayo) return step.do('ensayo de los rótulos', () => rehearseLabels(this.env.DB))
-		const { retiradas, ocultaciones, sensibles, menores, repetidos, lugares, federaciones, fideIds } = event.payload
+		const { retiradas, ocultaciones, sensibles, menores, repetidos, lugares, federaciones, fideIds, ejemplo } =
+			event.payload
 		const all =
-			!retiradas && !ocultaciones && !sensibles && !menores && !repetidos && !lugares && !federaciones && !fideIds
+			!retiradas &&
+			!ocultaciones &&
+			!sensibles &&
+			!menores &&
+			!repetidos &&
+			!lugares &&
+			!federaciones &&
+			!fideIds &&
+			!ejemplo
 		// Lo primero: las partidas de los torneos borrados ya no se recorren.
 		if (all || sensibles) {
 			// Puede preguntar a lichess de qué torneo es una ronda: con sus reintentos.
@@ -200,6 +214,7 @@ export class GamesReprocessWorkflow extends WorkflowEntrypoint<Env, GamesReproce
 			const hidden = await step.do('ocultaciones', () => applyHidden(this.env.DB))
 			console.log(`[reprocess] ocultaciones: ${JSON.stringify(hidden)}`)
 		}
+		await refreshExampleStep(step, this.env.DB, 'reprocess')
 	}
 }
 

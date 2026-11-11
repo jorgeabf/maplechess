@@ -1,0 +1,84 @@
+---
+// Apuros de tiempo de un ritmo (clockSummary en lib/chess/clock.ts): en cuántas
+// partidas baja del 5 % de su tiempo y hacia qué jugada, cuánto le queda tras la
+// apertura y cómo le va con apuro y sin él. Lo usan el dossier, que pone en el
+// hueco cuándo empieza el apuro y sus otros ritmos, y el ejemplo de la portada.
+// Sólo con MIN_CLOCK_GAMES partidas con reloj o más.
+import { OPENING_MOVE, TROUBLE_SHARE, type ClockSummary } from '../../lib/chess/clock'
+import { TIME_CLASS_LABEL, type TimeClass } from '../../lib/chess/timecontrol'
+import { formatDuration, formatGames, formatNumber, formatPercent } from '../../lib/format'
+import ScoreBar from '../repertorio/ScoreBar.astro'
+
+interface Props {
+	clock: ClockSummary
+	/** Ritmo de las partidas resumidas; null si no se sabe. */
+	timeClass: TimeClass | null
+	/** Tu propio dossier: los textos te hablan a ti. */
+	own?: boolean
+}
+
+const { clock, timeClass, own = false } = Astro.props
+const clockClassText = timeClass ? ` a ${TIME_CLASS_LABEL[timeClass].toLowerCase()}` : ''
+// El umbral en tiempo de reloj, redondeado: «4 min 30 s» y no «4 min 33 s».
+const troubleSeconds = (clock.initial ?? 0) * TROUBLE_SHARE
+const troubleLimit = `${formatDuration(troubleSeconds >= 60 ? Math.round(troubleSeconds / 15) * 15 : troubleSeconds)} (el ${formatPercent(TROUBLE_SHARE)} de ${own ? 'tu' : 'su'} tiempo)`
+---
+
+<div class="clock-body">
+	<div>
+		<p>
+			{
+				clock.trouble === 0
+					? `${own ? 'No bajaste' : 'No bajó'} de ${troubleLimit} en ninguna de ${own ? 'tus' : 'sus'} ${formatGames(clock.games)}${clockClassText} con reloj.`
+					: `${own ? 'Bajaste' : 'Bajó'} de ${troubleLimit} en ${formatNumber(clock.trouble)} de ${own ? 'tus' : 'sus'} ${formatGames(clock.games)}${clockClassText} con reloj (${formatPercent(clock.trouble / clock.games)}); suele ser hacia la jugada ${clock.troubleMove}.`
+			}
+			{
+				clock.afterOpening !== null &&
+					` Tras ${OPENING_MOVE} jugadas ${own ? 'te' : 'le'} suele quedar el ${formatPercent(clock.afterOpening)} (${formatDuration((clock.initial ?? 0) * clock.afterOpening)}).`
+			}
+		</p>
+		<slot />
+	</div>
+	<table class="data-table">
+		<thead>
+			<tr>
+				<td></td>
+				<th scope="col" class="end">Partidas</th>
+				<th scope="col" class="end">Puntuación</th>
+			</tr>
+		</thead>
+		<tbody>
+			{
+				[
+					{ label: 'Con apuro', stats: clock.withTrouble },
+					{ label: 'Sin apuro', stats: clock.withoutTrouble }
+				]
+					.filter((row) => row.stats.games > 0)
+					.map((row) => (
+						<tr>
+							<th scope="row">{row.label}</th>
+							<td class="end num">{formatNumber(row.stats.games)}</td>
+							<td class="end">
+								<ScoreBar stats={row.stats} />
+							</td>
+						</tr>
+					))
+			}
+		</tbody>
+	</table>
+</div>
+
+<style>
+	/* A todo el ancho, el texto y la tabla van en dos columnas; estrecho, una. */
+	.clock-body {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr));
+		gap: var(--space-4);
+		align-items: start;
+	}
+
+	/* Las etiquetas de fila parten línea antes que sacar la tabla de su tarjeta. */
+	th[scope='row'] {
+		white-space: normal;
+	}
+</style>

@@ -1,13 +1,25 @@
 ---
 import { env } from 'cloudflare:workers'
+import ApurosReloj from '../components/dossier/ApurosReloj.astro'
+import PrimeraJugada from '../components/dossier/PrimeraJugada.astro'
+import ResultadosRival from '../components/dossier/ResultadosRival.astro'
 import ProximasPartidas from '../components/ProximasPartidas.astro'
 import Base from '../layouts/Base.astro'
+import { getExample } from '../lib/db/ejemplo'
 import { getPairedRounds, getUpcomingGames } from '../lib/db/pairings'
 import { getPlayer } from '../lib/db/players'
 import { getTotals, latestTournamentsWithGames } from '../lib/db/tournaments'
-import { formatCount, formatGames, formatNumber, formatRange, formatRoundTime, givenName } from '../lib/format'
+import {
+	displayName,
+	formatCount,
+	formatGames,
+	formatNumber,
+	formatRange,
+	formatRoundTime,
+	givenName
+} from '../lib/format'
 import { ME_COOKIE, resolveMe } from '../lib/me'
-import { TOURNAMENT_TABS } from '../lib/params'
+import { dossierHref, TOURNAMENT_TABS, withParams } from '../lib/params'
 
 // Con la cookie yo, el saludo con tu nombre de pila en lugar de la pregunta,
 // que en una línea sólo cabe así (hasta 19 caracteres, el p99,9 de la lista
@@ -18,17 +30,22 @@ import { TOURNAMENT_TABS } from '../lib/params'
 // (retirado o inexistente), como sin la cookie: sin «Mi ficha», que daría un
 // 404, y con la nota de cómo decir quién eres.
 const me = resolveMe(null, Astro.cookies.get(ME_COOKIE)?.value).fideId
-const [totals, rounds, upcoming, player] = await Promise.all([
+const [totals, rounds, upcoming, player, stored] = await Promise.all([
 	getTotals(env.DB),
 	getPairedRounds(env.DB),
 	me ? getUpcomingGames(env.DB, me) : [],
-	me ? getPlayer(env.DB, me) : null
+	me ? getPlayer(env.DB, me) : null,
+	getExample(env.DB)
 ])
-// Bajo el buscador, las rondas ya emparejadas que aún no han empezado, las más
-// cercanas: de ahí se va a la mesa y al dossier del rival. Las demás, en la
-// pestaña «Emparejados» de /torneos. Sólo el día que no hay ninguna, los
-// últimos torneos con partidas jugados en España.
-const SHOWN = 8
+// Bajo el buscador, un ejemplo con tres trozos del dossier de uno de los
+// primeros del ranking, calculado de noche (lib/db/ejemplo.ts). Es una
+// presentación: como la frase de arriba, no sale si la web ya sabe quién eres.
+const example = player ? null : stored
+// Debajo, las rondas ya emparejadas que aún no han empezado, las más cercanas:
+// de ahí se va a la mesa y al dossier del rival. Seis llenan las filas con una,
+// dos y tres columnas. Las demás, en la pestaña «Emparejados» de /torneos. Sólo
+// el día que no hay ninguna, los últimos torneos con partidas jugados en España.
+const SHOWN = 6
 const latest = rounds.length === 0 ? await latestTournamentsWithGames(env.DB, SHOWN) : []
 const given = player && givenName(player.name)
 // Lo que hay, en una línea: en el móvil, tres tarjetas ocupaban más que la entrada.
@@ -98,6 +115,43 @@ const available = [
 			))
 		}
 	</p>
+
+	{/*
+		Las tarjetas son las del dossier sin filtros, con sus partidas con blancas: las
+		mismas cifras que enseña el dossier al abrirlo con el enlace de debajo.
+	*/}
+	{
+		example && (
+			<section aria-labelledby="ejemplo">
+				<h2 id="ejemplo">Un ejemplo: el n.º {example.rank} de España</h2>
+				<div class="example">
+					<section class="card" aria-labelledby="ejemplo-blancas">
+						<h3 id="ejemplo-blancas">Qué juega con blancas</h3>
+						<PrimeraJugada
+							summary={example.first}
+							color="white"
+							href={(moves) =>
+								withParams(new URL(`/jugadores/${example.fideId}/repertorio`, Astro.url), { jugadas: moves.join(' ') })
+							}
+						/>
+					</section>
+					<section class="card" aria-labelledby="ejemplo-rival">
+						<h3 id="ejemplo-rival">Cómo le va según el rival</h3>
+						<ResultadosRival byElo={example.byElo} />
+					</section>
+					<section class="card" aria-labelledby="ejemplo-reloj">
+						<h3 id="ejemplo-reloj">Si se apura con el reloj</h3>
+						<ApurosReloj clock={example.clock} timeClass={example.timeClass} />
+					</section>
+				</div>
+				<p class="more">
+					<a href={dossierHref(example.fideId, 'white')} rel="nofollow">
+						Ver el dossier de {displayName(example.name)}
+					</a>
+				</p>
+			</section>
+		)
+	}
 
 	{
 		rounds.length > 0 && (
@@ -280,5 +334,23 @@ const available = [
 	.more {
 		margin-block: var(--space-4) 0;
 		font-size: var(--text-s);
+	}
+
+	/*
+	 * Las tres tarjetas del ejemplo caben en fila desde el mismo ancho que tres
+	 * rondas (18rem cada una y los huecos), y entonces miden lo mismo que ellas.
+	 * Con dos por fila, la tercera ocupa la fila entera: en una rejilla se
+	 * quedaría sola, a media anchura. Las tablas piden unos 255 px: la que no
+	 * cabe se desplaza dentro de su tarjeta, como en el dossier.
+	 */
+	.example {
+		display: flex;
+		flex-wrap: wrap;
+		gap: var(--space-4);
+	}
+
+	.example > .card {
+		flex: 1 1 min(100%, 18rem);
+		overflow-x: auto;
 	}
 </style>

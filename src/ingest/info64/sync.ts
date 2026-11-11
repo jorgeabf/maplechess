@@ -9,6 +9,7 @@ import { NonRetryableError } from 'cloudflare:workflows'
 import { eventHeaders, parseGames, type ParsedGame } from '../../lib/chess/pgn'
 import { addDays, endOfMonth, isoDate, madridDateTime, validDate } from '../../lib/dates'
 import { saveHealth, type HealthCounts } from '../../lib/salud'
+import { refreshExampleStep } from '../ejemplo'
 import { buildGameRows, type Participant } from '../games'
 import { fetchText, HttpError } from '../http'
 import { fetchBroadcastPgn, gamesOfTournament, LICHESS_STEP, parseBroadcastUrl, resolveTourId } from '../lichess/api'
@@ -316,7 +317,10 @@ export class Info64SyncWorkflow extends WorkflowEntrypoint<Env, Info64SyncParams
 				// Con su salud: lo que falle aquí no toca la de la ventana.
 				const uncalendared = daily ? await this.syncUncalendared(step, tournaments.keys, tournaments.health) : 0
 				const changed = (tournaments?.pending ?? 0) + (upcoming?.added ?? 0) + uncalendared
-				if (changed > 0) await step.do('totales', () => refreshTotals(db))
+				if (changed > 0) {
+					await step.do('totales', () => refreshTotals(db))
+					await refreshExampleStep(step, db, 'info64')
+				}
 			}
 		}
 
