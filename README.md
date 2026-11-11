@@ -50,7 +50,7 @@ Saber contra quién te toca en la próxima ronda, ver qué aperturas juega y dó
   </picture>
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/capturas/dossier-oscuro.webp">
-    <img src="docs/capturas/dossier-claro.webp" width="260" alt="El dossier en el móvil: su primera jugada con blancas, con el porcentaje y la puntuación de cada una, y sus líneas principales">
+    <img src="docs/capturas/dossier-claro.webp" width="260" alt="El dossier en el móvil: su primera jugada con negras, con el porcentaje y la puntuación contra cada primera jugada de las blancas y lo que responde a cada una">
   </picture>
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/capturas/visor-movil-oscuro.webp">
