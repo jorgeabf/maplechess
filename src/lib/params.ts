@@ -208,13 +208,17 @@ export function boardColor(params: URLSearchParams): 'white' | 'black' | null {
 	return value === 'white' || value === 'black' ? value : null
 }
 
+/** Valor de `cuando` de cada pestaña de /torneos; la de los ya empezados no lo lleva. */
+export const TOURNAMENT_TABS = { started: '', upcoming: 'proximos', paired: 'emparejados' } as const
+
 export function tournamentFilters(params: URLSearchParams): TournamentFilters {
-	const upcoming = params.get('cuando') === 'proximos'
+	const tab = params.get('cuando')
+	const when = tab === TOURNAMENT_TABS.upcoming ? 'upcoming' : tab === TOURNAMENT_TABS.paired ? 'paired' : 'started'
 	return {
 		q: text(params, 'q'),
-		upcoming,
-		// Los que aún no han empezado no tienen partidas.
-		withGames: !upcoming && params.get('con_partidas') === '1',
+		when,
+		// Los que aún no han empezado no tienen partidas, y en los emparejados no se filtra por ellas.
+		withGames: when === 'started' && params.get('con_partidas') === '1',
 		from: isoDay(params, 'desde'),
 		to: isoDay(params, 'hasta'),
 		type: tournamentType(params),

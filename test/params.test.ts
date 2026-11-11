@@ -159,11 +159,13 @@ describe('boardColor', () => {
 })
 
 describe('tournamentFilters', () => {
-	it('«Próximos» con cuando=proximos, y entonces sin «Sólo con partidas»', () => {
+	it('«Próximos» con cuando=proximos y «Emparejados» con cuando=emparejados, y entonces sin «Sólo con partidas»', () => {
 		const filters = (query: string) => tournamentFilters(new URLSearchParams(query))
-		expect(filters('con_partidas=1')).toMatchObject({ upcoming: false, withGames: true })
-		expect(filters('cuando=proximos&con_partidas=1')).toMatchObject({ upcoming: true, withGames: false })
-		expect(filters('cuando=otro')).toMatchObject({ upcoming: false })
+		expect(filters('con_partidas=1')).toMatchObject({ when: 'started', withGames: true })
+		expect(filters('cuando=proximos&con_partidas=1')).toMatchObject({ when: 'upcoming', withGames: false })
+		expect(filters('cuando=emparejados&con_partidas=1')).toMatchObject({ when: 'paired', withGames: false })
+		expect(filters('cuando=otro')).toMatchObject({ when: 'started' })
+		expect(filters('cuando=')).toMatchObject({ when: 'started' })
 	})
 
 	it('la modalidad, individual o por equipos; vacía o desconocida, las dos', () => {

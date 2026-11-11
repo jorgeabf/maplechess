@@ -74,8 +74,9 @@ Saber contra quién te toca en la próxima ronda, ver qué aperturas juega y dó
 
 ### Próximas partidas
 
-info64 publica los emparejamientos antes de cada ronda. La web los lee varias veces al día y enlaza cada partida con la preparación del rival:
+info64 publica los emparejamientos antes de cada ronda. La web los lee cada noche y enlaza cada partida con la preparación del rival:
 
+- en la portada, las rondas ya emparejadas más cercanas, con un enlace a sus mesas; todas, en la pestaña «Emparejados» de Torneos;
 - en la página del torneo;
 - en la ficha del jugador;
 - en el dossier;

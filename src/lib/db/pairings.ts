@@ -95,10 +95,17 @@ export async function getUpcomingRound(
 	}
 }
 
-/** Próxima ronda emparejada de un torneo de info64, sin los jugadores (/api/emparejamientos). */
+/**
+ * Próxima ronda emparejada de un torneo de info64, sin los jugadores: la
+ * portada, la pestaña «Emparejados» de /torneos y /api/emparejamientos.
+ */
 export interface PairedRoundSummary {
+	/** id del torneo. */
+	id: number
 	/** source_key: el slug de la URL de info64. */
 	slug: string
+	name: string
+	city: string | null
 	round: number
 	/** 'YYYY-MM-DD HH:MM', hora local. */
 	startsAt: string
@@ -108,17 +115,27 @@ export interface PairedRoundSummary {
 
 /**
  * La próxima ronda de cada torneo, de las que aún no han empezado (la hora, en
- * ?1). Sólo hay una ronda por torneo (replacePairings la sustituye entera), así
- * que su número y su hora son los de cualquiera de sus mesas. Recorre pairings
- * entera, que es pequeña, y busca cada torneo por su clave primaria. Con JOIN,
- * el planificador recorría antes los torneos de info64 por el índice único de
- * (source, source_key): 8.830 filas en vez de 398, con 8.700 torneos y 360 mesas.
+ * el parámetro `now`), como subconsulta. Sólo hay una ronda por torneo
+ * (replacePairings la sustituye entera), así que su número y su hora son los
+ * de cualquiera de sus mesas. Recorre pairings entera, que es pequeña.
  */
-export const PAIRED_ROUNDS_SQL = `SELECT t.source_key AS slug, r.round, r.startsAt, r.boards
-	FROM (SELECT tournament_id, round, starts_at AS startsAt, count(*) AS boards
-		FROM pairings WHERE starts_at > ?1 GROUP BY tournament_id) r
+export const pairedRoundsSql = (now: string) => `(SELECT tournament_id, round, starts_at AS startsAt, count(*) AS boards
+		FROM pairings WHERE starts_at > ${now} GROUP BY tournament_id)`
+
+/**
+ * Las rondas emparejadas (pairedRoundsSql, la hora en ?1) con su torneo,
+ * buscado por su clave primaria. Con JOIN, el planificador recorría antes los
+ * torneos de info64 por el índice único de (source, source_key): 8.830 filas
+ * en vez de 398, con 8.700 torneos y 360 mesas.
+ */
+export const PAIRED_ROUNDS_SQL = `SELECT t.id, t.source_key AS slug, t.name, t.city, r.round, r.startsAt, r.boards
+	FROM ${pairedRoundsSql('?1')} r
 	CROSS JOIN tournaments t ON t.id = r.tournament_id
 	WHERE t.source = 'info64'`
+
+/** La ronda más cercana primero y, a la misma hora, por el slug. En TS: ordenar en SQL vuelve a contar cada fila. */
+export const byRoundTime = (a: { startsAt: string; slug: string }, b: { startsAt: string; slug: string }) =>
+	a.startsAt.localeCompare(b.startsAt) || a.slug.localeCompare(b.slug)
 
 /**
  * La próxima ronda de cada torneo que ya está emparejada y aún no ha empezado,
@@ -127,7 +144,7 @@ export const PAIRED_ROUNDS_SQL = `SELECT t.source_key AS slug, r.round, r.starts
  */
 export async function getPairedRounds(db: D1Database, now = madridDateTime(new Date())): Promise<PairedRoundSummary[]> {
 	const { results } = await db.prepare(PAIRED_ROUNDS_SQL).bind(now).all<PairedRoundSummary>()
-	return results.sort((a, b) => a.startsAt.localeCompare(b.startsAt) || a.slug.localeCompare(b.slug))
+	return results.sort(byRoundTime)
 }
 
 /** Una mesa de la próxima ronda de cualquier torneo. */
