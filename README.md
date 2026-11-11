@@ -46,7 +46,7 @@ Saber contra quién te toca en la próxima ronda, ver qué aperturas juega y dó
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/capturas/portada-oscuro.webp">
-    <img src="docs/capturas/portada-claro.webp" width="260" alt="La portada en el móvil: «¿Contra quién juegas?», el buscador y los últimos torneos con partidas">
+    <img src="docs/capturas/portada-claro.webp" width="260" alt="La portada en el móvil: «¿Contra quién juegas?», el buscador y el ejemplo del dossier del n.º 1 de España, con su primera jugada con blancas">
   </picture>
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/capturas/dossier-oscuro.webp">
