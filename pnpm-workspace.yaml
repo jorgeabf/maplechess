@@ -10,8 +10,8 @@ allowBuilds:
 # sube la suya: entonces se quita.
 overrides:
   # miniflare 5.20261019.2-beta y anteriores fijan undici 7.29.1
-  # (GHSA-xjj6-f33q-929c, GHSA-4qv8-2p9j-2685, GHSA-f72v-6w45-q472).
+  # (GHSA-xjj6-f33q-929c, GHSA-4qv8-2p9j-2685, GHSA-f72v-6w45-q472). Wrangler y
+  # vitest-plugin ya traen una miniflare arreglada; queda la de
+  # @cloudflare/vite-plugin 1.64.0 (la del adaptador de Astro), arreglada desde
+  # la 1.66.0.
   'miniflare>undici@<7.30.1': 7.30.1
-  # @cloudflare/vitest-plugin 1.4.7 y anteriores fijan zod 4.6.5
-  # (GHSA-mrhx-c7xc-m3w5). La 4.6.7 es la que ya trae Astro.
-  '@cloudflare/vitest-plugin>zod@<4.6.6': 4.6.7
