@@ -34,6 +34,8 @@ const {
 	canonical = Astro.url.pathname
 } = Astro.props
 const siteName = 'MapleChess'
+// El curso del canal de YouTube de MapleChess: la lista, no un vídeo, para que empiece por la clase 1.
+const COURSE_URL = 'https://www.youtube.com/playlist?list=PLKVvNd5QhGrg'
 const fullTitle = title.startsWith(siteName) ? title : `${title} · ${siteName}`
 const site = Astro.site ?? Astro.url
 // Sin query: los filtros, la página y la ronda son variantes de la misma
@@ -167,6 +169,7 @@ const me = resolveMe(null, Astro.cookies.get(ME_COOKIE)?.value).fideId
 							<li><a href="/acerca">Acerca de</a></li>
 							<li><a href="/privacidad">Privacidad</a></li>
 							<li><a href="/aviso-legal">Aviso legal</a></li>
+							<li><a href={COURSE_URL} rel="noopener">Curso desde cero en YouTube</a></li>
 						</ul>
 					</nav>
 				</div>
