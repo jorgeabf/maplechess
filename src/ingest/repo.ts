@@ -6,7 +6,7 @@
 import { normalizeName } from '../lib/chess/names'
 import { setPgnTags } from '../lib/chess/pgn'
 import { MIN_FIDE_ID, plausibleFideId } from '../lib/chess/rating'
-import { madridYear } from '../lib/dates'
+import { madridDateTime, madridYear, pendingRoundSql } from '../lib/dates'
 import type { RelatedTournament } from '../lib/db/tournaments'
 import { withoutHomonymYear } from '../lib/format'
 import { lichessUrl } from '../lib/licenses'
@@ -1253,18 +1253,27 @@ export async function refreshTotals(db: D1Database): Promise<void> {
  * ranking inicial, ya rectificado (rectificaciones.ts); si no lo hay, se queda
  * lo que trae la página de la ronda, con el nombre sin el año de los menores
  * ni el de quien ha pedido ocultarlo.
- * Si la ronda aún no está emparejada (sin filas), se borran los de otras
- * rondas y se conservan los de ésta: una página que vuelve vacía no los quita.
+ * Si la ronda aún no está emparejada (sin filas), se conservan los de ésta
+ * (una página que vuelve vacía no los quita) y los de otra ronda que sigue por
+ * jugar a la hora `now` (pendingRoundSql: la de hoy sin hora), y se borran los
+ * demás.
  */
 export async function replacePairings(
 	db: D1Database,
 	tournamentId: number,
 	round: number,
 	startsAt: string | null,
-	pairings: Pairing[]
+	pairings: Pairing[],
+	now = madridDateTime(new Date())
 ): Promise<void> {
 	if (pairings.length === 0) {
-		await db.prepare('DELETE FROM pairings WHERE tournament_id = ?1 AND round <> ?2').bind(tournamentId, round).run()
+		await db
+			.prepare(
+				`DELETE FROM pairings WHERE tournament_id = ?1 AND round <> ?2
+				AND (starts_at IS NULL OR NOT ${pendingRoundSql('starts_at', '?3')})`
+			)
+			.bind(tournamentId, round, now)
+			.run()
 		return
 	}
 	const year = madridYear(new Date())
@@ -1308,9 +1317,12 @@ export async function replacePairings(
 	])
 }
 
-/** Borra los emparejamientos de las rondas que ya han empezado (`now` en hora local). */
+/** Borra los emparejamientos de las rondas que ya no siguen por jugar (`now` en hora local; pendingRoundSql). */
 export async function deletePastPairings(db: D1Database, now: string): Promise<void> {
-	await db.prepare('DELETE FROM pairings WHERE starts_at IS NULL OR starts_at <= ?1').bind(now).run()
+	await db
+		.prepare(`DELETE FROM pairings WHERE starts_at IS NULL OR NOT ${pendingRoundSql('starts_at', '?1')}`)
+		.bind(now)
+		.run()
 }
 
 /** id de los torneos indicados que ya están guardados. */

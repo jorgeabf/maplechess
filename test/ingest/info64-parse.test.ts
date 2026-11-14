@@ -54,6 +54,17 @@ describe('parseUpcomingRounds', () => {
 			{ key: 'open-a', name: 'Open A', round: 2, startsAt: '2026-10-24 16:00' }
 		])
 	})
+
+	it('una ronda sin hora de hoy no se elige: se lee la siguiente', () => {
+		const events = [
+			{ id: 'a', title: 'R.4 - Open A (Bilbao)', start: '2026-10-18T00:00:00', url: '/open-a', className: 'individual' },
+			{ id: 'a', title: 'R.5 - Open A (Bilbao)', start: '2026-10-19T00:00:00', url: '/open-a', className: 'individual' },
+			{ id: 'b', title: 'R.2 - Open B (Vitoria)', start: '2026-10-17T00:00:00', url: '/open-b', className: 'individual' }
+		]
+		expect(parseUpcomingRounds(events, '2026-10-18 21:00')).toEqual([
+			{ key: 'open-a', name: 'Open A', round: 5, startsAt: '2026-10-19 00:00' }
+		])
+	})
 })
 
 describe('parseRoundPage', () => {

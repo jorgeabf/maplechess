@@ -16,7 +16,10 @@ import { getPairedRounds } from '../../lib/db/pairings'
 import { isAlarm, loadHealth } from '../../lib/salud'
 
 export const GET: APIRoute = async () => {
-	const [runs, rounds] = await Promise.all([loadHealth(env.DB), getPairedRounds(env.DB)])
+	const [runs, rounds] = await Promise.all([
+		loadHealth(env.DB),
+		getPairedRounds(env.DB, undefined, { notStarted: true })
+	])
 	if (isAlarm(runs.emparejamientos)) {
 		return Response.json({ emparejamientos: runs.emparejamientos }, { status: 503, headers: { 'Cache-Control': 'no-store' } })
 	}

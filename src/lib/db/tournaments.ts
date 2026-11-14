@@ -165,7 +165,7 @@ export async function searchTournaments(
 
 /**
  * La pestaña «Emparejados»: los torneos que cumplen los filtros y tienen
- * emparejada la próxima ronda, que aún no ha empezado (`now`, en hora local),
+ * emparejada la próxima ronda, que sigue por jugar (`now`, en hora local),
  * la más cercana primero, como en la portada (getPairedRounds). Parte de las
  * rondas (pairedRoundsSql), que son pocas, y busca cada torneo por su clave
  * primaria: se leen todas y se pagina aquí, sin recuento aparte.

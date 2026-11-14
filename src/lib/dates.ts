@@ -59,6 +59,17 @@ export function madridDate(date: Date): string {
 	return madridDateTime(date).slice(0, 10)
 }
 
+/** La hora de una ronda sin hora: así la da el calendario de info64 cuando el organizador no la dice. */
+export const NO_ROUND_TIME = '00:00'
+
+/**
+ * Si la ronda de `column` sigue por jugar a la hora `now` (una expresión SQL,
+ * normalmente un parámetro; las dos en hora local, 'YYYY-MM-DD HH:MM'): hasta
+ * que empieza o, si no tiene hora, hasta que acaba su día.
+ */
+export const pendingRoundSql = (column: string, now: string) =>
+	`(${column} > ${now} OR ${column} = substr(${now}, 1, 10) || ' ${NO_ROUND_TIME}')`
+
 /** Año en España peninsular. */
 export function madridYear(date: Date): number {
 	return Number(madridDate(date).slice(0, 4))

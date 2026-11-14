@@ -624,7 +624,7 @@ export class Info64SyncWorkflow extends WorkflowEntrypoint<Env, Info64SyncParams
 				}
 				const tournamentId = id
 				const saved = await step.do(`emparejamientos ${round.key}`, FETCH_STEP, () =>
-					failFast(() => syncPairings(this.env.DB, tournamentId, round))
+					failFast(() => syncPairings(this.env.DB, tournamentId, round, now))
 				)
 				health.ok++
 				if (saved.pairings) console.log(`[info64] ${round.key}: ${JSON.stringify(saved)}`)
@@ -814,15 +814,19 @@ async function failFast<T>(fn: () => Promise<T>): Promise<T> {
 	}
 }
 
-/** Lee la página de la ronda y guarda sus emparejamientos (ninguno si aún no está emparejada). */
+/**
+ * Lee la página de la ronda y guarda sus emparejamientos (ninguno si aún no está
+ * emparejada). `now` es la hora de la pasada, la misma de deletePastPairings.
+ */
 async function syncPairings(
 	db: D1Database,
 	tournamentId: number,
-	upcoming: UpcomingRound
+	upcoming: UpcomingRound,
+	now: string
 ): Promise<{ round: number; pairings: number }> {
 	const page = await parseRoundPage(await fetchText(`${INFO64_URL}/${upcoming.key}/${upcoming.round}`))
 	if (!page) throw new PageFormatError(`info64: la página de la ronda ${upcoming.round} no tiene la forma esperada`)
-	await replacePairings(db, tournamentId, page.round, page.startsAt ?? upcoming.startsAt, page.pairings)
+	await replacePairings(db, tournamentId, page.round, page.startsAt ?? upcoming.startsAt, page.pairings, now)
 	return { round: page.round, pairings: page.pairings.length }
 }
 
