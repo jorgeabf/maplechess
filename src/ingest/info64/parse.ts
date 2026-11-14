@@ -148,7 +148,9 @@ export interface UpcomingRound {
 
 /**
  * La primera ronda de cada torneo individual que empieza después de `now`
- * (hora local, 'YYYY-MM-DD HH:MM'). El número sale del título ("R.3 - …").
+ * (hora local, 'YYYY-MM-DD HH:MM'), aunque la de hoy no tenga hora: es la que
+ * hay que leer, y al guardarla sustituye a la de hoy (sólo se guarda una ronda
+ * por torneo). El número sale del título ("R.3 - …").
  * Los torneos por equipos no entran: info64 no publica quién juega en cada
  * tablero hasta el encuentro.
  */

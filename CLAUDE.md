@@ -296,7 +296,7 @@ curl -X POST localhost:4321/api/admin/sync -H "Authorization: Bearer $TOKEN" \
 - **D1 local frente a remota:** wrangler identifica la base local por `preview_database_id` (`"DB"`), no por `database_id`. Si se quita, la local aparece vacía. Las órdenes `--remote` dicen «preview database», pero usan el `database_id` de producción.
 - **Bloqueos de LaLiga:** en horario de partido, las operadoras españolas bloquean IP de Cloudflare: a menudo las de workers.dev y, si le toca, las del dominio. Si la web no carga desde España, mira hayahora.futbol antes de depurar. La API de Cloudflare (wrangler) sigue funcionando.
 - **Cabeceras HTTP sólo en ASCII** (el User-Agent de `src/ingest/http.ts`).
-- **Horas de ronda en hora local:** info64 publica la hora local de España sin zona. `pairings.starts_at` se guarda así (`'YYYY-MM-DD HH:MM'`) y se compara con `madridDateTime()`; en Canarias hay una hora de desfase. Una ronda a las 00:00 no tiene hora (así la da el calendario): `formatRoundTime` dice sólo el día.
+- **Horas de ronda en hora local:** info64 publica la hora local de España sin zona. `pairings.starts_at` se guarda así (`'YYYY-MM-DD HH:MM'`) y se compara con `madridDateTime()`; en Canarias hay una hora de desfase. Una ronda a las 00:00 no tiene hora (así la da el calendario): `formatRoundTime` dice sólo el día, y se conserva y se enseña hasta que acaba ese día (`pendingRoundSql`, `src/lib/dates.ts`) o hasta que la sustituye la siguiente: la ingesta lee siempre la siguiente que aún no ha empezado. `/api/emparejamientos`, sólo las que aún no han empezado.
 
 ## Producción
 

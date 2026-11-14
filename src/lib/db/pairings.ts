@@ -1,7 +1,8 @@
 // Emparejamientos de las próximas rondas (tabla pairings; ver la migración
-// 0004). Sólo cuentan las rondas que aún no han empezado: `now` es la hora
-// local de España, en el mismo formato que starts_at.
-import { madridDateTime } from '../dates'
+// 0004). Sólo cuentan las rondas que siguen por jugar (pendingRoundSql: las
+// que no tienen hora, hasta que acaba su día): `now` es la hora local de
+// España, en el mismo formato que starts_at.
+import { madridDateTime, pendingRoundSql } from '../dates'
 import { topPerTournament } from './games'
 import { hasDossierSql, minorsBornSince } from './players'
 
@@ -74,7 +75,7 @@ function toRoundPairing(r: PairingRow): RoundPairing {
 	}
 }
 
-/** Próxima ronda emparejada del torneo, si aún no ha empezado. */
+/** Próxima ronda emparejada del torneo, si sigue por jugar. */
 export async function getUpcomingRound(
 	db: D1Database,
 	tournamentId: number,
@@ -83,7 +84,7 @@ export async function getUpcomingRound(
 	const { results } = await db
 		.prepare(
 			`SELECT p.round, p.starts_at AS startsAt, ${pairingColumns('?3')}
-			FROM pairings p WHERE p.tournament_id = ?1 AND p.starts_at > ?2 ORDER BY p.board`
+			FROM pairings p WHERE p.tournament_id = ?1 AND ${pendingRoundSql('p.starts_at', '?2')} ORDER BY p.board`
 		)
 		.bind(tournamentId, now, bornSinceAt(now))
 		.all<PairingRow & { round: number; startsAt: string }>()
@@ -114,13 +115,15 @@ export interface PairedRoundSummary {
 }
 
 /**
- * La próxima ronda de cada torneo, de las que aún no han empezado (la hora, en
- * el parámetro `now`), como subconsulta. Sólo hay una ronda por torneo
- * (replacePairings la sustituye entera), así que su número y su hora son los
- * de cualquiera de sus mesas. Recorre pairings entera, que es pequeña.
+ * La próxima ronda de cada torneo, de las que siguen por jugar (la hora, en el
+ * parámetro `now`) o, con `notStarted`, sólo de las que aún no han empezado,
+ * como subconsulta. Sólo hay una ronda por torneo (replacePairings la
+ * sustituye entera), así que su número y su hora son los de cualquiera de sus
+ * mesas. Recorre pairings entera, que es pequeña.
  */
-export const pairedRoundsSql = (now: string) => `(SELECT tournament_id, round, starts_at AS startsAt, count(*) AS boards
-		FROM pairings WHERE starts_at > ${now} GROUP BY tournament_id)`
+export const pairedRoundsSql = (now: string, notStarted = false) => `(SELECT tournament_id, round, starts_at AS startsAt,
+		count(*) AS boards
+		FROM pairings WHERE ${notStarted ? `starts_at > ${now}` : pendingRoundSql('starts_at', now)} GROUP BY tournament_id)`
 
 /**
  * Las rondas emparejadas (pairedRoundsSql, la hora en ?1) con su torneo,
@@ -128,22 +131,31 @@ export const pairedRoundsSql = (now: string) => `(SELECT tournament_id, round, s
  * torneos de info64 por el índice único de (source, source_key): 8.830 filas
  * en vez de 398, con 8.700 torneos y 360 mesas.
  */
-export const PAIRED_ROUNDS_SQL = `SELECT t.id, t.source_key AS slug, t.name, t.city, r.round, r.startsAt, r.boards
-	FROM ${pairedRoundsSql('?1')} r
+export const pairedRoundsQuery = (notStarted = false) => `SELECT t.id, t.source_key AS slug, t.name, t.city, r.round,
+		r.startsAt, r.boards
+	FROM ${pairedRoundsSql('?1', notStarted)} r
 	CROSS JOIN tournaments t ON t.id = r.tournament_id
 	WHERE t.source = 'info64'`
+
+export const PAIRED_ROUNDS_SQL = pairedRoundsQuery()
 
 /** La ronda más cercana primero y, a la misma hora, por el slug. En TS: ordenar en SQL vuelve a contar cada fila. */
 export const byRoundTime = (a: { startsAt: string; slug: string }, b: { startsAt: string; slug: string }) =>
 	a.startsAt.localeCompare(b.startsAt) || a.slug.localeCompare(b.slug)
 
 /**
- * La próxima ronda de cada torneo que ya está emparejada y aún no ha empezado,
- * con el criterio de getUpcomingRound, por hora y slug. Los torneos sensibles y
- * los de menores no están: la ingesta no los guarda.
+ * La próxima ronda de cada torneo que ya está emparejada y sigue por jugar,
+ * con el criterio de getUpcomingRound, por hora y slug; con `notStarted`, sólo
+ * las que aún no han empezado (/api/emparejamientos: una ronda sin hora de hoy
+ * puede haber empezado). Los torneos sensibles y los de menores no están: la
+ * ingesta no los guarda.
  */
-export async function getPairedRounds(db: D1Database, now = madridDateTime(new Date())): Promise<PairedRoundSummary[]> {
-	const { results } = await db.prepare(PAIRED_ROUNDS_SQL).bind(now).all<PairedRoundSummary>()
+export async function getPairedRounds(
+	db: D1Database,
+	now = madridDateTime(new Date()),
+	{ notStarted = false } = {}
+): Promise<PairedRoundSummary[]> {
+	const { results } = await db.prepare(pairedRoundsQuery(notStarted)).bind(now).all<PairedRoundSummary>()
 	return results.sort(byRoundTime)
 }
 
@@ -181,7 +193,10 @@ export async function getTopUpcomingPairings(
 	now = madridDateTime(new Date())
 ): Promise<UpcomingPairing[]> {
 	const { results } = await db
-		.prepare('SELECT tournament_id AS tournamentId, board, white_rating + black_rating AS elo FROM pairings WHERE starts_at > ?1')
+		.prepare(
+			`SELECT tournament_id AS tournamentId, board, white_rating + black_rating AS elo
+			FROM pairings WHERE ${pendingRoundSql('starts_at', '?1')}`
+		)
 		.bind(now)
 		.all<{ tournamentId: number; board: number; elo: number | null }>()
 	const top = topPerTournament(results, limit)
@@ -227,11 +242,11 @@ export async function getUpcomingGames(
 		.prepare(
 			`SELECT ${columns('white', 'black')}
 			FROM pairings p JOIN tournaments t ON t.id = p.tournament_id
-			WHERE p.white_fide_id = ?1 AND p.starts_at > ?2
+			WHERE p.white_fide_id = ?1 AND ${pendingRoundSql('p.starts_at', '?2')}
 			UNION ALL
 			SELECT ${columns('black', 'white')}
 			FROM pairings p JOIN tournaments t ON t.id = p.tournament_id
-			WHERE p.black_fide_id = ?1 AND p.starts_at > ?2
+			WHERE p.black_fide_id = ?1 AND ${pendingRoundSql('p.starts_at', '?2')}
 			ORDER BY startsAt`
 		)
 		.bind(fideId, now, bornSinceAt(now))

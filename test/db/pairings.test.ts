@@ -8,8 +8,10 @@ import {
 	getUpcomingGames,
 	getUpcomingRound,
 	PAIRED_ROUNDS_SQL,
+	pairedRoundsQuery,
 	PAIRINGS_BY_KEY_SQL
 } from '../../src/lib/db/pairings'
+import { pendingRoundSql } from '../../src/lib/dates'
 import { formatRoundTime } from '../../src/lib/format'
 import roundHtml from '../fixtures/info64/round.html?raw'
 
@@ -158,6 +160,77 @@ describe('emparejamientos', () => {
 		await deletePastPairings(db, '2026-10-24 16:00')
 		const count = await db.prepare('SELECT count(*) AS n FROM pairings').first<{ n: number }>()
 		expect(count?.n).toBe(0)
+	})
+
+	describe('una ronda sin hora (las 00:00)', () => {
+		const TODAY = '2026-10-24 18:00'
+		const TOMORROW = '2026-10-25 00:00'
+
+		async function loadUntimedRound(): Promise<number> {
+			const id = await loadRound()
+			await db.prepare("UPDATE pairings SET starts_at = '2026-10-24 00:00'").run()
+			return id
+		}
+
+		it('sigue en las páginas hasta que acaba su día', async () => {
+			const id = await loadUntimedRound()
+			expect((await getUpcomingRound(db, id, TODAY))?.pairings).toHaveLength(7)
+			expect(await getUpcomingGames(db, 9000007, TODAY)).toHaveLength(1)
+			expect(await getTopUpcomingPairings(db, 8, TODAY)).not.toEqual([])
+			expect((await getPairedRounds(db, TODAY)).map((r) => r.round)).toEqual([2])
+			expect(await getUpcomingRound(db, id, TOMORROW)).toBeNull()
+			expect(await getUpcomingGames(db, 9000007, TOMORROW)).toEqual([])
+			expect(await getTopUpcomingPairings(db, 8, TOMORROW)).toEqual([])
+			expect(await getPairedRounds(db, TOMORROW)).toEqual([])
+		})
+
+		it('con notStarted no sale el día que se juega', async () => {
+			await loadUntimedRound()
+			expect(await getPairedRounds(db, '2026-10-23 23:59', { notStarted: true })).toHaveLength(1)
+			expect(await getPairedRounds(db, '2026-10-24 00:00', { notStarted: true })).toEqual([])
+		})
+
+		it('una lectura vacía de la siguiente no la quita hasta que acaba su día', async () => {
+			const id = await loadUntimedRound()
+			await replacePairings(db, id, 3, '2026-10-31 16:00', [], TODAY)
+			expect((await getUpcomingRound(db, id, TODAY))?.round).toBe(2)
+			await replacePairings(db, id, 3, '2026-10-31 16:00', [], TOMORROW)
+			expect(await getUpcomingRound(db, id, TODAY)).toBeNull()
+		})
+
+		it('la siguiente ronda ya emparejada la sustituye', async () => {
+			const id = await loadUntimedRound()
+			const page = await parseRoundPage(roundHtml)
+			await replacePairings(db, id, 3, '2026-10-25 00:00', page!.pairings.slice(0, 2), TODAY)
+			const round = await getUpcomingRound(db, id, TODAY)
+			expect([round?.round, round?.startsAt, round?.pairings.length]).toEqual([3, '2026-10-25 00:00', 2])
+		})
+
+		it('no se borra hasta que acaba su día', async () => {
+			const id = await loadUntimedRound()
+			await deletePastPairings(db, TODAY)
+			expect((await getUpcomingRound(db, id, TODAY))?.pairings).toHaveLength(7)
+			await deletePastPairings(db, TOMORROW)
+			const count = await db.prepare('SELECT count(*) AS n FROM pairings').first<{ n: number }>()
+			expect(count?.n).toBe(0)
+		})
+
+		it('la regla: hasta que empieza o, sin hora, hasta que acaba su día', async () => {
+			const cases: [string, string][] = [
+				['2026-10-24 00:00', '2026-10-23 23:59'],
+				['2026-10-24 00:00', '2026-10-24 00:00'],
+				['2026-10-24 00:00', '2026-10-24 23:59'],
+				['2026-10-24 00:00', '2026-10-25 00:00'],
+				['2026-10-24 00:30', '2026-10-24 00:29'],
+				['2026-10-24 00:30', '2026-10-24 00:30'],
+				['2026-10-24 16:00', '2026-10-24 18:00']
+			]
+			const expected = [true, true, true, false, true, false, false]
+			const sql = await db.batch<{ pending: number }>(
+				cases.map(([startsAt, now]) => db.prepare(`SELECT ${pendingRoundSql('?1', '?2')} AS pending`).bind(startsAt, now))
+			)
+			expect(sql.map((r) => r.results[0].pending === 1)).toEqual(expected)
+		})
 	})
 
 	describe('mesas de más nivel de todos los torneos', () => {
@@ -311,11 +384,13 @@ describe('emparejamientos', () => {
 			expect(await getPairedRounds(db, '2026-10-24 16:00')).toEqual([])
 		})
 
-		it('recorre pairings y busca cada torneo por su clave primaria', async () => {
-			const { results } = await db.prepare(`EXPLAIN QUERY PLAN ${PAIRED_ROUNDS_SQL}`).bind(BEFORE).all<{ detail: string }>()
-			const plan = results.map((r) => r.detail)
-			expect(plan).toContain('SCAN pairings')
-			expect(plan).toContain('SEARCH t USING INTEGER PRIMARY KEY (rowid=?)')
+		it('recorre pairings y busca cada torneo por su clave primaria, también la de la API', async () => {
+			for (const sql of [PAIRED_ROUNDS_SQL, pairedRoundsQuery(true)]) {
+				const { results } = await db.prepare(`EXPLAIN QUERY PLAN ${sql}`).bind(BEFORE).all<{ detail: string }>()
+				const plan = results.map((r) => r.detail)
+				expect(plan).toContain('SCAN pairings')
+				expect(plan).toContain('SEARCH t USING INTEGER PRIMARY KEY (rowid=?)')
+			}
 		})
 	})
 })

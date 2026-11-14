@@ -1,5 +1,6 @@
 // Formatos de presentación.
 import { stripDiacritics } from './chess/names'
+import { NO_ROUND_TIME } from './dates'
 
 const dateFormat = new Intl.DateTimeFormat('es-ES', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' })
 
@@ -28,7 +29,7 @@ export function formatRoundTime(startsAt: string): string {
 	const date = new Date(`${startsAt.slice(0, 10)}T00:00:00Z`)
 	if (Number.isNaN(date.getTime())) return startsAt
 	const time = startsAt.slice(11, 16)
-	return time && time !== '00:00' ? `${roundDayFormat.format(date)}, ${time}` : roundDayFormat.format(date)
+	return time && time !== NO_ROUND_TIME ? `${roundDayFormat.format(date)}, ${time}` : roundDayFormat.format(date)
 }
 
 /** Segundos de reloj → "4 min 30 s", "45 s"; desde 10 minutos, en minutos enteros ("49 min"). */
