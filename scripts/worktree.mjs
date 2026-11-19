@@ -38,9 +38,14 @@ if (/[\\/]onedrive[^\\/]*[\\/]/.test(here)) fail('La copia está en OneDrive: su
 if (here.startsWith(normal(tmpdir()) + sep)) fail('La copia está en la carpeta temporal: allí workerd.exe pasa del límite de rutas.')
 
 const launch = JSON.parse(readFileSync(join(top, '.claude', 'launch.json'), 'utf8'))
-const config = launch.configurations.find((entry) => entry.port === port)
+// Sólo las de pnpm dev: `build` sirve con wrangler dev el dist/ que haya.
+const devConfigs = launch.configurations.filter((entry) => entry.runtimeArgs?.[0] === 'dev')
+const config = devConfigs.find((entry) => entry.port === port)
 if (!config)
-	fail(`Ninguna configuración de .claude/launch.json usa el puerto ${port}. Hay: ${launch.configurations.map((entry) => entry.port).join(', ')}.`)
+	fail(
+		`Ninguna configuración de pnpm dev de .claude/launch.json usa el puerto ${port}. ` +
+			`Hay: ${devConfigs.map((entry) => entry.port).join(', ')}.`
+	)
 
 const steps = []
 function step(name, action) {

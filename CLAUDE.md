@@ -133,7 +133,7 @@ Este archivo lleva las reglas, dónde está cada cosa, los comandos y las trampa
   - `500.astro`: con `Base`, que no consulta D1, y sin enseñar el error.
 - `src/middleware.ts`: `Cache-Control: private, max-age=0, must-revalidate` por defecto (por la cookie `yo`); sólo fija otra una ruta que admite caché (los PGN, los sitemaps, `/api/emparejamientos`, `/api/clasificaciones`, `/api/elo` y `/api/torneos`) y, con `no-store`, `/api/estado` y `/api/admin/sync`. Además `nosniff`, `X-Frame-Options: SAMEORIGIN`, HSTS de un año y el límite de ritmo. Sin `Referrer-Policy`: «← Volver» depende del valor por defecto.
   - **Redirección al dominio** (`canonicalUrl`): un GET o HEAD a workers.dev o a `www`, 301 a `site`, por host exacto; los POST no. La 301 lleva la caché por defecto.
-  - **CSP:** la pone Astro (`security.csp`) con los hashes de lo suyo, `'self'`, `'wasm-unsafe-eval'` y `style-src-attr 'unsafe-inline'`. Un `<script>` o `<style>` creado desde JS, un atributo `on…` o un recurso de otro origen se bloquean. `pnpm dev` no la aplica: se prueba con `pnpm build` y `pnpm exec wrangler dev`, mirando la consola.
+  - **CSP:** la pone Astro (`security.csp`) con los hashes de lo suyo, `'self'`, `'wasm-unsafe-eval'` y `style-src-attr 'unsafe-inline'`. Un `<script>` o `<style>` creado desde JS, un atributo `on…` o un recurso de otro origen se bloquean. `pnpm dev` no la aplica: se prueba con `pnpm build` y `pnpm exec wrangler dev`, mirando la consola o con `scripts/probar-build.mjs`.
   - Las URL de las fuentes pasan por `sourceUrl` (`src/lib/urls.ts`: info64, lichess, `FCA_SITE` y `SICHESS_SITE`), y en los textos se nombran con `sourceName`.
 - `src/client/`: código de navegador, con **su propio `tsconfig`** y cargado con `<script src>` (ver «Trampas conocidas»).
   - `visor/panel-motor.ts` (`EnginePanel`) y `components/visor/PanelMotor.astro`: el panel de Stockfish que comparten el visor y el explorador.
@@ -193,10 +193,14 @@ pnpm db:migrate:local    # aplica migrations/ a la D1 local
 pnpm build               # check + astro build
 pnpm run deploy          # scripts/desplegar.mjs, ver «Producción» (sin «run», pnpm ejecuta su propio «deploy»)
 node scripts/medir.mjs <carpeta> <ruta…>   # anchos, temas, desbordes y errores, en Chromium sin ventana
+node scripts/probar-build.mjs [--base URL] # el build bajo la CSP, en Chromium sin ventana: visor, motor, explorador, buscador y «Soy yo»
 node scripts/worktree.mjs <puerto>         # en una copia de trabajo: instala, D1 local, .dev.vars y migraciones
 ```
 
-- **`medir.mjs`** usa `playwright-core` 1.60.0, la de `chromium-1223`, que ya está en la carpeta de navegadores que comparten otros proyectos; Dependabot no lo sube. Nunca `playwright install`: puede borrar de esa carpeta versiones que usan otros. Lanza Chromium con `channel: 'chromium'`, sólo abre localhost y maplechess.es, y escribe fuera del repositorio. En Git Bash, con `MSYS_NO_PATHCONV=1` o desde PowerShell.
+- **`medir.mjs`** usa `playwright-core` 1.60.0, la de `chromium-1223`, que ya está en la carpeta de navegadores que comparten otros proyectos; Dependabot no lo sube. Nunca `playwright install`: puede borrar de esa carpeta versiones que usan otros. Lanza Chromium con `channel: 'chromium'` y sólo abre localhost y maplechess.es (`scripts/navegador.mjs`, que comparte con `probar-build.mjs`), y escribe fuera del repositorio. En Git Bash, con `MSYS_NO_PATHCONV=1` o desde PowerShell.
+- **`probar-build.mjs`** usa en Chromium lo que ejecuta JavaScript bajo la CSP, que ni la CI ni el humo abren: el visor, el motor, el explorador del repertorio y el buscador de la cabecera. Y «Soy yo»: el botón de la ficha y, con `fetch` de Node, un POST de otro origen. Falla también con un error de consola o una petición fallida.
+  - Contra el build servido con `pnpm exec wrangler dev` tras `pnpm build` (`http://localhost:8787`; en `.claude/launch.json`, `build`, que sirve el `dist/` que haya) o, con `--base`, contra producción. Contra `pnpm dev` falla: no aplica la CSP.
+  - Antes de fusionar un PR que suba Astro, el adaptador o Vite, y tras desplegarlo. Si cambia un selector de los que usa, se cambia con él.
 - **`worktree.mjs`** sólo prepara una copia de este repositorio fuera de OneDrive y de la carpeta temporal, con el puerto de una configuración de `.claude/launch.json` (`web` 4321, `web-4322` o `web-4323`), una por sesión que pruebe a la vez.
 
 Para lanzar una sincronización en local, con el token de `.dev.vars`:
@@ -211,7 +215,7 @@ curl -X POST localhost:4321/api/admin/sync -H "Authorization: Bearer $TOKEN" \
 ## Colaboración
 
 - **Repositorio público en GitHub** (`origin`, `SOURCE_CODE` en `src/lib/licenses.ts`).
-  - **Nada de datos personales:** los fixtures (`test/fixtures/`) son sintéticos: la estructura real de info64, lichess y la FIDE, recortada a lo que lee el parser, con nombres y FIDE ID inventados («Supuesto Irreal, Otro») y sin árbitros ni contactos. Las únicas personas reales son GM de élite del ranking, de ejemplo en `scripts/humo.mjs` y en algún comentario del código.
+  - **Nada de datos personales:** los fixtures (`test/fixtures/`) son sintéticos: la estructura real de info64, lichess y la FIDE, recortada a lo que lee el parser, con nombres y FIDE ID inventados («Supuesto Irreal, Otro») y sin árbitros ni contactos. Las únicas personas reales son GM de élite del ranking, de ejemplo en `scripts/humo.mjs`, en `scripts/probar-build.mjs` (el FIDE ID de uno) y en algún comentario del código.
   - **Capturas del README** (`docs/capturas/`): de producción, en WebP, en claro y en oscuro (`<picture>`), sólo con GM de élite y nombres de torneos.
 - **`main` es lo desplegado y está protegido:** sólo entra por PR, con la CI en verde (`.github/workflows/ci.yml`: lint, `astro check` más `tsc` del cliente, y tests) y la revisión de la otra persona, cuando haya dos personas colaborando; hasta entonces, fusiona Jorge.
   - Las acciones de la CI van fijadas por SHA, con la etiqueta en un comentario. Las sube Dependabot (`.github/dependabot.yml`), con 7 días de espera, y sus PR pasan por la CI y la revisión.

@@ -569,7 +569,7 @@ La historia, las medidas, los casos concretos y el detalle de cada página que s
 
 #### CSP
 
-- **CSP:** la pone Astro (`security.csp` en `astro.config.mjs`) como cabecera, con los hashes de sus scripts y estilos en línea, `'self'`, `'wasm-unsafe-eval'` y `style-src-attr 'unsafe-inline'` (los atributos `style` de los gráficos y de chessground). Los `<script>` y `<style>` que emite Astro llevan su hash; uno creado desde JS, un atributo `on…` o un recurso de otro origen se bloquean. `pnpm dev` no la aplica: se prueba con `pnpm build` y `pnpm exec wrangler dev`, mirando la consola.
+- **CSP:** la pone Astro (`security.csp` en `astro.config.mjs`) como cabecera, con los hashes de sus scripts y estilos en línea, `'self'`, `'wasm-unsafe-eval'` y `style-src-attr 'unsafe-inline'` (los atributos `style` de los gráficos y de chessground). Los `<script>` y `<style>` que emite Astro llevan su hash; uno creado desde JS, un atributo `on…` o un recurso de otro origen se bloquean. `pnpm dev` no la aplica: se prueba con `pnpm build` y `pnpm exec wrangler dev`, mirando la consola o con `scripts/probar-build.mjs`.
 
 ### `src/client/`
 
@@ -787,6 +787,21 @@ La historia, las medidas, los casos concretos y el detalle de cada página que s
   - Lanza Chromium con `channel: 'chromium'`: sin él busca `chromium_headless_shell`, que no está descargado.
   - Sólo abre localhost y maplechess.es, y la carpeta de salida va fuera del repositorio.
   - En Git Bash, una ruta que empieza por `/` llega como `C:/Program Files/Git/`: hay que lanzarlo con `MSYS_NO_PATHCONV=1` o desde PowerShell.
+  - El navegador y los sitios que se pueden abrir están en `scripts/navegador.mjs` desde el 19-nov-2026, para que `probar-build.mjs` use los mismos.
+
+### `probar-build.mjs`
+
+- **`probar-build.mjs`** (19-nov-2026) salió del #129, el PR semanal de Dependabot que subía Astro de la 7.4.7 a la 7.4.11, el adaptador y, con ellos, Vite (de la 8.3.5 a la 8.3.8) y rolldown. La CI pasa el lint, los tipos y los tests, pero no construye el sitio, y los tests no cargan el handler de Astro (`vitest.config.ts`); el humo mira el estado, un texto y las cabeceras de 15 URL, sin navegador. Un fallo de la CSP o del JavaScript del cliente no lo vería nadie hasta entrar en una partida.
+  - **Prueba lo que ejecuta JavaScript bajo la CSP:** el visor (chessground montado, ← y →), el motor (el wasm en su Web Worker), el explorador del repertorio y el buscador de la cabecera (el script en línea de `Base.astro`, con su hash). Y la consola y la red: un error, una petición fallida o una a otro sitio lo hacen fallar.
+  - **«Soy yo», por los dos lados:** en el navegador, el botón de la ficha, que tiene que dejar la cookie `yo` con `HttpOnly` y volver a la ficha con «No soy yo»; y con `fetch` de Node, un POST con otro `Origin`, que tiene que dar 403 (`security.checkOrigin`). Éste no puede hacerlo el navegador sin abrir otro sitio.
+  - **Exige la cabecera `Content-Security-Policy`** en cada página que abre: contra `pnpm dev`, que no la aplica, pasaría todo sin probar nada.
+  - **En el explorador no valen las piezas:** su tablero lo pinta el servidor con el marcado de chessground (`Tablero.astro`), y se ve igual con el script roto. Se mira la clase `manipulable`, que sólo pone chessground al montarse, que el motor analice y que «e4» escrito en «Tu jugada» lleve a `?jugadas=e2e4`. Con JavaScript desactivado fallan el visor, el motor, el explorador y el buscador, y pasan la ficha, «Soy yo» y la consola.
+  - **El visor abre en la última jugada:** se retrocede dos y se avanza una, esperando al `#j` de cada una (el visor lo escribe 300 ms después de moverse), y se compara dónde están las piezas. Avanzar desde el final no mueve nada, y la prueba pasaría igual.
+  - **Del motor espera las líneas o su aviso,** lo que llegue antes: si no carga, el panel se apaga solo y dice «No se pudo cargar el motor», sin llegar a dar ninguna línea.
+  - **Apaga el motor al acabar cada prueba:** la preferencia se recuerda (`localStorage`) y la página siguiente lo encendería sola. Salir de ella con el motor cargándose deja a medias la petición de `stockfish.js`, y Chromium la da por fallida (`net::ERR_BLOCKED_BY_RESPONSE`): contra producción, una de cada cuatro veces.
+  - **El jugador,** el del humo: con sus partidas en la D1 local no hace falta el id de una partida, que en local es otro. Con la D1 vacía, su ficha da 404 y fallan casi todas. Con `--jugador`, cualquier otro.
+  - **No arranca el servidor:** como el humo y `medir.mjs`, prueba una URL que sirve otro, y `wrangler dev` sirve el `dist/` que haya: antes, `pnpm build`. No se lanza desde `pnpm run deploy`.
+  - **Lo medido con el #129,** con el build frente a producción: los siete CSS, idénticos (el mismo hash en el nombre; el despliegue sólo subió dos archivos nuevos, los dos de JS); la CSP, igual en nueve rutas; y el JS de los tableros, con otro hash sólo por la minificación (`(!a||!b)&&c` pasó a `a&&b||c`).
 
 ### `worktree.mjs`
 
@@ -800,7 +815,7 @@ La historia, las medidas, los casos concretos y el detalle de cada página que s
 
 #### Nada de datos personales
 
-- **Nada de datos personales:** los fixtures (`test/fixtures/`) son sintéticos. Conservan la estructura de las páginas de info64, del PGN de lichess y de la lista FIDE, las jugadas, los ELO, los títulos y los torneos, pero los nombres y los FIDE ID son inventados, y no hay árbitros ni contactos. Los tests usan nombres inventados («Supuesto Irreal, Otro»). Las únicas personas reales son GM de élite que salen en el ranking de la web, puestos de ejemplo en `scripts/humo.mjs` (que comprueba producción) y en algún comentario del código. Un fixture nuevo se recorta igual: sólo los elementos que lee el parser, con nombres e ID inventados.
+- **Nada de datos personales:** los fixtures (`test/fixtures/`) son sintéticos. Conservan la estructura de las páginas de info64, del PGN de lichess y de la lista FIDE, las jugadas, los ELO, los títulos y los torneos, pero los nombres y los FIDE ID son inventados, y no hay árbitros ni contactos. Los tests usan nombres inventados («Supuesto Irreal, Otro»). Las únicas personas reales son GM de élite que salen en el ranking de la web, puestos de ejemplo en `scripts/humo.mjs` (que comprueba producción), en `scripts/probar-build.mjs` (el FIDE ID de uno de ellos) y en algún comentario del código. Un fixture nuevo se recorta igual: sólo los elementos que lee el parser, con nombres e ID inventados.
 
 #### Capturas del README
 

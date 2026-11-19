@@ -11,17 +11,14 @@
 // móvil, con la barra de desplazamiento superpuesta, como en un teléfono. 250 px equivale
 // a 375 con la letra del navegador al 150 %.
 //
-// Usa el Chromium de playwright-core que ya está en la carpeta de navegadores de Playwright,
-// compartida con otros proyectos, con un perfil temporal. playwright-core va fijado a la
-// versión de ese Chromium: nunca `playwright install`, que puede borrar de esa carpeta
-// versiones que usan otros. Sale con 1 si alguna página tiene un problema.
+// El navegador y los sitios que se pueden abrir, en scripts/navegador.mjs. Sale con 1 si
+// alguna página tiene un problema.
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { isAbsolute, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { chromium } from 'playwright-core'
+import { allowed, launch, onlyAllowed } from './navegador.mjs'
 
 const REPO = fileURLToPath(new URL('..', import.meta.url))
-const ALLOWED_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]', 'maplechess.es'])
 const THEMES = { claro: 'light', oscuro: 'dark' }
 
 function fail(message) {
@@ -49,8 +46,6 @@ function parseArgs(argv) {
 	if (unknown.length > 0) fail(`Temas: claro u oscuro, no ${unknown.join(', ')}.`)
 	return { ...options, out, paths }
 }
-
-const allowed = (url) => /^https?:$/.test(url.protocol) && (ALLOWED_HOSTS.has(url.hostname) || url.hostname.endsWith('.localhost'))
 
 // Dentro de la página: desborde, alto y los elementos que se salen por los lados. No
 // cuentan los que recorta un antepasado con overflow (una tabla con scroll), los de 1 px
@@ -92,12 +87,7 @@ async function measure(browser, options, path, theme, width) {
 	})
 	const errors = []
 	const requests = []
-	await context.route('**/*', (route) => {
-		const target = new URL(route.request().url())
-		if (allowed(target)) return route.continue()
-		requests.push(`cortada: ${target.origin}`)
-		return route.abort()
-	})
+	await onlyAllowed(context, (origin) => requests.push(`cortada: ${origin}`))
 	const page = await context.newPage()
 	page.on('console', (message) => message.type() === 'error' && errors.push(message.text().slice(0, 200)))
 	page.on('pageerror', (error) => errors.push(String(error).slice(0, 200)))
@@ -140,15 +130,7 @@ async function main() {
 		fail('La carpeta de salida tiene que estar fuera del repositorio: las capturas pueden llevar nombres.')
 	mkdirSync(options.outDir, { recursive: true })
 
-	let browser
-	try {
-		browser = await chromium.launch({ channel: 'chromium' })
-	} catch (error) {
-		fail(
-			`No arranca Chromium: ${String(error.message ?? error).split('\n')[0]}\n` +
-				'playwright-core va con el Chromium ya descargado. Si se ha subido su versión, hay que volver a fijarla (package.json).'
-		)
-	}
+	const browser = await launch().catch((error) => fail(error.message))
 	const started = Date.now()
 	const results = []
 	for (const path of options.paths)

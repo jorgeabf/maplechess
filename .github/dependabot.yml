@@ -24,7 +24,7 @@ updates:
         update-types: ['version-update:semver-major']
       # playwright-core va con el Chromium que ya está descargado (chromium-1223),
       # en la carpeta de navegadores que comparten otros proyectos. Otra versión
-      # pide otro Chromium: se sube a mano (ver scripts/medir.mjs).
+      # pide otro Chromium: se sube a mano (ver scripts/navegador.mjs).
       - dependency-name: playwright-core
 
   - package-ecosystem: github-actions
