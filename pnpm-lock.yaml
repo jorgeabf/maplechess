@@ -4,9 +4,6 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
-overrides:
-  miniflare>undici@<7.30.1: 7.30.1
-
 importers:
 
   .:
