@@ -2,16 +2,3 @@ allowBuilds:
   # Comprueban/enlazan el binario de su plataforma; los usan wrangler y Vite.
   esbuild: true
   workerd: true
-
-# Versiones con avisos de seguridad que traen fijadas las herramientas de
-# Cloudflare, mientras el lockfile no tenga una versión que las suba. Sólo llegan
-# a wrangler, a `pnpm dev` y a los tests, no al Worker. Cada regla casa sólo con
-# las versiones vulnerables, así que deja de aplicarse sola cuando el paquete
-# sube la suya: entonces se quita.
-overrides:
-  # miniflare 5.20261019.2-beta y anteriores fijan undici 7.29.1
-  # (GHSA-xjj6-f33q-929c, GHSA-4qv8-2p9j-2685, GHSA-f72v-6w45-q472). Wrangler y
-  # vitest-plugin ya traen una miniflare arreglada; queda la de
-  # @cloudflare/vite-plugin, que llega por el adaptador de Astro (^1.63.1): el
-  # lockfile tiene la 1.64.0, y está arreglada desde la 1.66.0.
-  'miniflare>undici@<7.30.1': 7.30.1
