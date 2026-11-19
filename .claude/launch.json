@@ -18,6 +18,12 @@
       "runtimeExecutable": "pnpm",
       "runtimeArgs": ["dev", "--port", "4323"],
       "port": 4323
+    },
+    {
+      "name": "build",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["exec", "wrangler", "dev", "--port", "8787"],
+      "port": 8787
     }
   ]
 }

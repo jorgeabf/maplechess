@@ -299,7 +299,7 @@ Necesita una cuenta de Cloudflare con **Workers Paid**: la importación de la li
 2. Crea la base de datos (`pnpm exec wrangler d1 create ajedrez --jurisdiction eu`) y pon su id en `database_id`, en `wrangler.jsonc`.
 3. Aplica las migraciones: `pnpm db:migrate:remote`.
 4. Sube el token de administración, `pnpm exec wrangler secret put ADMIN_TOKEN`, y el de lichess (una cuenta con un token de sólo `study:read`), `pnpm exec wrangler secret put LICHESS_TOKEN`.
-5. Cambia el dominio: `routes` de `wrangler.jsonc`, `site` de `astro.config.mjs`, la URL de workers.dev de `src/middleware.ts`, la línea `Sitemap:` de `public/robots.txt` y las URL de `scripts/humo.mjs` y `.github/workflows/vigilancia.yml`.
+5. Cambia el dominio: `routes` de `wrangler.jsonc`, `site` de `astro.config.mjs`, la URL de workers.dev de `src/middleware.ts`, la línea `Sitemap:` de `public/robots.txt`, las URL de `scripts/humo.mjs` y `.github/workflows/vigilancia.yml` y el dominio que admite `scripts/navegador.mjs`.
 6. Despliega: `pnpm run deploy`.
 7. Carga los datos con `/api/admin/sync`: la lista FIDE, info64 y las retransmisiones de lichess. Los parámetros, en [CLAUDE.md](CLAUDE.md).
 
