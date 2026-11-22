@@ -10,7 +10,7 @@ import { gameRoundPage, getAdjacentGames, getGame } from '../../lib/db/games'
 import { displayName, formatDate, formatResult } from '../../lib/format'
 import { CC_BY, CC_BY_SA, fcaUrl, licensedPgn, lichessUrl } from '../../lib/licenses'
 import { ME_COOKIE, isOwn, resolveMe } from '../../lib/me'
-import { backTarget, boardColor, positiveInt, type BackKind } from '../../lib/params'
+import { backTarget, boardColor, gameOrientation, positiveInt, type BackKind } from '../../lib/params'
 import { sourceUrl } from '../../lib/urls'
 
 const id = positiveInt(Astro.params.id)
@@ -47,11 +47,13 @@ const sourceHref = sourceUrl(
 	game.tournamentSource === 'info64' ? `${game.tournamentUrl}/${game.round}/${game.board}` : game.tournamentUrl
 )
 const title = `${displayName(game.whiteName)} – ${displayName(game.blackName)}`
-// Lado del tablero: el que pide el enlace (desde la ficha, el dossier o el
-// repertorio, el del jugador) o, si la partida es tuya (cookie yo), el tuyo.
-const requested = boardColor(Astro.url.searchParams)
 const me = resolveMe(null, Astro.cookies.get(ME_COOKIE)?.value)
-const orientation = requested ?? (game.blackFideId !== null && isOwn(me, game.blackFideId) ? 'black' : 'white')
+// Página de la que se viene, si es de la web (Referer).
+const from = backTarget(Astro.request.headers.get('referer'), Astro.url)
+// Lado del tablero: el que pide la URL, el tuyo o el del jugador de la página
+// de la que se viene (gameOrientation). Los enlaces no lo llevan, para que no
+// haya una URL por color que rastrear.
+const orientation = gameOrientation(boardColor(Astro.url.searchParams), game, (fideId) => isOwn(me, fideId), from)
 // Vuelta a la página de la que se viene, si es de la web: encima del título,
 // como la de la ficha en el dossier y el repertorio. La ficha, el dossier y
 // el repertorio de uno de los dos jugadores dicen de quién; los tuyos, en
@@ -71,7 +73,6 @@ const OWN_BACK_LABELS: Partial<Record<BackKind, string>> = {
 }
 
 const backLink = async (): Promise<{ href: string; label: string } | null> => {
-	const from = backTarget(Astro.request.headers.get('referer'), Astro.url)
 	if (!from) return null
 	// Tras «Anterior» o «Siguiente del torneo» se está recorriendo el torneo:
 	// se vuelve a él, a la página de su lista en la que sale esta partida,

@@ -372,7 +372,7 @@ La historia, las medidas, los casos concretos y el detalle de cada página que s
 
 #### `noindex`
 
-- **`noindex`:** búsquedas, dossier, repertorio, páginas de error, fichas sin torneos ni partidas o de posibles menores (ver «Menores»), torneos sin partidas y con menos de dos jugadores (`isIndexableTournament`: cancelados, o sin la lista ni las partidas en la fuente; 47 el 24-oct-2026) y partidas sin jugadas (`plyCount`). La partida con `?color=` sí se indexa: su canonical es la partida sin query.
+- **`noindex`:** búsquedas, dossier, repertorio, páginas de error, fichas sin torneos ni partidas o de posibles menores (ver «Menores»), torneos sin partidas y con menos de dos jugadores (`isIndexableTournament`: cancelados, o sin la lista ni las partidas en la fuente; 47 el 24-oct-2026) y partidas sin jugadas (`plyCount`). Las variantes con query no se rastrean (`robots.txt`, ver «`public/robots.txt`»), y su canonical es la página sin query.
 
 #### OpenGraph
 
@@ -560,7 +560,7 @@ La historia, las medidas, los casos concretos y el detalle de cada página que s
 
 ### `src/middleware.ts`
 
-- `src/middleware.ts`: `Cache-Control: private, max-age=0, must-revalidate` por defecto (`private`: las páginas cambian con la cookie `yo`). Una ruta sólo fija la suya si admite caché (las descargas PGN, `/api/emparejamientos`, `/api/clasificaciones` y `/api/elo`). Además, `X-Content-Type-Options: nosniff`, `X-Frame-Options: SAMEORIGIN` y HSTS de un año en todas las respuestas, y el límite de ritmo (ver «D1 cobra por filas recorridas»). Sin `Referrer-Policy`: «← Volver» depende del valor por defecto.
+- `src/middleware.ts`: `Cache-Control: private, max-age=0, must-revalidate` por defecto (`private`: las páginas cambian con la cookie `yo`). Una ruta sólo fija la suya si admite caché (las descargas PGN, `/api/emparejamientos`, `/api/clasificaciones` y `/api/elo`). Además, `X-Content-Type-Options: nosniff`, `X-Frame-Options: SAMEORIGIN` y HSTS de un año en todas las respuestas, y el límite de ritmo (ver «D1 cobra por filas recorridas»). Sin `Referrer-Policy`: «← Volver» y el lado del tablero dependen del valor por defecto.
   - Las URL de las fuentes que se enlazan pasan por `sourceUrl` (`src/lib/urls.ts`): sólo `https://info64.org/`, `https://lichess.org/`, `https://www.fcajedrez.es/` (`FCA_SITE`) y `https://sichess.com/` (`SICHESS_SITE`). En los textos, la fuente se nombra con `sourceName` («Ver en fcajedrez.es»).
 
 #### Redirección al dominio
@@ -602,6 +602,16 @@ La historia, las medidas, los casos concretos y el detalle de cada página que s
 #### La vuelta desde la partida
 
 - **La vuelta desde la partida** (`backTarget` en `params.ts` y `backLink` en `partidas/[id].astro`; 25-oct-2026): «← Volver a la búsqueda», «← Volver a Partidas» (`/partidas` sin búsqueda) y, si es de uno de los dos jugadores, «← Volver a la ficha de {nombre}», al dossier o al repertorio (los tuyos, «a mi ficha»). Tras «Anterior» o «Siguiente del torneo», «← Volver al torneo», a la ronda y la página de la partida (`gameRoundPage`: una fila por mesa anterior de la ronda, por el índice único). Sin lecturas de D1 más que ésa: el Referer se compara con las partidas adyacentes, que ya se leen. Si el enlace es la página de antes, vuelve con el historial (`onBack`).
+
+#### El lado del tablero
+
+- **El lado del tablero** (`gameOrientation` en `params.ts`; 22-nov-2026): los enlaces de la ficha, el dossier y el repertorio llevaban `?color=black` en las partidas con negras, una URL más por partida que rastrear (casi todas las 1.096 «rastreadas sin indexar» del 23-oct) y, con `Disallow: /*?`, un enlace que Google ya no seguiría. Ahora lo decide el servidor con lo que ya sabe, en este orden:
+  - `?color=`, si viene: los enlaces de antes y «Copiar enlace», que lo sigue escribiendo (lo comparte una persona, y la URL queda bloqueada y con canonical);
+  - el tuyo, si juegas en ella (cookie `yo`), con los dos colores: en «Tú contra…», el Referer es el dossier de tu rival y daría su lado;
+  - el del jugador de la ficha, el dossier o el repertorio del que se viene, por el Referer (`backTarget`), como «← Volver»; de un torneo, una búsqueda u otra partida, no;
+  - si no, blancas. Googlebot no manda Referer y ve la partida desde blancas; un enlace pegado en otra web o un marcador, también.
+  - La página cambia con el Referer y no lleva `Vary: Referer`: vale mientras vaya con `private, max-age=0` y sin ETag. Con una caché o un 304 en `/partidas/{id}`, el lado quedaría viejo.
+  - Descartado, el color en el fragmento (`#negras`): cambiaba el formato del `#j`, y el servidor no lo ve, así que las barras de los jugadores se pintarían al revés hasta montarse chessground.
 
 #### Comentario de la jugada en el móvil
 
@@ -653,7 +663,10 @@ La historia, las medidas, los casos concretos y el detalle de cada página que s
 
 ### `public/robots.txt`
 
-- `public/robots.txt`: bloquea repertorio, dossier y PGN, que no aportan al índice y cada visita lee todas las partidas de un jugador; el repertorio, además, tiene un enlace por jugada y es un espacio de URL casi infinito. Su línea `Sitemap:` lleva la URL absoluta del dominio, escrita: si cambia `site` (`astro.config.mjs`), cambiarla también.
+- `public/robots.txt`: bloquea toda URL con query, `/api/`, repertorio, dossier y PGN. Estos tres no aportan al índice y cada visita lee todas las partidas de un jugador; el repertorio, además, tiene un enlace por jugada y es un espacio de URL casi infinito. Su línea `Sitemap:` lleva la URL absoluta del dominio, escrita: si cambia `site` (`astro.config.mjs`), cambiarla también.
+  - **Toda URL con query es una vista de otra página** (`Disallow: /*?`, 22-nov-2026): la canonical ya quita la query (`canonicalHref`), y la regla dice lo mismo. Sustituye a `/partidas?`, `/jugadores?` y `/torneos?`, y cubre sin acordarse un filtro nuevo. El 16-nov, Search Console daba 91.313 páginas «Descubiertas: actualmente sin indexar» y 1.655 «alternativas con canónica adecuada» (50 el 23-oct): `?color=black`, `?ronda=`, `?color=…&eco=`, `?torneo=` y `?p=`. El `nofollow` de `?ronda=` y `?torneo=`, desde el 22–25-oct, no lo paró: los rastreó del 11 al 13-nov. La canonical y el `nofollow` son pistas para elegir qué se indexa, no para no rastrear; para los filtros, Google recomienda `robots.txt`. Los enlaces a filtros siguen con `nofollow` (`Segmented`, las aperturas de la ficha).
+  - **`Allow: /_astro/`:** ningún recurso de una página lleva query (CSS, JS, fuentes, el motor y su wasm, manifest, iconos e imagen OG; comprobado el 22-nov-2026 en el build), pero Astro admite una contra el desfase de versiones, y si la activara el adaptador la regla bloquearía lo que Google necesita para pintar la página. Gana por ser la regla más larga. Un recurso nuevo fuera de `/_astro/`, sin query.
+  - Una URL con query muy enlazada desde fuera puede salir «Indexada, aunque bloqueada por robots.txt», como las búsquedas.
 
 ### Sitemap
 
@@ -792,10 +805,10 @@ La historia, las medidas, los casos concretos y el detalle de cada página que s
 ### `probar-build.mjs`
 
 - **`probar-build.mjs`** (19-nov-2026) salió del #129, el PR semanal de Dependabot que subía Astro de la 7.4.7 a la 7.4.11, el adaptador y, con ellos, Vite (de la 8.3.5 a la 8.3.8) y rolldown. La CI pasa el lint, los tipos y los tests, pero no construye el sitio, y los tests no cargan el handler de Astro (`vitest.config.ts`); el humo mira el estado, un texto y las cabeceras de 15 URL, sin navegador. Un fallo de la CSP o del JavaScript del cliente no lo vería nadie hasta entrar en una partida.
-  - **Prueba lo que ejecuta JavaScript bajo la CSP:** el visor (chessground montado, ← y →), el motor (el wasm en su Web Worker), el explorador del repertorio y el buscador de la cabecera (el script en línea de `Base.astro`, con su hash). Y la consola y la red: un error, una petición fallida o una a otro sitio lo hacen fallar.
+  - **Prueba lo que ejecuta JavaScript bajo la CSP:** el visor (chessground montado, ← y →), el motor (el wasm en su Web Worker), el explorador del repertorio y el buscador de la cabecera (el script en línea de `Base.astro`, con su hash). Además, el lado del tablero: una partida con negras pulsada desde la ficha sale desde negras y, sin Referer, desde blancas (ver «El lado del tablero»). Y la consola y la red: un error, una petición fallida o una a otro sitio lo hacen fallar.
   - **«Soy yo», por los dos lados:** en el navegador, el botón de la ficha, que tiene que dejar la cookie `yo` con `HttpOnly` y volver a la ficha con «No soy yo»; y con `fetch` de Node, un POST con otro `Origin`, que tiene que dar 403 (`security.checkOrigin`). Éste no puede hacerlo el navegador sin abrir otro sitio.
   - **Exige la cabecera `Content-Security-Policy`** en cada página que abre: contra `pnpm dev`, que no la aplica, pasaría todo sin probar nada.
-  - **En el explorador no valen las piezas:** su tablero lo pinta el servidor con el marcado de chessground (`Tablero.astro`), y se ve igual con el script roto. Se mira la clase `manipulable`, que sólo pone chessground al montarse, que el motor analice y que «e4» escrito en «Tu jugada» lleve a `?jugadas=e2e4`. Con JavaScript desactivado fallan el visor, el motor, el explorador y el buscador, y pasan la ficha, «Soy yo» y la consola.
+  - **En el explorador no valen las piezas:** su tablero lo pinta el servidor con el marcado de chessground (`Tablero.astro`), y se ve igual con el script roto. Se mira la clase `manipulable`, que sólo pone chessground al montarse, que el motor analice y que «e4» escrito en «Tu jugada» lleve a `?jugadas=e2e4`. Con JavaScript desactivado fallan el visor, el motor, el explorador, la orientación y el buscador, y pasan la ficha, «Soy yo» y la consola.
   - **El visor abre en la última jugada:** se retrocede dos y se avanza una, esperando al `#j` de cada una (el visor lo escribe 300 ms después de moverse), y se compara dónde están las piezas. Avanzar desde el final no mueve nada, y la prueba pasaría igual.
   - **Del motor espera las líneas o su aviso,** lo que llegue antes: si no carga, el panel se apaga solo y dice «No se pudo cargar el motor», sin llegar a dar ninguna línea.
   - **Apaga el motor al acabar cada prueba:** la preferencia se recuerda (`localStorage`) y la página siguiente lo encendería sola. Salir de ella con el motor cargándose deja a medias la petición de `stockfish.js`, y Chromium la da por fallida (`net::ERR_BLOCKED_BY_RESPONSE`): contra producción, una de cada cuatro veces.
@@ -1065,7 +1078,7 @@ Decidido el 5-nov-2026, leído sólo su esquema (https://info64.org/api/3/schema
 
 #### Límite de ritmo
 
-- **Límite de ritmo** (`src/middleware.ts`, binding `RATE_LIMITER`): 30 peticiones caras por minuto y por IP (búsquedas, PGN, dossier, repertorio y los trozos del sitemap que salen de D1; nunca fichas, partidas, torneos ni `/api`), con la página 429 y `Retry-After`. En local, `RATE_LIMIT=on` en `.dev.vars`. `robots.txt` aparta además `/partidas?`, `/jugadores?` y `/torneos?`.
+- **Límite de ritmo** (`src/middleware.ts`, binding `RATE_LIMITER`): 30 peticiones caras por minuto y por IP (búsquedas, PGN, dossier, repertorio y los trozos del sitemap que salen de D1; nunca fichas, partidas, torneos ni `/api`), con la página 429 y `Retry-After`. En local, `RATE_LIMIT=on` en `.dev.vars`. `robots.txt` aparta además toda URL con query.
   - **Apagado en producción a propósito** (`"RATE_LIMIT": "off"` en `wrangler.jsonc`; decidido el 22-oct-2026). Va por IP, y la documentación de Cloudflare lo desaconseja porque muchos usuarios comparten la suya: la wifi de una sala de juego o de un club, los datos del móvil. Con 30 por minuto, una sala con muchos jugadores preparando la ronda se bloquearía, y el repertorio hace una petición por jugada. El coste ya lo acotan los topes de las búsquedas. Cuándo encenderlo está en la guía de operación.
 
 ### Bloqueos de LaLiga

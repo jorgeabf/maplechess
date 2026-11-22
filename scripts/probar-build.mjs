@@ -13,10 +13,12 @@
 // 4. el explorador del repertorio. Su tablero lo pinta el servidor con el marcado de
 //    chessground, así que las piezas no dicen nada: se mira que chessground lo haya
 //    montado, que el motor analice y que una jugada escrita lleve a su página;
-// 5. el buscador de la cabecera se cierra cuando el foco sale de él (el script en línea);
-// 6. «Soy yo»: el botón de la ficha guarda la cookie, y un POST de otro origen se rechaza
+// 5. la orientación: los enlaces de la ficha no llevan query, una partida en la que el
+//    jugador lleva negras sale desde negras abierta desde su ficha, y desde blancas sin Referer;
+// 6. el buscador de la cabecera se cierra cuando el foco sale de él (el script en línea);
+// 7. «Soy yo»: el botón de la ficha guarda la cookie, y un POST de otro origen se rechaza
 //    (security.checkOrigin). Éste va con fetch de Node: el navegador no sale del sitio;
-// 7. la consola y la red: sin errores, sin peticiones fallidas ni a otro sitio.
+// 8. la consola y la red: sin errores, sin peticiones fallidas ni a otro sitio.
 //
 // Sale con 1 si falla alguna. El navegador y los sitios que se pueden abrir, en
 // scripts/navegador.mjs.
@@ -150,7 +152,7 @@ async function analyse(page, root) {
 
 async function main() {
 	const { base, player } = parseArgs(process.argv.slice(2))
-	// Sin nadie sirviendo fallarían las siete, una a una.
+	// Sin nadie sirviendo fallarían las ocho, una a una.
 	await fetch(base, { redirect: 'manual', signal: AbortSignal.timeout(TIMEOUT_MS) }).then(
 		(response) => response.body?.cancel(),
 		(error) =>
@@ -262,6 +264,34 @@ async function main() {
 				'tras «e4», «← Atrás» no lleva su atajo: el explorador no se ha montado'
 			)
 			return `${path} monta chessground, ${lines} líneas del motor y «e4» lleva a ?jugadas=e2e4`
+		})
+
+		await check('orientación', async () => {
+			await open(page, base, ficha)
+			const withQuery = await page
+				.locator('#partidas a.result[href*="?"]')
+				.evaluateAll((links) => links.map((link) => link.getAttribute('href')))
+			if (withQuery.length > 0) throw new Error(`${ficha} enlaza partidas con query: ${withQuery[0]}`)
+			// Con negras, el rival de blancas lleva enlace a su ficha y el jugador de la página, no.
+			const asBlack = page
+				.locator('#partidas tr:has(td.white a[href^="/jugadores/"]):not(:has(td.black a[href^="/jugadores/"]))')
+				.locator('a.result')
+				.first()
+			if ((await asBlack.count()) === 0)
+				throw new Error(`${ficha} no tiene, en su primera página, partidas con negras`)
+			const game = new URL(await asBlack.getAttribute('href'), base).pathname
+			await asBlack.click({ timeout: TIMEOUT_MS })
+			await must(
+				page.waitForSelector('visor-partida .cg-wrap.orientation-black', { timeout: TIMEOUT_MS }),
+				`${game}, abierta desde ${ficha}, no sale desde negras`
+			)
+			// page.goto no manda Referer.
+			await open(page, base, game)
+			await must(
+				page.waitForSelector('visor-partida .cg-wrap.orientation-white', { timeout: TIMEOUT_MS }),
+				`${game}, abierta sin Referer, no sale desde blancas`
+			)
+			return `${game} sale desde negras abierta desde ${ficha} y desde blancas sin Referer`
 		})
 
 		await check('buscador', async () => {

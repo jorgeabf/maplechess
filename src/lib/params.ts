@@ -136,13 +136,12 @@ export function dossierHref(fideId: number, rivalColor?: 'white' | 'black'): str
 }
 
 /**
- * Enlace a una partida. Con `color`, el tablero se abre desde ese lado: desde
- * la ficha, el dossier o el repertorio, el del jugador, como /partida/black en
- * lichess. Blancas no va en la URL. Con `ply`, en esa media jugada de la línea
- * principal (#j, ver GameTree).
+ * Enlace a una partida. Con `ply`, en esa media jugada de la línea principal
+ * (#j, ver GameTree). El lado del tablero no va en la URL: lo decide la
+ * partida con la página de la que se viene (gameOrientation).
  */
-export function gameHref(id: number, color?: 'white' | 'black', ply?: number): string {
-	return `/partidas/${id}${color === 'black' ? '?color=black' : ''}${ply ? `#j${ply}` : ''}`
+export function gameHref(id: number, ply?: number): string {
+	return `/partidas/${id}${ply ? `#j${ply}` : ''}`
 }
 
 /**
@@ -206,6 +205,30 @@ export function roundParam(params: URLSearchParams): number | null {
 export function boardColor(params: URLSearchParams): 'white' | 'black' | null {
 	const value = text(params, 'color')
 	return value === 'white' || value === 'black' ? value : null
+}
+
+/** Páginas de un jugador, por su FIDE ID (`id` de backTarget). */
+const PLAYER_PAGES: readonly BackKind[] = ['player', 'dossier', 'repertoire']
+
+/**
+ * Lado del tablero de una partida: el que pide la URL (`?color=`, de «Copiar
+ * enlace» y de los enlaces de antes); si juegas en ella, el tuyo (`isMine`, la
+ * cookie yo), también en «Tú contra…» del dossier de tu rival; si se viene de
+ * la ficha, el dossier o el repertorio de uno de los dos (`from`, de
+ * backTarget), el suyo, como /partida/black en lichess; si no, blancas.
+ */
+export function gameOrientation(
+	requested: 'white' | 'black' | null,
+	game: { whiteFideId: number | null; blackFideId: number | null },
+	isMine: (fideId: number) => boolean,
+	from: { kind: BackKind; id: number | null } | null
+): 'white' | 'black' {
+	if (requested) return requested
+	const { whiteFideId: white, blackFideId: black } = game
+	if (white !== null && isMine(white)) return 'white'
+	if (black !== null && isMine(black)) return 'black'
+	const player = from && PLAYER_PAGES.includes(from.kind) ? from.id : null
+	return player !== null && player === black ? 'black' : 'white'
 }
 
 /** Valor de `cuando` de cada pestaña de /torneos; la de los ya empezados no lo lleva. */
