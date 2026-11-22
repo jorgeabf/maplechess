@@ -378,6 +378,18 @@ La historia, las medidas, los casos concretos y el detalle de cada página que s
 
 - **OpenGraph** en todas las páginas: `og:title` sin el nombre del sitio, que va en `og:site_name`; `og:url`, sólo si hay canonical. La imagen es `src/assets/compartir.png` (1200×630, `summary_large_image`), importada: lleva hash, así que cambia de URL al regenerarla.
 
+#### Datos estructurados
+
+- **Datos estructurados** (`src/lib/structured-data.ts`, decidido con Jorge el 22-nov-2026, pasada 5 de SEO): un `<script type="application/ld+json">` que escribe Base con la prop `structuredData`. Los clics de Google vienen sobre todo de los torneos de club en curso, y Google puede enseñar las fechas y el sitio de un evento en el resultado.
+  - **`SportsEvent` en `/torneos/{id}`** (`tournamentEvent`), sólo si la página se indexa, tiene fecha de inicio, se juega en una provincia (`tournaments.provincia`, ver «Buscar torneos por sitio») y no ha terminado: el fin o, sin él, el inicio, desde hoy en Madrid. Lo terminado ya no es un evento, y sin el sitio Google no lo enseña; el extranjero y lo no reconocido tienen la provincia NULL.
+    - Lleva el nombre, las fechas, `EventScheduled`, `OfflineEventAttendanceMode`, `sport` «Ajedrez», la canonical y el sitio.
+    - **El sitio:** la ciudad es texto libre del organizador («Calle Alava, 14. Madrid», un hotel, «Cantabria»), así que va como nombre del `Place` y no como `addressLocality`; sin ciudad, el de la provincia. La dirección sólo lleva `addressRegion`, el primer nombre de la provincia (`PROVINCE_NAME` de `toponimos.ts`: «Bizkaia», «Islas Baleares»), y `addressCountry` `ES`. El nombre no sale de `lugares.ts`, que arrastra `lugares.json`.
+    - `getTournament` lee `provincia`, `comunidad` y `rounds` en su propio SELECT, no en `COLUMNS`, que comparten los listados.
+  - **`WebSite` en la portada** (`websiteData`): el nombre y la URL, para que Google no adivine el nombre del sitio. Sin `SearchAction`, que Google retiró en 2024. El humo (`scripts/humo.mjs`) comprueba que se lee como JSON.
+  - **Sin personas:** ni `competitor`, ni `performer`, ni `organizer`, y nada en las fichas ni en las partidas. Todo lo que se marca ya sale en la página, así que `/privacidad` no cambia.
+  - **El escapado:** los nombres de torneo vienen de fuera, y un «</script>» cerraría la etiqueta. `jsonLd` escapa `<` como `\u003c`, como el JSON del visor (`VisorPartida.astro`); un test lo comprueba. El bloque no se ejecuta, así que la CSP no lo mira.
+  - **Cómo se mide:** el informe «Eventos» de Search Console y los clics de los torneos en curso frente a los 28 días anteriores.
+
 ### `src/pages/`
 
 - `src/pages/`: páginas (formularios GET, funcionan sin JS) y endpoints `.pgn`.

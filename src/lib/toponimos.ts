@@ -117,6 +117,9 @@ export const PLACES: Place[] = [
 /** La comunidad de cada provincia. */
 export const COMMUNITY_OF = new Map(PROVINCES.map(([code, community]) => [code, community]))
 
+/** El nombre de cada provincia, el primero de su línea: «Bizkaia», «Islas Baleares». */
+export const PROVINCE_NAME = new Map(PROVINCES.map(([code, , names]) => [code, names.split(',')[0].trim()]))
+
 /** La palabra buscada es la del nombre o su plural («alaveses», «andaluces»). */
 function sameWord(query: string, name: string): boolean {
 	return (

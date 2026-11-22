@@ -276,13 +276,23 @@ export interface TournamentPageRow extends TournamentRow {
 	sourceKey: string
 	/** El grupo, con el propio torneo; null si no tiene. */
 	related: RelatedTournament[] | null
+	/** Códigos del INE de su sitio (tournamentPlace); NULL si se juega fuera o no se reconoce. */
+	provincia: string | null
+	comunidad: string | null
+	/** Las rondas del torneo según la fuente, también las que aún no tienen partidas. */
+	rounds: number | null
 }
+
+type TournamentPageColumns = Omit<TournamentPageRow, 'related'> & { related: string | null }
 
 export async function getTournament(db: D1Database, id: number): Promise<TournamentPageRow | null> {
 	const row = await db
-		.prepare(`SELECT ${COLUMNS}, t.source_key AS sourceKey, t.related FROM tournaments t WHERE t.id = ?1`)
+		.prepare(
+			`SELECT ${COLUMNS}, t.source_key AS sourceKey, t.related, t.provincia, t.comunidad, t.rounds
+			FROM tournaments t WHERE t.id = ?1`
+		)
 		.bind(id)
-		.first<TournamentRow & { sourceKey: string; related: string | null }>()
+		.first<TournamentPageColumns>()
 	return row && { ...row, related: row.related === null ? null : (JSON.parse(row.related) as RelatedTournament[]) }
 }
 

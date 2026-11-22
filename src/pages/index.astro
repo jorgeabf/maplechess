@@ -20,6 +20,8 @@ import {
 } from '../lib/format'
 import { ME_COOKIE, resolveMe } from '../lib/me'
 import { dossierHref, TOURNAMENT_TABS, withParams } from '../lib/params'
+import { websiteData } from '../lib/structured-data'
+import { canonicalHref } from '../lib/urls'
 
 // Con la cookie yo, el saludo con tu nombre de pila en lugar de la pregunta,
 // que en una línea sólo cabe así (hasta 19 caracteres, el p99,9 de la lista
@@ -54,11 +56,14 @@ const available = [
 	formatCount(totals.players, 'jugador', 'jugadores'),
 	formatGames(totals.games)
 ]
+// El nombre del sitio para Google (lib/structured-data.ts).
+const website = websiteData(canonicalHref('/', Astro.site ?? Astro.url))
 ---
 
 <Base
 	title="MapleChess · Prepara tu próxima partida de ajedrez"
 	description="¿Ya sabes contra quién juegas? Mira qué aperturas juega tu rival, cómo le van y si se apura con el reloj. Gratis y sin registro."
+	structuredData={website}
 >
 	<section class="hero">
 		<h1>{given ? `Hola, ${given}` : '¿Contra quién juegas?'}</h1>

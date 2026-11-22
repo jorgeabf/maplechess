@@ -467,6 +467,18 @@ describe('isIndexableTournament', () => {
 	})
 })
 
+describe('getTournament', () => {
+	it('getTournament da su sitio y sus rondas, que no leen los listados', async () => {
+		const id = await tournament('cto-inventado-absoluto-2026')
+		expect(await getTournament(db, id)).toMatchObject({ provincia: null, comunidad: null, rounds: null })
+		await db
+			.prepare("UPDATE tournaments SET provincia = '48', comunidad = '16', rounds = 9 WHERE id = ?1")
+			.bind(id)
+			.run()
+		expect(await getTournament(db, id)).toMatchObject({ provincia: '48', comunidad: '16', rounds: 9 })
+	})
+})
+
 describe('grupo del torneo', () => {
 	const group = [
 		{ key: 'cto-inventado-absoluto-2026', label: 'Campeonato Absoluto de Inventada 2026' },
