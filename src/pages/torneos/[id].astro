@@ -21,8 +21,10 @@ import {
 	getTournamentGroup,
 	getTournamentParticipants,
 	isIndexableTournament,
+	tournamentFacts,
 	tournamentSummary
 } from '../../lib/db/tournaments'
+import { tournamentDescription } from '../../lib/descripciones'
 import { gameMatches } from '../../lib/encuentros'
 import { formatCount, formatNumber, formatPoints, formatRange, formatRoundTime } from '../../lib/format'
 import { CC_BY, CC_BY_SA } from '../../lib/licenses'
@@ -106,13 +108,19 @@ const event = tournamentEvent(tournament, {
 // partidas de algún español, no los del torneo. Los de la FCA sí: su archivo
 // trae todas las partidas del torneo, aunque sin títulos.
 const teamsInField = standings ? standings.rows.length : teamCount
-const summary = fromLichess
+const facts = fromLichess
 	? null
 	: isTeam
-		? teamsInField > 0 &&
-			tournamentSummary(formatCount(teamsInField, 'equipo', 'equipos'), participants, standings?.rows.map((s) => s.rating) ?? [])
-		: players > 0 &&
-			tournamentSummary(formatCount(players, 'jugador', 'jugadores'), field, field.map((p) => p.rating))
+		? teamsInField > 0
+			? tournamentFacts(formatCount(teamsInField, 'equipo', 'equipos'), participants, standings?.rows.map((s) => s.rating) ?? [])
+			: null
+		: players > 0
+			? tournamentFacts(formatCount(players, 'jugador', 'jugadores'), field, field.map((p) => p.rating))
+			: null
+const summary = facts && tournamentSummary(facts)
+// La descripción, con lo mismo que la cabecera y el resumen, y las rondas de
+// la fuente: `rounds`, arriba, son sólo las que tienen partidas.
+const description = tournamentDescription({ ...tournament, facts, standings: standings !== null })
 // Si es un Campeonato de España de la lista (lib/campeonatos.ts), un enlace a
 // la tabla de su categoría en /torneos/campeones; un absoluto mixto, a la del
 // absoluto. Sin D1: la lista va en el código.
@@ -220,7 +228,7 @@ const indexItems = sections.flatMap((s) => {
 <Base
 	title={tournament.name}
 	section="torneos"
-	description={`${tournament.name}: ${standings ? 'clasificación' : 'participantes'} y partidas.`}
+	description={description}
 	canonical={canonical}
 	noindex={!indexable}
 	structuredData={event}

@@ -390,6 +390,17 @@ La historia, las medidas, los casos concretos y el detalle de cada página que s
   - **El escapado:** los nombres de torneo vienen de fuera, y un «</script>» cerraría la etiqueta. `jsonLd` escapa `<` como `\u003c`, como el JSON del visor (`VisorPartida.astro`); un test lo comprueba. El bloque no se ejecuta, así que la CSP no lo mira.
   - **Cómo se mide:** el informe «Eventos» de Search Console y los clics de los torneos en curso frente a los 28 días anteriores.
 
+#### Títulos y descripciones
+
+- **Títulos y descripciones** (`src/lib/descripciones.ts`: la descripción del torneo y el título y la descripción de la ficha; decidido con Jorge el 22-nov-2026, pasada 5 de SEO): casi todas las impresiones son de fichas, buscadas por el nombre («nombre», «nombre fide», «nombre ajedrez»), con un CTR medio del 4,5 %. La descripción del torneo repetía su nombre y la ficha se titulaba sólo con el nombre.
+  - **El torneo:** «Bilbao, 17 oct – 28 nov 2026. 7 rondas · 66 jugadores, 2 GM, 5 IM · ELO medio 2105. Clasificación y partidas.» (`tournamentDescription`), con la ciudad y las fechas de la cabecera, las rondas de la fuente (`tournaments.rounds`: el `rounds` de la página cuenta sólo las que tienen partidas) y lo que resume el torneo (`tournamentFacts`, lo mismo que la línea de resumen). Sin un dato, sin su trozo; sin ninguno, el nombre. Sin clasificación, «Participantes y partidas.».
+  - **El título de la ficha:** «{nombre}: ELO y partidas de ajedrez» (`playerTitle`) y, si con « · MapleChess» pasa de 65 caracteres (Google corta hacia los 60), «{nombre}: ELO y partidas». El nombre va delante: es lo que se busca y lo que mira el humo. El `<h1>` no cambia.
+  - **La descripción de la ficha** (`playerDescription`): el título FIDE, el ELO de cada ritmo, cuántos torneos y partidas tiene y el último torneo que ya ha empezado (`lastStartedTournament`: el primero de la lista puede ser uno por empezar). Fuera de la lista FIDE (`inFideList`), «ELO» sin «FIDE»: es el de su último torneo.
+    - **Un posible menor y una ficha vacía** llevan la de siempre («Partidas y torneos de {nombre} (FIDE {id}).»): aunque no se indexen, la descripción sale al compartir (`og:description`), y con un torneo por empezar diría dónde va a jugar.
+  - **160 caracteres como mucho** (`DESCRIPTION_MAX`): los nombres de torneo y las ciudades vienen de fuera y pueden pasar de eso ellos solos. Se recorta lo que viene de fuera (la ciudad, el último torneo), con «…», y lo demás se queda; al final, todo, por si no cabe. `clip` corta entre palabras, salvo si el último espacio queda en la primera mitad, y no deja delante de «…» puntuación ni un conector («de…»); tras «…» no va punto. Cuenta caracteres, no unidades de UTF-16. No dice si el ELO está inactivo: la ficha sí.
+  - **Sin consultas nuevas:** todo sale de lo que la página ya lee.
+  - **Cómo se mide:** el CTR por página en Search Console, a las cuatro semanas.
+
 ### `src/pages/`
 
 - `src/pages/`: páginas (formularios GET, funcionan sin JS) y endpoints `.pgn`.
