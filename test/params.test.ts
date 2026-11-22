@@ -5,6 +5,7 @@ import {
 	dossierHref,
 	gameFilters,
 	gameHref,
+	gameOrientation,
 	gameSearchKind,
 	isPlayerSearch,
 	pageParam,
@@ -12,7 +13,8 @@ import {
 	positiveInt,
 	rankingCategory,
 	roundParam,
-	tournamentFilters
+	tournamentFilters,
+	type BackKind
 } from '../src/lib/params'
 
 function kind(query: string) {
@@ -125,16 +127,48 @@ describe('rankingCategory', () => {
 })
 
 describe('gameHref', () => {
-	it('blancas no va en la URL; negras, sí', () => {
+	it('sin el lado del tablero en la URL', () => {
 		expect(gameHref(12)).toBe('/partidas/12')
-		expect(gameHref(12, 'white')).toBe('/partidas/12')
-		expect(gameHref(12, 'black')).toBe('/partidas/12?color=black')
 	})
 
 	it('con ply, abre la partida en esa jugada', () => {
-		expect(gameHref(12, 'white', 9)).toBe('/partidas/12#j9')
-		expect(gameHref(12, 'black', 9)).toBe('/partidas/12?color=black#j9')
-		expect(gameHref(12, undefined, 0)).toBe('/partidas/12')
+		expect(gameHref(12, 9)).toBe('/partidas/12#j9')
+		expect(gameHref(12, 0)).toBe('/partidas/12')
+	})
+})
+
+describe('gameOrientation', () => {
+	const game = { whiteFideId: 2200001, blackFideId: 2200002 }
+	const nobody = () => false
+	const me = (id: number) => (fideId: number) => fideId === id
+	const player = (kind: BackKind, id: number | null) => ({ kind, id })
+
+	it('el que pide la URL, antes que nada', () => {
+		expect(gameOrientation('black', game, nobody, null)).toBe('black')
+		expect(gameOrientation('white', game, me(2200002), player('player', 2200002))).toBe('white')
+	})
+
+	it('si juegas en ella, el tuyo, también desde la página de tu rival («Tú contra…»)', () => {
+		expect(gameOrientation(null, game, me(2200002), null)).toBe('black')
+		expect(gameOrientation(null, game, me(2200001), player('dossier', 2200002))).toBe('white')
+	})
+
+	it('desde la ficha, el dossier o el repertorio de uno de los dos, el suyo', () => {
+		expect(gameOrientation(null, game, nobody, player('player', 2200002))).toBe('black')
+		expect(gameOrientation(null, game, nobody, player('dossier', 2200002))).toBe('black')
+		expect(gameOrientation(null, game, nobody, player('repertoire', 2200002))).toBe('black')
+		expect(gameOrientation(null, game, nobody, player('player', 2200001))).toBe('white')
+		expect(gameOrientation(null, game, me(2200009), player('player', 2200002))).toBe('black')
+	})
+
+	it('si no, blancas: sin Referer, desde un torneo, una búsqueda, otra partida o la ficha de un tercero', () => {
+		expect(gameOrientation(null, game, nobody, null)).toBe('white')
+		expect(gameOrientation(null, game, nobody, player('tournament', null))).toBe('white')
+		expect(gameOrientation(null, game, nobody, player('search', null))).toBe('white')
+		expect(gameOrientation(null, game, nobody, player('game', 2200002))).toBe('white')
+		expect(gameOrientation(null, game, nobody, player('player', 2200009))).toBe('white')
+		const withoutIds = { whiteFideId: null, blackFideId: null }
+		expect(gameOrientation(null, withoutIds, nobody, player('player', 2200002))).toBe('white')
 	})
 })
 
