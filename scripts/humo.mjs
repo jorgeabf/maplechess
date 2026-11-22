@@ -17,17 +17,33 @@ const base = (process.argv[2] ?? PRODUCTION).replace(/\/+$/, '')
 /** El HTML no se guarda en caché: tras un despliegue apuntaría a CSS y JS que ya no existen. */
 const revalidates = (value) => /no-store|no-cache|max-age=0\b/.test(value ?? '')
 
-const html = (path, text, status = 200) => ({
+const html = (path, text, status = 200, body) => ({
 	path,
 	status,
 	type: 'text/html',
 	text,
-	headers: { 'Cache-Control': revalidates }
+	headers: { 'Cache-Control': revalidates },
+	body
 })
+
+/**
+ * El JSON-LD de la página (lib/structured-data.ts) se lee como JSON y es de
+ * tipo `type`. Va con "<" escapado, así que su texto no lleva ninguno.
+ */
+const structuredData = (type) => (body) => {
+	const found = body.match(/<script type="application\/ld\+json">([^<]*)<\/script>/)
+	if (!found) return 'sin JSON-LD'
+	try {
+		const data = JSON.parse(found[1])
+		return data['@type'] === type ? null : `JSON-LD de tipo «${data['@type']}», se esperaba ${type}`
+	} catch (error) {
+		return `JSON-LD que no se lee como JSON: ${error.message}`
+	}
+}
 
 const CHECKS = [
 	// La lista de bajo el buscador: su título cambia con los datos (las rondas emparejadas o, sin ninguna, los últimos torneos).
-	html('/', '<ul class="cards"'),
+	html('/', '<ul class="cards"', 200, structuredData('WebSite')),
 	// Las rondas emparejadas, todas: unas 750 filas. Su consulta va antes de pintar: si falla, es un 500.
 	html('/torneos?cuando=emparejados', 'Emparejados'),
 	html('/jugadores', 'Ranking de España'),
@@ -80,7 +96,7 @@ const get = (url) =>
 	})
 
 /** Problemas de una URL; vacío si está bien. */
-async function check({ path, status, warnStatus, type, text, headers }) {
+async function check({ path, status, warnStatus, type, text, headers, body: checkBody }) {
 	const response = await get(base + path)
 	const body = await response.text()
 	const problems = []
@@ -92,6 +108,8 @@ async function check({ path, status, warnStatus, type, text, headers }) {
 	const contentType = response.headers.get('Content-Type') ?? ''
 	if (!contentType.startsWith(type)) problems.push(`Content-Type «${contentType}», se esperaba ${type}`)
 	if (!body.includes(text)) problems.push(`no contiene «${text}»`)
+	const bodyProblem = checkBody?.(body)
+	if (bodyProblem) problems.push(bodyProblem)
 	for (const [name, ok] of Object.entries(headers)) {
 		const value = response.headers.get(name)
 		if (!ok(value)) problems.push(`${name}: «${value ?? '(sin cabecera)'}»`)

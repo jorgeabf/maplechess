@@ -6,6 +6,7 @@ import Icon from '../components/Icon.astro'
 import Logo from '../components/Logo.astro'
 import { CC_BY, CC_BY_SA, SOURCE_CODE } from '../lib/licenses'
 import { ME_COOKIE, resolveMe } from '../lib/me'
+import { jsonLd, type StructuredData } from '../lib/structured-data'
 import { THEME_COLOR } from '../lib/theme-color'
 import { canonicalHref } from '../lib/urls'
 import '../styles/global.css'
@@ -24,6 +25,8 @@ interface Props {
 	 * (positiveInt la acepta). Por defecto, la pedida.
 	 */
 	canonical?: string
+	/** Datos estructurados (lib/structured-data.ts): el WebSite de la portada y el evento de un torneo. */
+	structuredData?: StructuredData | null
 }
 
 const {
@@ -31,7 +34,8 @@ const {
 	description = 'Buscador de jugadores españoles de ajedrez y de sus partidas, con visor y motor de análisis.',
 	section,
 	noindex = false,
-	canonical = Astro.url.pathname
+	canonical = Astro.url.pathname,
+	structuredData = null
 } = Astro.props
 const siteName = 'MapleChess'
 // El curso del canal de YouTube de MapleChess: la lista, no un vídeo, para que empiece por la clase 1.
@@ -91,6 +95,8 @@ const me = resolveMe(null, Astro.cookies.get(ME_COOKIE)?.value).fideId
 		<meta property="og:image:height" content={String(compartir.height)} />
 		<meta property="og:image:alt" content={siteName} />
 		<meta name="twitter:card" content="summary_large_image" />
+		{/* No se ejecuta, así que la CSP no lo mira; jsonLd escapa "<" para que no cierre la etiqueta. */}
+		{structuredData && <script type="application/ld+json" set:html={jsonLd(structuredData)} />}
 		{/* El ICO con sizes="32x32": así los navegadores que leen SVG se quedan con
 		    el SVG. El ICO y el icono de iOS salen de scripts/iconos.mjs. */}
 		<link rel="icon" href="/favicon.ico" sizes="32x32" />

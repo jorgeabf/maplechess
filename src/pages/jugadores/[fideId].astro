@@ -16,6 +16,7 @@ import { searchGames } from '../../lib/db/games'
 import { PLAYER_PAGE_SIZE } from '../../lib/db/pagination'
 import { getUpcomingGames } from '../../lib/db/pairings'
 import { bestStandardRating, getPlayer, getPlayerSummary, getPlayerTournaments } from '../../lib/db/players'
+import { lastStartedTournament, playerDescription, playerTitle } from '../../lib/descripciones'
 import { displayName, formatMonth, formatNumber, formatPercent } from '../../lib/format'
 import { ME_COOKIE, ME_COOKIE_OPTIONS, ME_FIELD, claimCookieAction, isOwn, readMeField, resolveMe } from '../../lib/me'
 import { dossierHref, gameFilters, positiveInt, withParams } from '../../lib/params'
@@ -114,7 +115,17 @@ const shownTournaments = tournaments.length > RECENT_TOURNAMENTS + 5 ? RECENT_TO
 const recent = tournaments.slice(0, shownTournaments)
 const older = tournaments.slice(shownTournaments)
 // Su mejor ELO estándar, de las filas de sus torneos: sin lecturas de D1.
-const best = bestStandardRating(tournaments, madridDate(new Date()))
+const today = madridDate(new Date())
+const best = bestStandardRating(tournaments, today)
+// El título y la descripción, de lo ya leído (lib/descripciones.ts).
+const title = playerTitle(name)
+const description = playerDescription({
+	...player,
+	name,
+	tournaments: tournaments.length,
+	games: totalGames,
+	lastTournament: lastStartedTournament(tournaments, today)
+})
 // Índice «En esta página», con las secciones que hay: en el móvil, los
 // torneos empezaban a 8.646 px (25-oct-2026). Las partidas, las de la lista:
 // con filtros, sólo las que cumplen.
@@ -130,9 +141,9 @@ const pageIndex = [
 ---
 
 <Base
-	title={name}
+	title={title}
 	section="jugadores"
-	description={`Partidas y torneos de ${name} (FIDE ${fideId}).`}
+	description={description}
 	canonical={`/jugadores/${fideId}`}
 	noindex={empty || player.minor}
 >

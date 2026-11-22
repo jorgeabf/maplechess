@@ -276,13 +276,23 @@ export interface TournamentPageRow extends TournamentRow {
 	sourceKey: string
 	/** El grupo, con el propio torneo; null si no tiene. */
 	related: RelatedTournament[] | null
+	/** Códigos del INE de su sitio (tournamentPlace); NULL si se juega fuera o no se reconoce. */
+	provincia: string | null
+	comunidad: string | null
+	/** Las rondas del torneo según la fuente, también las que aún no tienen partidas. */
+	rounds: number | null
 }
+
+type TournamentPageColumns = Omit<TournamentPageRow, 'related'> & { related: string | null }
 
 export async function getTournament(db: D1Database, id: number): Promise<TournamentPageRow | null> {
 	const row = await db
-		.prepare(`SELECT ${COLUMNS}, t.source_key AS sourceKey, t.related FROM tournaments t WHERE t.id = ?1`)
+		.prepare(
+			`SELECT ${COLUMNS}, t.source_key AS sourceKey, t.related, t.provincia, t.comunidad, t.rounds
+			FROM tournaments t WHERE t.id = ?1`
+		)
 		.bind(id)
-		.first<TournamentRow & { sourceKey: string; related: string | null }>()
+		.first<TournamentPageColumns>()
 	return row && { ...row, related: row.related === null ? null : (JSON.parse(row.related) as RelatedTournament[]) }
 }
 
@@ -402,24 +412,38 @@ export async function getTournamentGroup(db: D1Database, source: string, related
 // Los títulos que cuenta el resumen: los que dicen cuánto pesa un torneo.
 const SUMMARY_TITLES = ['GM', 'IM']
 
+/** Lo que resume un torneo: lo enseñan la línea de resumen y la descripción (lib/descripciones.ts). */
+export interface TournamentFacts {
+	/** El tamaño ya escrito: «100 jugadores», «52 equipos». */
+	size: string
+	/** Los títulos que pesan, ya escritos: «7 GM», «16 IM». */
+	titles: string[]
+	/** El ELO medio de los que lo tienen; null si no lo tiene nadie. */
+	average: number | null
+}
+
 /**
- * La línea de resumen del torneo: «100 jugadores · 7 GM · 16 IM · ELO medio
- * 2211». `size` es el tamaño ya escrito («100 jugadores», «52 equipos»); los
- * títulos se cuentan en `players` y el ELO medio es el de `ratings`, sin los
- * que no tienen. Sale de las filas que la página ya lee.
+ * Lo que resume el torneo, de las filas que la página ya lee: los títulos se
+ * cuentan en `players` y el ELO medio es el de `ratings`, sin los que no
+ * tienen.
  */
-export function tournamentSummary(
+export function tournamentFacts(
 	size: string,
 	players: readonly { title: string | null }[],
 	ratings: readonly (number | null)[]
-): string {
+): TournamentFacts {
 	const titles = SUMMARY_TITLES.flatMap((title) => {
 		const n = players.filter((p) => p.title === title).length
 		return n > 0 ? [`${formatNumber(n)} ${title}`] : []
 	})
 	const rated = ratings.filter((r): r is number => r !== null)
-	const average = rated.length > 0 ? [`ELO medio ${Math.round(rated.reduce((sum, r) => sum + r, 0) / rated.length)}`] : []
-	return [size, ...titles, ...average].join(' · ')
+	const average = rated.length > 0 ? Math.round(rated.reduce((sum, r) => sum + r, 0) / rated.length) : null
+	return { size, titles, average }
+}
+
+/** La línea de resumen del torneo: «100 jugadores · 7 GM · 16 IM · ELO medio 2211». */
+export function tournamentSummary({ size, titles, average }: TournamentFacts): string {
+	return [size, ...titles, ...(average === null ? [] : [`ELO medio ${average}`])].join(' · ')
 }
 
 /**

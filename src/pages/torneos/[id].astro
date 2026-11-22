@@ -21,15 +21,18 @@ import {
 	getTournamentGroup,
 	getTournamentParticipants,
 	isIndexableTournament,
+	tournamentFacts,
 	tournamentSummary
 } from '../../lib/db/tournaments'
+import { tournamentDescription } from '../../lib/descripciones'
 import { gameMatches } from '../../lib/encuentros'
 import { formatCount, formatNumber, formatPoints, formatRange, formatRoundTime } from '../../lib/format'
 import { CC_BY, CC_BY_SA } from '../../lib/licenses'
 import { ME_COOKIE, resolveMe } from '../../lib/me'
 import { dossierHref, pageParam, positiveInt, roundParam, withParams } from '../../lib/params'
+import { tournamentEvent } from '../../lib/structured-data'
 import { myPlace } from '../../lib/tu-torneo'
-import { sourceName, sourceUrl } from '../../lib/urls'
+import { canonicalHref, sourceName, sourceUrl } from '../../lib/urls'
 
 const id = positiveInt(Astro.params.id)
 const tournament = id === null ? null : await getTournament(env.DB, id)
@@ -90,6 +93,14 @@ const rosterCount = teamCount > 0 ? formatCount(teamCount, 'equipo', 'equipos') 
 const field = standings && !isTeam ? standings.rows : participants
 const players = field.length
 const indexable = isIndexableTournament(tournament.gamesCount, players)
+// El torneo como evento para Google, si se indexa, es de una provincia y no ha
+// terminado (lib/structured-data.ts). Sin personas.
+const canonical = `/torneos/${id}`
+const event = tournamentEvent(tournament, {
+	url: canonicalHref(canonical, Astro.site ?? Astro.url),
+	indexable,
+	today
+})
 // La línea de resumen, de las filas ya leídas: «100 jugadores · 7 GM · 16 IM ·
 // ELO medio 2211». En uno por equipos, los equipos, los títulos de las
 // plantillas y la media del ELO medio de cada equipo, el de la clasificación.
@@ -97,13 +108,19 @@ const indexable = isIndexableTournament(tournament.gamesCount, players)
 // partidas de algún español, no los del torneo. Los de la FCA sí: su archivo
 // trae todas las partidas del torneo, aunque sin títulos.
 const teamsInField = standings ? standings.rows.length : teamCount
-const summary = fromLichess
+const facts = fromLichess
 	? null
 	: isTeam
-		? teamsInField > 0 &&
-			tournamentSummary(formatCount(teamsInField, 'equipo', 'equipos'), participants, standings?.rows.map((s) => s.rating) ?? [])
-		: players > 0 &&
-			tournamentSummary(formatCount(players, 'jugador', 'jugadores'), field, field.map((p) => p.rating))
+		? teamsInField > 0
+			? tournamentFacts(formatCount(teamsInField, 'equipo', 'equipos'), participants, standings?.rows.map((s) => s.rating) ?? [])
+			: null
+		: players > 0
+			? tournamentFacts(formatCount(players, 'jugador', 'jugadores'), field, field.map((p) => p.rating))
+			: null
+const summary = facts && tournamentSummary(facts)
+// La descripción, con lo mismo que la cabecera y el resumen, y las rondas de
+// la fuente: `rounds`, arriba, son sólo las que tienen partidas.
+const description = tournamentDescription({ ...tournament, facts, standings: standings !== null })
 // Si es un Campeonato de España de la lista (lib/campeonatos.ts), un enlace a
 // la tabla de su categoría en /torneos/campeones; un absoluto mixto, a la del
 // absoluto. Sin D1: la lista va en el código.
@@ -211,9 +228,10 @@ const indexItems = sections.flatMap((s) => {
 <Base
 	title={tournament.name}
 	section="torneos"
-	description={`${tournament.name}: ${standings ? 'clasificación' : 'participantes'} y partidas.`}
-	canonical={`/torneos/${id}`}
+	description={description}
+	canonical={canonical}
 	noindex={!indexable}
+	structuredData={event}
 >
 	<header class="page-head">
 		<h1>{tournament.name}</h1>

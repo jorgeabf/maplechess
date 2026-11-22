@@ -13,6 +13,7 @@ import {
 	latestTournamentsWithGames,
 	searchPairedTournaments,
 	searchTournaments,
+	tournamentFacts,
 	tournamentSummary,
 	type TournamentFilters
 } from '../../src/lib/db/tournaments'
@@ -467,6 +468,18 @@ describe('isIndexableTournament', () => {
 	})
 })
 
+describe('getTournament', () => {
+	it('getTournament da su sitio y sus rondas, que no leen los listados', async () => {
+		const id = await tournament('cto-inventado-absoluto-2026')
+		expect(await getTournament(db, id)).toMatchObject({ provincia: null, comunidad: null, rounds: null })
+		await db
+			.prepare("UPDATE tournaments SET provincia = '48', comunidad = '16', rounds = 9 WHERE id = ?1")
+			.bind(id)
+			.run()
+		expect(await getTournament(db, id)).toMatchObject({ provincia: '48', comunidad: '16', rounds: 9 })
+	})
+})
+
 describe('grupo del torneo', () => {
 	const group = [
 		{ key: 'cto-inventado-absoluto-2026', label: 'Campeonato Absoluto de Inventada 2026' },
@@ -586,12 +599,12 @@ describe('tournamentSummary', () => {
 	const p = (title: string | null) => ({ title })
 
 	it('cuenta los GM y los IM y da la media de los que tienen ELO', () => {
-		expect(tournamentSummary('4 jugadores', [p('GM'), p('IM'), p('IM'), p('FM')], [2600, 2401, null, 2200])).toBe(
-			'4 jugadores · 1 GM · 2 IM · ELO medio 2400'
-		)
+		const facts = tournamentFacts('4 jugadores', [p('GM'), p('IM'), p('IM'), p('FM')], [2600, 2401, null, 2200])
+		expect(facts).toEqual({ size: '4 jugadores', titles: ['1 GM', '2 IM'], average: 2400 })
+		expect(tournamentSummary(facts)).toBe('4 jugadores · 1 GM · 2 IM · ELO medio 2400')
 	})
 
 	it('sin titulados ni ELO, sólo el tamaño', () => {
-		expect(tournamentSummary('52 equipos', [p(null), p('WGM')], [null])).toBe('52 equipos')
+		expect(tournamentSummary(tournamentFacts('52 equipos', [p(null), p('WGM')], [null]))).toBe('52 equipos')
 	})
 })
