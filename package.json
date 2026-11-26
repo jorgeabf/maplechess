@@ -22,25 +22,25 @@
     "db:migrate:remote": "wrangler d1 migrations apply DB --remote"
   },
   "dependencies": {
-    "@astrojs/cloudflare": "14.4.7",
+    "@astrojs/cloudflare": "14.4.9",
     "@lichess-org/chessground": "10.5.0",
-    "astro": "7.4.11",
+    "astro": "7.4.13",
     "chessops": "0.15.1",
     "fflate": "0.8.3",
     "stockfish": "19.0.1"
   },
   "devDependencies": {
     "@astrojs/check": "0.9.12",
-    "@cloudflare/vitest-plugin": "1.8.1",
+    "@cloudflare/vitest-plugin": "1.8.5",
     "@resvg/resvg-js": "2.6.2",
     "@types/node": "^24.19.2",
-    "@typescript-eslint/parser": "8.72.2",
-    "eslint": "10.14.0",
+    "@typescript-eslint/parser": "8.73.0",
+    "eslint": "10.15.0",
     "eslint-plugin-astro": "3.2.1",
     "playwright-core": "1.60.0",
     "typescript": "6.0.3",
-    "typescript-eslint": "8.72.2",
-    "vitest": "5.1.0",
-    "wrangler": "4.161.0"
+    "typescript-eslint": "8.73.0",
+    "vitest": "5.1.1",
+    "wrangler": "4.165.0"
   }
 }
